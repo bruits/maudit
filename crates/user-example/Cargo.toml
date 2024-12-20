@@ -1,0 +1,9 @@
+[package]
+name = "dire-coronet-example"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+dire-coronet = { path = "../framework" }
+maud = "0.26.0"

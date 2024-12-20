@@ -1,0 +1,12 @@
+[package]
+name = "dire-coronet"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+maud = "0.26.0"
+dire-coronet-macros = { path = "../macros" }
+log = { version = "0.4", features = ["kv"] }
+env_logger = "0.11.5"
+chrono = "0.4.39"
+colored = "2.2.0"
