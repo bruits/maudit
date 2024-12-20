@@ -1,6 +1,6 @@
 use dire_coronet::dire_coronet_macros::route;
 
-#[route("/data.json")]
+#[route("/catalogue/data.json")]
 pub struct Endpoint;
 
 impl Page for Endpoint {

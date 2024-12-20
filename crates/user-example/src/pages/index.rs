@@ -15,4 +15,3 @@ impl Page for Index {
         })
     }
 }
-
