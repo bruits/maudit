@@ -1,4 +1,4 @@
-use dire_coronet::dire_coronet_macros::route;
+use maudit::maudit_macros::route;
 
 #[route("/catalogue/data.json")]
 pub struct Endpoint;

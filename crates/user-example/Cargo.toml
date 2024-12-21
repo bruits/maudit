@@ -1,9 +1,9 @@
 [package]
-name = "dire-coronet-example"
+name = "maudit-example"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
 [dependencies]
-dire-coronet = { path = "../framework" }
+maudit = { path = "../framework" }
 maud = "0.26.0"

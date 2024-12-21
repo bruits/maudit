@@ -13,10 +13,10 @@ use std::{
 };
 
 use colored::{ColoredString, Colorize};
-pub use dire_coronet_macros;
 use env_logger::{Builder, Env};
 use logging::{format_elapsed_time, FormatElapsedTimeOptions};
 pub use maud;
+pub use maudit_macros;
 
 use log::{info, trace};
 
@@ -40,8 +40,6 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
             )
         })
         .init();
-
-    println!("\n{}\n", "Let the coronation begin!".bold());
 
     // Create a directory for the output
     trace!(target: "build", "Setting up required directories...");

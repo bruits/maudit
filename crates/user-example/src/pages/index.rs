@@ -1,6 +1,6 @@
-use dire_coronet::assets::Asset;
-use dire_coronet::dire_coronet_macros::route;
-use dire_coronet::maud::html;
+use maudit::assets::Asset;
+use maudit::maud::html;
+use maudit::maudit_macros::route;
 
 #[route("/")]
 pub struct Index;

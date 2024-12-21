@@ -41,7 +41,7 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         use std::path::{Path, PathBuf};
-        use dire_coronet::page::{FullPage, InternalPage, Page, Params, RenderResult};
+        use maudit::page::{FullPage, InternalPage, Page, Params, RenderResult};
 
         impl InternalPage for #struct_name {
           fn route(&self) -> String {
