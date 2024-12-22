@@ -1,21 +1,26 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 pub enum RenderResult<T = maud::Markup> {
     Html(T),
     Text(String),
 }
 
+pub struct RouteContext {
+    pub params: HashMap<String, String>,
+}
+
 pub trait Page {
-    fn render(&self) -> RenderResult;
+    fn render(&self, ctx: &RouteContext) -> RenderResult;
+}
+
+pub trait DynamicPage {
+    fn routes(&self) -> HashMap<String, String>;
 }
 
 pub trait InternalPage {
-    fn route(&self) -> String;
-    fn file_path(&self) -> PathBuf;
+    fn route_raw(&self) -> String;
+    fn route(&self, params: HashMap<String, String>) -> String;
+    fn file_path(&self, params: HashMap<String, String>) -> PathBuf;
 }
 
-pub trait FullPage: Page + InternalPage {}
-
-pub trait Params {
-    fn params(&self) -> Vec<String>;
-}
+pub trait FullPage: Page + InternalPage + DynamicPage {}
