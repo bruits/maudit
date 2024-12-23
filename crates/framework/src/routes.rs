@@ -1,11 +1,11 @@
 use crate::page::FullPage;
 
-pub struct Router {
-    pub(crate) routes: Vec<Box<dyn FullPage>>,
+pub struct Router<'a> {
+    pub(crate) routes: Vec<&'a dyn FullPage>,
 }
 
-impl Router {
-    pub fn new(routes: Vec<Box<dyn FullPage>>) -> Self {
+impl<'a> Router<'a> {
+    pub fn new(routes: Vec<&'a dyn FullPage>) -> Router<'a> {
         Router { routes }
     }
 }

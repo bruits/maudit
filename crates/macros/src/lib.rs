@@ -39,8 +39,8 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let dynamic_page_impl = match params.is_empty() {
         false => quote! {},
         true => quote! {
-            impl DynamicPage for #struct_name {
-                fn routes(&self) -> Vec<std::collections::HashMap<String, String>> {
+            impl maudit::page::DynamicPage for #struct_name {
+                fn routes(&self) -> Vec<maudit::page::RouteParams> {
                     Vec::new()
                 }
             }
@@ -53,7 +53,15 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
         .iter()
         .map(|v| {
             let key = format_ident!("{}", v.key);
-            quote! { let #key = params.get(stringify!(#key)).unwrap().to_string() }
+            quote! { let #key = params.0.get(stringify!(#key)).unwrap().to_string() }
+        })
+        .collect::<Vec<_>>();
+
+    let struct_def_params = params
+        .iter()
+        .map(|v| {
+            let key = format_ident!("{}", v.key);
+            quote! { #key: String }
         })
         .collect::<Vec<_>>();
 
@@ -61,30 +69,37 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let file_path_for_route = url_to_file_path(&path, attrs.is_endpoint_file, &params);
 
     let expanded = quote! {
-        use std::path::{Path, PathBuf};
-        use maudit::page::{FullPage, InternalPage, Page, RenderResult, DynamicPage};
+                struct RawParams {
+                        #(#struct_def_params,)*
+                }
 
-        impl InternalPage for #struct_name {
+        impl RawParams {
+            fn get_field_names() -> Vec<&'static str> {
+              vec![#(stringify!(#struct_def_params)),*]
+          }
+        }
+
+        impl maudit::page::InternalPage for #struct_name {
                     fn route_raw(&self) -> String {
                         #path.to_string()
                     }
 
-          fn route(&self, params: std::collections::HashMap<String, String>) -> String {
+          fn route(&self, params: maudit::page::RouteParams) -> String {
                         #(#list_params;)*
             return format!(#path_for_route);
           }
 
-          fn file_path(&self, params: std::collections::HashMap<String, String>) -> PathBuf {
+          fn file_path(&self, params: maudit::page::RouteParams) -> std::path::PathBuf {
                         // List params in the shape of let id = ctx.params.get("id").unwrap().to_string();
                         #(#list_params;)*
-            PathBuf::from(format!(#file_path_for_route))
+            std::path::PathBuf::from(format!(#file_path_for_route))
           }
         }
 
 
             #dynamic_page_impl
 
-        impl FullPage for #struct_name {}
+        impl maudit::page::FullPage for #struct_name {}
 
         #item_struct
     };
@@ -173,4 +188,45 @@ fn make_params_dynamic(file_path: &str, params: &[Parameter], offset: usize) -> 
     }
 
     file_path
+}
+
+#[proc_macro_derive(Params)]
+pub fn derive_params(item: TokenStream) -> TokenStream {
+    let item_struct = syn::parse_macro_input!(item as ItemStruct);
+    let struct_name = &item_struct.ident;
+
+    let fields = match &item_struct.fields {
+        syn::Fields::Named(fields) => fields
+            .named
+            .iter()
+            .map(|f| f.ident.as_ref().unwrap())
+            .collect::<Vec<_>>(),
+        _ => panic!("Only named fields are supported"),
+    };
+
+    // Add a from Hashmap conversion
+    let expanded = quote! {
+                use maudit::params::FromParam;
+
+        impl From<RouteParams> for #struct_name {
+            fn from(params: RouteParams) -> Self {
+                #struct_name {
+                                        #(#fields: FromParam::from_param(params.0.get(stringify!(#fields)).unwrap()).unwrap(),)*
+
+                }
+            }
+        }
+
+                impl Into<RouteParams> for #struct_name {
+                        fn into(self) -> RouteParams {
+                                let mut map = std::collections::HashMap::new();
+                                #(
+                                        map.insert(stringify!(#fields).to_string(), self.#fields.to_string());
+                                )*
+                                RouteParams(map)
+                        }
+                }
+    };
+
+    TokenStream::from(expanded)
 }

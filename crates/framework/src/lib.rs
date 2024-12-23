@@ -1,5 +1,6 @@
 pub mod assets;
 pub mod page;
+pub mod params;
 pub mod routes;
 
 mod logging;
@@ -22,7 +23,7 @@ pub use maud;
 pub use maudit_macros;
 
 use log::{info, trace};
-use page::RouteContext;
+use page::{RouteContext, RouteParams};
 
 pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>> {
     let build_start = SystemTime::now();
@@ -56,14 +57,14 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
     let pages_start = SystemTime::now();
 
     let route_format_options = FormatElapsedTimeOptions {
-        additional_fn: Some(Box::new(|msg: ColoredString| {
+        additional_fn: Some(&|msg: ColoredString| {
             let formatted_msg = format!("(+{})", msg);
             if msg.fgcolor.is_none() {
                 formatted_msg.dimmed()
             } else {
                 formatted_msg.into()
             }
-        })),
+        }),
         ..Default::default()
     };
 
@@ -81,7 +82,7 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
             true => {
                 let route_start = SystemTime::now();
                 let ctx = RouteContext {
-                    params: HashMap::new(),
+                    params: page::RouteParams(HashMap::new()),
                 };
 
                 let (file_path, file) = create_route_file(&**route, ctx.params.clone())?;
@@ -148,7 +149,7 @@ pub fn copy_recursively(source: impl AsRef<Path>, destination: impl AsRef<Path>)
 
 fn create_route_file(
     route: &dyn page::FullPage,
-    params: HashMap<String, String>,
+    params: RouteParams,
 ) -> Result<(PathBuf, File), Box<dyn std::error::Error>> {
     let file_path = PathBuf::from_str("./dist/")
         .unwrap()
