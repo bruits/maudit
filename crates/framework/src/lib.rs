@@ -15,7 +15,9 @@ use std::{
 
 use colored::{ColoredString, Colorize};
 use env_logger::{Builder, Env};
+
 use logging::{format_elapsed_time, FormatElapsedTimeOptions};
+
 pub use maud;
 pub use maudit_macros;
 
@@ -23,6 +25,7 @@ use log::{info, trace};
 use page::RouteContext;
 
 pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>> {
+    let build_start = SystemTime::now();
     let logging_env = Env::default().filter_or("RUST_LOG", "info");
     Builder::from_env(logging_env)
         .format(|buf, record| {
@@ -53,10 +56,10 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
     let pages_start = SystemTime::now();
 
     for route in &router.routes {
-        let route_start = SystemTime::now();
-
-        match route.routes().is_empty() {
+        let routes = route.routes();
+        match routes.is_empty() {
             true => {
+                let route_start = SystemTime::now();
                 let ctx = RouteContext {
                     params: HashMap::new(),
                 };
@@ -100,10 +103,10 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
             }
             false => {
                 info!(target: "build", "{}", route.route_raw().to_string().bold());
-                for (index, (params_key, params_value)) in route.routes().into_iter().enumerate() {
-                    let ctx = RouteContext {
-                        params: vec![(params_key, params_value)].into_iter().collect(),
-                    };
+
+                routes.into_iter().for_each(|params| {
+                    let route_start = SystemTime::now();
+                    let ctx = RouteContext { params };
 
                     let file_path = PathBuf::from_str("./dist/")
                         .unwrap()
@@ -111,7 +114,7 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
 
                     // Create the parent directories if it doesn't exist
                     let parent_dir = Path::new(file_path.parent().unwrap());
-                    fs::create_dir_all(parent_dir)?;
+                    fs::create_dir_all(parent_dir).unwrap();
 
                     // Create file
                     let mut file = File::create(file_path.clone()).unwrap();
@@ -139,14 +142,9 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
                             })),
                             ..Default::default()
                         },
-                    )?;
-                    let ascii_sign = if index < route.routes().len() - 1 {
-                        "├─"
-                    } else {
-                        "└─"
-                    };
-                    info!(target: "build", "{} {} {}", ascii_sign, file_path.to_string_lossy().dimmed(), formatted_elasped_time);
-                }
+                    ).unwrap();
+                    info!(target: "build", "├─ {} {}", file_path.to_string_lossy().dimmed(), formatted_elasped_time);
+                });
             }
         }
     }
@@ -156,6 +154,8 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
         FormatElapsedTimeOptions {
             sec_red_threshold: 5,
             sec_yellow_threshold: 1,
+            millis_red_threshold: None,
+            millis_yellow_threshold: None,
             ..Default::default()
         },
     )?;
@@ -173,6 +173,18 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
             format_elapsed_time(assets_start.elapsed(), FormatElapsedTimeOptions::default())?;
         info!(target: "build", "{}", format!("Assets copied in {}", formatted_elasped_time).bold());
     }
+
+    let formatted_elasped_time = format_elapsed_time(
+        build_start.elapsed(),
+        FormatElapsedTimeOptions {
+            sec_red_threshold: 5,
+            sec_yellow_threshold: 1,
+            millis_red_threshold: None,
+            millis_yellow_threshold: None,
+            ..Default::default()
+        },
+    )?;
+    info!(target: "build", "{}", format!("Build completed in {}", formatted_elasped_time).bold());
 
     Ok(())
 }

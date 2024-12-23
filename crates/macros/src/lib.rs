@@ -40,9 +40,8 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
         false => quote! {},
         true => quote! {
             impl DynamicPage for #struct_name {
-                fn routes(&self) -> std::collections::HashMap<String, String> {
-                    let mut routes = std::collections::HashMap::new();
-                    routes
+                fn routes(&self) -> Vec<std::collections::HashMap<String, String>> {
+                    Vec::new()
                 }
             }
         },
@@ -135,7 +134,7 @@ fn extract_values(input: &str) -> Vec<Parameter> {
     values
 }
 
-fn url_to_file_path(url: &str, is_file: bool, params: &Vec<Parameter>) -> String {
+fn url_to_file_path(url: &str, is_file: bool, params: &[Parameter]) -> String {
     let file_path = match is_file {
         false => {
             // Remove the leading '/' from the URL if it exists
@@ -161,10 +160,10 @@ fn url_to_file_path(url: &str, is_file: bool, params: &Vec<Parameter>) -> String
         }
     };
 
-    make_params_dynamic(&file_path, &params, 1)
+    make_params_dynamic(&file_path, params, 1)
 }
 
-fn make_params_dynamic(file_path: &str, params: &Vec<Parameter>, offset: usize) -> String {
+fn make_params_dynamic(file_path: &str, params: &[Parameter], offset: usize) -> String {
     let mut file_path = file_path.to_string();
     for param in params.iter().rev() {
         file_path.replace_range(

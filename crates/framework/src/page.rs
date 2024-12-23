@@ -14,7 +14,7 @@ pub trait Page {
 }
 
 pub trait DynamicPage {
-    fn routes(&self) -> HashMap<String, String>;
+    fn routes(&self) -> Vec<HashMap<String, String>>;
 }
 
 pub trait InternalPage {
@@ -23,4 +23,4 @@ pub trait InternalPage {
     fn file_path(&self, params: HashMap<String, String>) -> PathBuf;
 }
 
-pub trait FullPage: Page + InternalPage + DynamicPage {}
+pub trait FullPage: Page + InternalPage + DynamicPage + Sync {}
