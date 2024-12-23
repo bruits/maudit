@@ -23,7 +23,7 @@ impl Default for FormatElapsedTimeOptions {
 
 pub fn format_elapsed_time(
     elapsed: Result<Duration, SystemTimeError>,
-    options: FormatElapsedTimeOptions,
+    options: &FormatElapsedTimeOptions,
 ) -> Result<ColoredString, SystemTimeError> {
     let elapsed = match elapsed {
         Ok(elapsed) => elapsed,
@@ -54,7 +54,7 @@ pub fn format_elapsed_time(
         },
     };
 
-    if let Some(additional_fn) = options.additional_fn {
+    if let Some(additional_fn) = &options.additional_fn {
         Ok(additional_fn(result))
     } else {
         Ok(result)

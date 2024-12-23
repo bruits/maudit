@@ -55,6 +55,26 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
     info!(target: "SKIP_FORMAT", "{}", " generating pages ".on_green().bold());
     let pages_start = SystemTime::now();
 
+    let route_format_options = FormatElapsedTimeOptions {
+        additional_fn: Some(Box::new(|msg: ColoredString| {
+            let formatted_msg = format!("(+{})", msg);
+            if msg.fgcolor.is_none() {
+                formatted_msg.dimmed()
+            } else {
+                formatted_msg.into()
+            }
+        })),
+        ..Default::default()
+    };
+
+    let section_format_options = FormatElapsedTimeOptions {
+        sec_red_threshold: 5,
+        sec_yellow_threshold: 1,
+        millis_red_threshold: None,
+        millis_yellow_threshold: None,
+        ..Default::default()
+    };
+
     for route in &router.routes {
         let routes = route.routes();
         match routes.is_empty() {
@@ -64,41 +84,11 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
                     params: HashMap::new(),
                 };
 
-                let file_path = PathBuf::from_str("./dist/")
-                    .unwrap()
-                    .join(route.file_path(ctx.params.clone()));
+                let (file_path, file) = create_route_file(&**route, ctx.params.clone())?;
+                render_route(file, &**route, &ctx)?;
 
-                // Create the parent directories if it doesn't exist
-                let parent_dir = Path::new(file_path.parent().unwrap());
-                fs::create_dir_all(parent_dir)?;
-
-                // Create file
-                let mut file = File::create(file_path.clone()).unwrap();
-
-                let rendered = route.render(&ctx);
-                match rendered {
-                    page::RenderResult::Html(html) => {
-                        file.write_all(html.into_string().as_bytes()).unwrap();
-                    }
-                    page::RenderResult::Text(text) => {
-                        file.write_all(text.as_bytes()).unwrap();
-                    }
-                }
-
-                let formatted_elasped_time = format_elapsed_time(
-                    route_start.elapsed(),
-                    FormatElapsedTimeOptions {
-                        additional_fn: Some(Box::new(|msg: ColoredString| {
-                            let formatted_msg = format!("(+{})", msg);
-                            if msg.fgcolor.is_none() {
-                                formatted_msg.dimmed()
-                            } else {
-                                formatted_msg.into()
-                            }
-                        })),
-                        ..Default::default()
-                    },
-                )?;
+                let formatted_elasped_time =
+                    format_elapsed_time(route_start.elapsed(), &route_format_options)?;
                 info!(target: "build", "{} -> {} {}", route.route(ctx.params), file_path.to_string_lossy().dimmed(), formatted_elasped_time);
             }
             false => {
@@ -108,57 +98,18 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
                     let route_start = SystemTime::now();
                     let ctx = RouteContext { params };
 
-                    let file_path = PathBuf::from_str("./dist/")
-                        .unwrap()
-                        .join(route.file_path(ctx.params.clone()));
+                    let (file_path, file) = create_route_file(&**route, ctx.params.clone()).unwrap();
+                    render_route(file, &**route, &ctx).unwrap();
 
-                    // Create the parent directories if it doesn't exist
-                    let parent_dir = Path::new(file_path.parent().unwrap());
-                    fs::create_dir_all(parent_dir).unwrap();
-
-                    // Create file
-                    let mut file = File::create(file_path.clone()).unwrap();
-
-                    let rendered = route.render(&ctx);
-                    match rendered {
-                        page::RenderResult::Html(html) => {
-                            file.write_all(html.into_string().as_bytes()).unwrap();
-                        }
-                        page::RenderResult::Text(text) => {
-                            file.write_all(text.as_bytes()).unwrap();
-                        }
-                    }
-
-                    let formatted_elasped_time = format_elapsed_time(
-                        route_start.elapsed(),
-                        FormatElapsedTimeOptions {
-                            additional_fn: Some(Box::new(|msg: ColoredString| {
-                                let formatted_msg = format!("(+{})", msg);
-                                if msg.fgcolor.is_none() {
-                                    formatted_msg.dimmed()
-                                } else {
-                                    formatted_msg.into()
-                                }
-                            })),
-                            ..Default::default()
-                        },
-                    ).unwrap();
+                    let formatted_elasped_time = format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap();
                     info!(target: "build", "├─ {} {}", file_path.to_string_lossy().dimmed(), formatted_elasped_time);
                 });
             }
         }
     }
 
-    let formatted_elasped_time = format_elapsed_time(
-        pages_start.elapsed(),
-        FormatElapsedTimeOptions {
-            sec_red_threshold: 5,
-            sec_yellow_threshold: 1,
-            millis_red_threshold: None,
-            millis_yellow_threshold: None,
-            ..Default::default()
-        },
-    )?;
+    let formatted_elasped_time =
+        format_elapsed_time(pages_start.elapsed(), &section_format_options)?;
     info!(target: "build", "{}", format!("Pages generated in {}", formatted_elasped_time).bold());
 
     // Check if static directory exists
@@ -170,20 +121,12 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
         copy_recursively("./static", "./dist")?;
 
         let formatted_elasped_time =
-            format_elapsed_time(assets_start.elapsed(), FormatElapsedTimeOptions::default())?;
+            format_elapsed_time(assets_start.elapsed(), &FormatElapsedTimeOptions::default())?;
         info!(target: "build", "{}", format!("Assets copied in {}", formatted_elasped_time).bold());
     }
 
-    let formatted_elasped_time = format_elapsed_time(
-        build_start.elapsed(),
-        FormatElapsedTimeOptions {
-            sec_red_threshold: 5,
-            sec_yellow_threshold: 1,
-            millis_red_threshold: None,
-            millis_yellow_threshold: None,
-            ..Default::default()
-        },
-    )?;
+    let formatted_elasped_time =
+        format_elapsed_time(build_start.elapsed(), &section_format_options)?;
     info!(target: "build", "{}", format!("Build completed in {}", formatted_elasped_time).bold());
 
     Ok(())
@@ -198,6 +141,41 @@ pub fn copy_recursively(source: impl AsRef<Path>, destination: impl AsRef<Path>)
             copy_recursively(entry.path(), destination.as_ref().join(entry.file_name()))?;
         } else {
             fs::copy(entry.path(), destination.as_ref().join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+
+fn create_route_file(
+    route: &dyn page::FullPage,
+    params: HashMap<String, String>,
+) -> Result<(PathBuf, File), Box<dyn std::error::Error>> {
+    let file_path = PathBuf::from_str("./dist/")
+        .unwrap()
+        .join(route.file_path(params.clone()));
+
+    // Create the parent directories if it doesn't exist
+    let parent_dir = Path::new(file_path.parent().unwrap());
+    fs::create_dir_all(parent_dir)?;
+
+    // Create file
+    let file = File::create(file_path.clone())?;
+
+    Ok((file_path, file))
+}
+
+fn render_route(
+    mut file: File,
+    route: &dyn page::FullPage,
+    ctx: &RouteContext,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rendered = route.render(ctx);
+    match rendered {
+        page::RenderResult::Html(html) => {
+            file.write_all(html.into_string().as_bytes())?;
+        }
+        page::RenderResult::Text(text) => {
+            file.write_all(text.as_bytes())?;
         }
     }
     Ok(())
