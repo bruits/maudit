@@ -1,6 +1,8 @@
 use maud::html;
 use maudit::maudit_macros::route;
-use maudit::page::{Page, RenderResult, RouteContext};
+use maudit::page::{InternalPage, Page, RenderResult, RouteContext};
+
+use super::dynamic::{DynamicExample, Params as DynamicExampleParams};
 
 #[route("/")]
 pub struct Index;
@@ -8,8 +10,11 @@ pub struct Index;
 impl Page for Index {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let image = ctx.assets.add_image("data/logo.svg".into());
-
         let script = ctx.assets.add_script("data/some_other_script.js".into());
+
+        let link_to_first_dynamic = DynamicExample::url(&DynamicExampleParams { page: 1 });
+
+        println!("Link to endpoint: {}", link_to_first_dynamic);
 
         RenderResult::Html(html! {
           h1 { "Index" }

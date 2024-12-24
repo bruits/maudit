@@ -6,8 +6,8 @@ use maudit::page::{DynamicPage, Page, RenderResult, RouteContext, RouteParams};
 pub struct DynamicExample;
 
 #[derive(Params)]
-struct Params {
-    page: u128,
+pub struct Params {
+    pub page: u128,
 }
 
 impl DynamicPage for DynamicExample {

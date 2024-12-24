@@ -45,7 +45,9 @@ pub trait InternalPage {
     fn route_raw(&self) -> String;
     fn route(&self, params: &RouteParams) -> String;
     fn file_path(&self, params: &RouteParams) -> PathBuf;
-    fn url(&self, params: &RouteParams) -> String;
+    fn url<P: Into<RouteParams>>(params: P) -> String
+    where
+        Self: Sized;
 }
 
 pub trait FullPage: Page + InternalPage + DynamicPage + Sync {}

@@ -94,7 +94,8 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 std::path::PathBuf::from(format!(#file_path_for_route))
             }
 
-            fn url(&self, params: &maudit::page::RouteParams) -> String {
+            fn url<P: Into<maudit::page::RouteParams>>(params: P) -> String {
+                let params = params.into();
                 #(#list_params;)*
                 format!(#path_for_route)
             }
@@ -227,6 +228,17 @@ pub fn derive_params(item: TokenStream) -> TokenStream {
                 RouteParams(map)
             }
         }
+
+        impl Into<RouteParams> for &#struct_name {
+            fn into(self) -> RouteParams {
+                let mut map = maudit::FxHashMap::default();
+                #(
+                    map.insert(stringify!(#fields).to_string(), self.#fields.to_string());
+                )*
+                RouteParams(map)
+            }
+        }
+
     };
 
     TokenStream::from(expanded)
