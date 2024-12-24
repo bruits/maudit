@@ -26,9 +26,10 @@ pub use rustc_hash::FxHashMap;
 
 use log::{info, trace};
 use page::{RouteContext, RouteParams};
+use rolldown::{Bundler, BundlerOptions, InputItem};
 use rustc_hash::FxHashSet;
 
-pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn coronate(router: routes::Router<'_>) -> Result<(), Box<dyn std::error::Error>> {
     let build_start = SystemTime::now();
     let logging_env = Env::default().filter_or("RUST_LOG", "info");
     Builder::from_env(logging_env)
@@ -80,6 +81,7 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
     };
 
     let mut build_pages_assets: FxHashSet<Box<dyn Asset>> = FxHashSet::default();
+    let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
 
     for route in &router.routes {
         let routes = route.routes();
@@ -99,7 +101,8 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
                     format_elapsed_time(route_start.elapsed(), &route_format_options)?;
                 info!(target: "build", "{} -> {} {}", route.route(&ctx.params), file_path.to_string_lossy().dimmed(), formatted_elasped_time);
 
-                build_pages_assets.extend(page_assets.0);
+                build_pages_assets.extend(page_assets.assets);
+                build_pages_scripts.extend(page_assets.scripts);
             }
             false => {
                 info!(target: "build", "{}", route.route_raw().to_string().bold());
@@ -118,7 +121,8 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
                     info!(target: "build", "├─ {} {}", file_path.to_string_lossy().dimmed(), formatted_elasped_time);
                 });
 
-                build_pages_assets.extend(pages_assets.0);
+                build_pages_assets.extend(pages_assets.assets);
+                build_pages_scripts.extend(pages_assets.scripts);
             }
         }
     }
@@ -128,11 +132,31 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
     info!(target: "build", "{}", format!("Pages generated in {}", formatted_elasped_time).bold());
 
     let assets_start = SystemTime::now();
-    info!(target: "SKIP_FORMAT", "{}", format!(" generating {} assets ", build_pages_assets.len()).on_green().bold());
+    info!(target: "SKIP_FORMAT", "{}", " generating assets ".on_green().bold());
 
     build_pages_assets.iter().for_each(|asset| {
         asset.process();
     });
+
+    let bundler_inputs = build_pages_scripts
+        .iter()
+        .map(|script| InputItem {
+            import: script.path().to_string_lossy().to_string(),
+            ..Default::default()
+        })
+        .collect::<Vec<InputItem>>();
+
+    if !bundler_inputs.is_empty() {
+        let mut bundler = Bundler::new(BundlerOptions {
+            input: Some(bundler_inputs),
+            minify: Some(true),
+            dir: Some("dist/_assets".to_string()),
+
+            ..Default::default()
+        });
+
+        let _result = bundler.write().await.unwrap();
+    }
 
     let formatted_elasped_time =
         format_elapsed_time(assets_start.elapsed(), &section_format_options)?;

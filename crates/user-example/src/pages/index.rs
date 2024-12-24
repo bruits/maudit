@@ -1,36 +1,20 @@
-use maudit::maud::html;
-use maudit::maudit_macros::{route, Params};
-use maudit::page::{DynamicPage, Page, RenderResult, RouteContext, RouteParams};
+use maud::html;
+use maudit::maudit_macros::route;
+use maudit::page::{Page, RenderResult, RouteContext};
 
-#[route("/[page]")]
+#[route("/")]
 pub struct Index;
-
-#[derive(Params)]
-struct Params {
-    page: u128,
-}
-
-impl DynamicPage for Index {
-    fn routes(&self) -> Vec<RouteParams> {
-        let mut static_routes: Vec<Params> = vec![];
-
-        for i in 0..1000 {
-            static_routes.push(Params { page: i });
-        }
-
-        RouteParams::from_vec(static_routes)
-    }
-}
 
 impl Page for Index {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-        let params = ctx.params.parse_into::<Params>();
-        let image = ctx.assets.add_image("data/social-card.png".into());
+        let image = ctx.assets.add_image("data/logo.svg".into());
+
+        let script = ctx.assets.add_script("data/some_other_script.js".into());
 
         RenderResult::Html(html! {
-          h1 { "Hello, world!" }
+          h1 { "Index" }
           img src=(image.path.to_string_lossy()) {}
-          p { (params.page) }
+          script src=(script.path.to_string_lossy()) {}
         })
     }
 }
