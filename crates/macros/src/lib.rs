@@ -69,35 +69,39 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let file_path_for_route = url_to_file_path(&path, attrs.is_endpoint_file, &params);
 
     let expanded = quote! {
-                struct RawParams {
-                        #(#struct_def_params,)*
-                }
+        struct RawParams {
+            #(#struct_def_params,)*
+        }
 
         impl RawParams {
             fn get_field_names() -> Vec<&'static str> {
-              vec![#(stringify!(#struct_def_params)),*]
-          }
+                vec![#(stringify!(#struct_def_params)),*]
+            }
         }
 
         impl maudit::page::InternalPage for #struct_name {
-                    fn route_raw(&self) -> String {
-                        #path.to_string()
-                    }
+            fn route_raw(&self) -> String {
+                #path.to_string()
+            }
 
-          fn route(&self, params: &maudit::page::RouteParams) -> String {
-                        #(#list_params;)*
-            return format!(#path_for_route);
-          }
+            fn route(&self, params: &maudit::page::RouteParams) -> String {
+                #(#list_params;)*
+                return format!(#path_for_route);
+            }
 
-          fn file_path(&self, params: &maudit::page::RouteParams) -> std::path::PathBuf {
-                        // List params in the shape of let id = ctx.params.get("id").unwrap().to_string();
-                        #(#list_params;)*
-            std::path::PathBuf::from(format!(#file_path_for_route))
-          }
+            fn file_path(&self, params: &maudit::page::RouteParams) -> std::path::PathBuf {
+                #(#list_params;)*
+                std::path::PathBuf::from(format!(#file_path_for_route))
+            }
+
+            fn url(&self, params: &maudit::page::RouteParams) -> String {
+                #(#list_params;)*
+                format!(#path_for_route)
+            }
         }
 
 
-            #dynamic_page_impl
+        #dynamic_page_impl
 
         impl maudit::page::FullPage for #struct_name {}
 
@@ -209,21 +213,20 @@ pub fn derive_params(item: TokenStream) -> TokenStream {
         impl From<RouteParams> for #struct_name {
             fn from(params: RouteParams) -> Self {
                 #struct_name {
-                                        #(#fields: maudit::params::FromParam::from_param(params.0.get(stringify!(#fields)).unwrap()).unwrap(),)*
-
+                    #(#fields: maudit::params::FromParam::from_param(params.0.get(stringify!(#fields)).unwrap()).unwrap(),)*
                 }
             }
         }
 
-                impl Into<RouteParams> for #struct_name {
-                        fn into(self) -> RouteParams {
-                                let mut map = maudit::FxHashMap::default();
-                                #(
-                                        map.insert(stringify!(#fields).to_string(), self.#fields.to_string());
-                                )*
-                                RouteParams(map)
-                        }
-                }
+        impl Into<RouteParams> for #struct_name {
+            fn into(self) -> RouteParams {
+                let mut map = maudit::FxHashMap::default();
+                #(
+                    map.insert(stringify!(#fields).to_string(), self.#fields.to_string());
+                )*
+                RouteParams(map)
+            }
+        }
     };
 
     TokenStream::from(expanded)
