@@ -1,16 +1,19 @@
 use std::{collections::HashMap, path::PathBuf};
 
+use crate::assets::PageAssets;
+
 pub enum RenderResult<T = maud::Markup> {
     Html(T),
     Text(String),
 }
 
-pub struct RouteContext {
+pub struct RouteContext<'a> {
     pub params: RouteParams,
+    pub assets: &'a mut PageAssets,
 }
 
 pub trait Page {
-    fn render(&self, ctx: &RouteContext) -> RenderResult;
+    fn render(&self, ctx: &mut RouteContext) -> RenderResult;
 }
 
 #[derive(Clone, Default, Debug)]
@@ -38,8 +41,8 @@ pub trait DynamicPage {
 
 pub trait InternalPage {
     fn route_raw(&self) -> String;
-    fn route(&self, params: RouteParams) -> String;
-    fn file_path(&self, params: RouteParams) -> PathBuf;
+    fn route(&self, params: &RouteParams) -> String;
+    fn file_path(&self, params: &RouteParams) -> PathBuf;
 }
 
 pub trait FullPage: Page + InternalPage + DynamicPage + Sync {}

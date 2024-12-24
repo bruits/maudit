@@ -6,7 +6,7 @@ pub mod routes;
 mod logging;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::{self, File},
     io::{self, Write},
     path::{Path, PathBuf},
@@ -14,6 +14,7 @@ use std::{
     time::SystemTime,
 };
 
+use assets::Asset;
 use colored::{ColoredString, Colorize};
 use env_logger::{Builder, Env};
 
@@ -76,35 +77,46 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
         ..Default::default()
     };
 
+    let mut build_pages_assets: HashSet<Box<dyn Asset>> = HashSet::new();
+
     for route in &router.routes {
         let routes = route.routes();
         match routes.is_empty() {
             true => {
                 let route_start = SystemTime::now();
-                let ctx = RouteContext {
+                let mut page_assets = assets::PageAssets::default();
+                let mut ctx = RouteContext {
                     params: page::RouteParams(HashMap::new()),
+                    assets: &mut page_assets,
                 };
 
-                let (file_path, file) = create_route_file(&**route, ctx.params.clone())?;
-                render_route(file, &**route, &ctx)?;
+                let (file_path, file) = create_route_file(&**route, &ctx.params)?;
+                render_route(file, &**route, &mut ctx)?;
 
                 let formatted_elasped_time =
                     format_elapsed_time(route_start.elapsed(), &route_format_options)?;
-                info!(target: "build", "{} -> {} {}", route.route(ctx.params), file_path.to_string_lossy().dimmed(), formatted_elasped_time);
+                info!(target: "build", "{} -> {} {}", route.route(&ctx.params), file_path.to_string_lossy().dimmed(), formatted_elasped_time);
+
+                build_pages_assets.extend(page_assets.0);
             }
             false => {
                 info!(target: "build", "{}", route.route_raw().to_string().bold());
 
+                // Reuse the same PageAssets HashSet for all the routes of a dynamic page
+                let mut pages_assets = assets::PageAssets::default();
+
                 routes.into_iter().for_each(|params| {
                     let route_start = SystemTime::now();
-                    let ctx = RouteContext { params };
+                    let mut ctx = RouteContext { params, assets: &mut pages_assets };
 
-                    let (file_path, file) = create_route_file(&**route, ctx.params.clone()).unwrap();
-                    render_route(file, &**route, &ctx).unwrap();
+                    let (file_path, file) = create_route_file(&**route, &ctx.params).unwrap();
+                    render_route(file, &**route, &mut ctx).unwrap();
 
                     let formatted_elasped_time = format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap();
                     info!(target: "build", "├─ {} {}", file_path.to_string_lossy().dimmed(), formatted_elasped_time);
                 });
+
+                build_pages_assets.extend(pages_assets.0);
             }
         }
     }
@@ -112,6 +124,17 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
     let formatted_elasped_time =
         format_elapsed_time(pages_start.elapsed(), &section_format_options)?;
     info!(target: "build", "{}", format!("Pages generated in {}", formatted_elasped_time).bold());
+
+    let assets_start = SystemTime::now();
+    info!(target: "SKIP_FORMAT", "{}", format!(" generating {} assets ", build_pages_assets.len()).on_green().bold());
+
+    build_pages_assets.iter().for_each(|asset| {
+        asset.process();
+    });
+
+    let formatted_elasped_time =
+        format_elapsed_time(assets_start.elapsed(), &section_format_options)?;
+    info!(target: "build", "{}", format!("Assets generated in {}", formatted_elasped_time).bold());
 
     // Check if static directory exists
     if PathBuf::from_str("./static").unwrap().exists() {
@@ -149,11 +172,11 @@ pub fn copy_recursively(source: impl AsRef<Path>, destination: impl AsRef<Path>)
 
 fn create_route_file(
     route: &dyn page::FullPage,
-    params: RouteParams,
+    params: &RouteParams,
 ) -> Result<(PathBuf, File), Box<dyn std::error::Error>> {
     let file_path = PathBuf::from_str("./dist/")
         .unwrap()
-        .join(route.file_path(params.clone()));
+        .join(route.file_path(params));
 
     // Create the parent directories if it doesn't exist
     let parent_dir = Path::new(file_path.parent().unwrap());
@@ -168,7 +191,7 @@ fn create_route_file(
 fn render_route(
     mut file: File,
     route: &dyn page::FullPage,
-    ctx: &RouteContext,
+    ctx: &mut RouteContext,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let rendered = route.render(ctx);
     match rendered {

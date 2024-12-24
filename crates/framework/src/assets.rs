@@ -1,50 +1,61 @@
-use std::fmt::Display;
-use std::fs::{self};
-use std::path::PathBuf;
+use dyn_eq::DynEq;
+use std::hash::Hash;
+use std::{collections::HashSet, fs, path::PathBuf};
 
-pub struct Asset {
-    file_path: PathBuf,
-    final_url: String,
+#[derive(Default)]
+pub struct PageAssets(pub(crate) HashSet<Box<dyn Asset>>);
+
+impl PageAssets {
+    pub fn add_image(&mut self, image_path: PathBuf) -> Image {
+        let image = Box::new(Image { path: image_path });
+
+        self.0.insert(image.clone());
+
+        *image
+    }
+}
+pub trait Asset: DynEq {
+    fn url(&self) -> Option<String>;
+    fn path(&self) -> &PathBuf;
+
+    fn process(&self);
+    fn hash(&self) -> [u8; 8];
 }
 
-trait GenericAsset {
-    fn load(file_path: PathBuf) -> Self;
-}
-
-impl GenericAsset for Asset {
-    fn load(file_path: PathBuf) -> Self {
-        let canonicalized = file_path.canonicalize().unwrap();
-        let file_name = canonicalized.file_name().unwrap().to_string_lossy();
-
-        Asset {
-            file_path: canonicalized.clone(),
-            final_url: format!("/_assets/{}", file_name),
-        }
+impl Hash for dyn Asset {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.hash().hash(state);
     }
 }
 
-impl Asset {
-    pub fn new(file_path: PathBuf) -> Self {
-        let asset = Asset::load(file_path);
-        asset.finalize();
+dyn_eq::eq_trait_object!(Asset);
 
-        asset
+#[derive(Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct Image {
+    pub path: PathBuf,
+}
+
+impl Asset for Image {
+    fn url(&self) -> Option<String> {
+        let file_name = self.path.file_name().unwrap().to_str().unwrap();
+
+        format!("/_assets/{}", file_name).into()
     }
 
-    fn finalize(&self) {
+    fn path(&self) -> &PathBuf {
+        &self.path
+    }
+
+    fn process(&self) {
         fs::copy(
-            &self.file_path,
-            format!(
-                "dist/_assets/{}",
-                self.file_path.file_name().unwrap().to_string_lossy()
-            ),
+            &self.path,
+            "dist/_assets/".to_string() + self.path.file_name().unwrap().to_str().unwrap(),
         )
         .unwrap();
     }
-}
 
-impl Display for Asset {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.final_url)
+    fn hash(&self) -> [u8; 8] {
+        [0; 8]
     }
 }

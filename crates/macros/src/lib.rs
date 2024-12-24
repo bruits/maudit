@@ -84,12 +84,12 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
                         #path.to_string()
                     }
 
-          fn route(&self, params: maudit::page::RouteParams) -> String {
+          fn route(&self, params: &maudit::page::RouteParams) -> String {
                         #(#list_params;)*
             return format!(#path_for_route);
           }
 
-          fn file_path(&self, params: maudit::page::RouteParams) -> std::path::PathBuf {
+          fn file_path(&self, params: &maudit::page::RouteParams) -> std::path::PathBuf {
                         // List params in the shape of let id = ctx.params.get("id").unwrap().to_string();
                         #(#list_params;)*
             std::path::PathBuf::from(format!(#file_path_for_route))

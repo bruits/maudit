@@ -23,11 +23,13 @@ impl DynamicPage for Index {
 }
 
 impl Page for Index {
-    fn render(&self, ctx: &RouteContext) -> RenderResult {
+    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let params = ctx.params.parse_into::<Params>();
+        let image = ctx.assets.add_image("data/social-card.png".into());
 
         RenderResult::Html(html! {
           h1 { "Hello, world!" }
+          img src=(image.path.to_string_lossy()) {}
           p { (params.page) }
         })
     }

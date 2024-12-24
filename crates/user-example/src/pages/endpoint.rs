@@ -5,8 +5,15 @@ use maudit::page::{Page, RenderResult, RouteContext};
 pub struct Endpoint;
 
 impl Page for Endpoint {
-    fn render(&self, _context: &RouteContext) -> RenderResult {
+    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+        let image = ctx.assets.add_image("data/logo.svg".into());
+
         // Return some JSON
-        RenderResult::Text(r#"{"message": "Hello, world!"}"#.to_string())
+        RenderResult::Text(format!(
+            r#"{{
+								"image": "{}"
+								}}"#,
+            image.path.to_string_lossy()
+        ))
     }
 }
