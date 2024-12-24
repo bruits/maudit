@@ -206,12 +206,10 @@ pub fn derive_params(item: TokenStream) -> TokenStream {
 
     // Add a from Hashmap conversion
     let expanded = quote! {
-                use maudit::params::FromParam;
-
         impl From<RouteParams> for #struct_name {
             fn from(params: RouteParams) -> Self {
                 #struct_name {
-                                        #(#fields: FromParam::from_param(params.0.get(stringify!(#fields)).unwrap()).unwrap(),)*
+                                        #(#fields: maudit::params::FromParam::from_param(params.0.get(stringify!(#fields)).unwrap()).unwrap(),)*
 
                 }
             }
