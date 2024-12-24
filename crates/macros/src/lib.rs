@@ -219,7 +219,7 @@ pub fn derive_params(item: TokenStream) -> TokenStream {
 
                 impl Into<RouteParams> for #struct_name {
                         fn into(self) -> RouteParams {
-                                let mut map = std::collections::HashMap::new();
+                                let mut map = maudit::FxHashMap::default();
                                 #(
                                         map.insert(stringify!(#fields).to_string(), self.#fields.to_string());
                                 )*

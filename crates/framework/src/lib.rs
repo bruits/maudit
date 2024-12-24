@@ -6,7 +6,6 @@ pub mod routes;
 mod logging;
 
 use std::{
-    collections::{HashMap, HashSet},
     fs::{self, File},
     io::{self, Write},
     path::{Path, PathBuf},
@@ -23,8 +22,11 @@ use logging::{format_elapsed_time, FormatElapsedTimeOptions};
 pub use maud;
 pub use maudit_macros;
 
+pub use rustc_hash::FxHashMap;
+
 use log::{info, trace};
 use page::{RouteContext, RouteParams};
+use rustc_hash::FxHashSet;
 
 pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>> {
     let build_start = SystemTime::now();
@@ -77,7 +79,7 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
         ..Default::default()
     };
 
-    let mut build_pages_assets: HashSet<Box<dyn Asset>> = HashSet::new();
+    let mut build_pages_assets: FxHashSet<Box<dyn Asset>> = FxHashSet::default();
 
     for route in &router.routes {
         let routes = route.routes();
@@ -86,7 +88,7 @@ pub fn coronate(router: routes::Router) -> Result<(), Box<dyn std::error::Error>
                 let route_start = SystemTime::now();
                 let mut page_assets = assets::PageAssets::default();
                 let mut ctx = RouteContext {
-                    params: page::RouteParams(HashMap::new()),
+                    params: page::RouteParams(FxHashMap::default()),
                     assets: &mut page_assets,
                 };
 

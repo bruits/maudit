@@ -1,9 +1,10 @@
 use dyn_eq::DynEq;
+use rustc_hash::FxHashSet;
 use std::hash::Hash;
-use std::{collections::HashSet, fs, path::PathBuf};
+use std::{fs, path::PathBuf};
 
 #[derive(Default)]
-pub struct PageAssets(pub(crate) HashSet<Box<dyn Asset>>);
+pub struct PageAssets(pub(crate) FxHashSet<Box<dyn Asset>>);
 
 impl PageAssets {
     pub fn add_image(&mut self, image_path: PathBuf) -> Image {

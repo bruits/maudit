@@ -1,4 +1,6 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::path::PathBuf;
+
+use rustc_hash::FxHashMap;
 
 use crate::assets::PageAssets;
 
@@ -17,7 +19,7 @@ pub trait Page {
 }
 
 #[derive(Clone, Default, Debug)]
-pub struct RouteParams(pub HashMap<String, String>);
+pub struct RouteParams(pub FxHashMap<String, String>);
 
 impl RouteParams {
     pub fn from_vec<T>(params: Vec<T>) -> Vec<RouteParams>
