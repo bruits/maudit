@@ -1,6 +1,6 @@
-use maudit::maud::html;
-use maudit::maudit_macros::{route, Params};
-use maudit::page::{DynamicPage, Page, RenderResult, RouteContext, RouteParams};
+use maudit::page::prelude::*;
+
+use maud::html;
 
 #[route("/[page]")]
 pub struct DynamicExample;

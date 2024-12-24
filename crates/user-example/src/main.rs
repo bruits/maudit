@@ -1,5 +1,5 @@
 mod pages;
-use maudit::routes::Router;
+use maudit::Router;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

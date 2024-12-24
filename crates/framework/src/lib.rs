@@ -1,7 +1,7 @@
-pub mod assets;
+mod assets;
 pub mod page;
 pub mod params;
-pub mod routes;
+mod routes;
 
 mod logging;
 
@@ -19,8 +19,7 @@ use env_logger::{Builder, Env};
 
 use logging::{format_elapsed_time, FormatElapsedTimeOptions};
 
-pub use maud;
-pub use maudit_macros;
+pub use routes::Router;
 
 pub use rustc_hash::FxHashMap;
 

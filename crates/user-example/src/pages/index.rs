@@ -1,6 +1,6 @@
+use maudit::page::prelude::*;
+
 use maud::html;
-use maudit::maudit_macros::route;
-use maudit::page::{InternalPage, Page, RenderResult, RouteContext};
 
 use super::dynamic::{DynamicExample, Params as DynamicExampleParams};
 

@@ -51,3 +51,10 @@ pub trait InternalPage {
 }
 
 pub trait FullPage: Page + InternalPage + DynamicPage + Sync {}
+
+pub mod prelude {
+    pub use super::{
+        DynamicPage, FullPage, InternalPage, Page, RenderResult, RouteContext, RouteParams,
+    };
+    pub use maudit_macros::{route, Params};
+}

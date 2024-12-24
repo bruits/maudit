@@ -1,5 +1,4 @@
-use maudit::maudit_macros::route;
-use maudit::page::{Page, RenderResult, RouteContext};
+use maudit::page::prelude::*;
 
 #[route("/catalogue/data.json")]
 pub struct Endpoint;
