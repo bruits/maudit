@@ -11,18 +11,23 @@ impl Page for Index {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let image = ctx.assets.add_image("data/logo.svg".into());
         let script = ctx.assets.add_script("data/some_other_script.js".into());
+        let style = ctx.assets.add_style("data/tailwind.css".into(), true);
 
         let link_to_first_dynamic = DynamicExample::url_unsafe(&DynamicExampleParams { page: 1 });
 
         let safe_link_to_first_dynamic = DynamicExample
-            .url(&DynamicExampleParams { page: 2 })
+            .url(&DynamicExampleParams { page: 0 })
             .unwrap();
 
         RenderResult::Html(html! {
+            head {
+                title { "Index" }
+                link rel="stylesheet" href=(style.url().unwrap()) {}
+            }
             h1 { "Index" }
-            img src=(image.path.to_string_lossy()) {}
-            script src=(script.path.to_string_lossy()) {}
-            a href=(link_to_first_dynamic) { "Go to first dynamic page" }
+            img src=(image.url().unwrap()) {}
+            script src=(script.url().unwrap()) {}
+            a."text-red-500" href=(link_to_first_dynamic) { "Go to first dynamic page" }
             a href=(safe_link_to_first_dynamic) { "Go to first dynamic page (safe)" }
         })
     }

@@ -67,5 +67,6 @@ pub mod prelude {
     pub use super::{
         DynamicPage, FullPage, InternalPage, Page, RenderResult, RouteContext, RouteParams,
     };
+    pub use crate::assets::Asset;
     pub use maudit_macros::{route, Params};
 }

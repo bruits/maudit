@@ -1,12 +1,16 @@
 use dyn_eq::DynEq;
+use log::info;
 use rustc_hash::FxHashSet;
 use std::hash::Hash;
+use std::process::Command;
+use std::time::SystemTime;
 use std::{fs, path::PathBuf};
 
 #[derive(Default)]
 pub struct PageAssets {
     pub(crate) assets: FxHashSet<Box<dyn Asset>>,
     pub(crate) scripts: FxHashSet<Script>,
+    pub(crate) styles: FxHashSet<Style>,
 }
 
 impl PageAssets {
@@ -25,13 +29,26 @@ impl PageAssets {
 
         script
     }
+
+    pub fn add_style(&mut self, style_path: PathBuf, tailwind: bool) -> Style {
+        let style = Style {
+            path: style_path,
+            tailwind,
+        };
+
+        self.styles.insert(style.clone());
+
+        style
+    }
 }
 
 pub trait Asset: DynEq {
     fn url(&self) -> Option<String>;
     fn path(&self) -> &PathBuf;
 
-    fn process(&self);
+    fn process(&self) -> Option<String> {
+        None
+    }
     fn hash(&self) -> [u8; 8];
 }
 
@@ -60,12 +77,14 @@ impl Asset for Image {
         &self.path
     }
 
-    fn process(&self) {
+    fn process(&self) -> Option<String> {
         fs::copy(
             &self.path,
             "dist/_assets/".to_string() + self.path.file_name().unwrap().to_str().unwrap(),
         )
         .unwrap();
+
+        None
     }
 
     fn hash(&self) -> [u8; 8] {
@@ -90,7 +109,48 @@ impl Asset for Script {
         &self.path
     }
 
-    fn process(&self) {}
+    fn hash(&self) -> [u8; 8] {
+        [0; 8]
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct Style {
+    pub path: PathBuf,
+    pub(crate) tailwind: bool,
+}
+
+impl Asset for Style {
+    fn url(&self) -> Option<String> {
+        let file_name = self.path.file_name().unwrap().to_str().unwrap();
+
+        format!("/_assets/{}", file_name).into()
+    }
+
+    fn path(&self) -> &PathBuf {
+        &self.path
+    }
+
+    fn process(&self) -> Option<String> {
+        if self.tailwind {
+            let tmp_path = "dist/_tmp/tailwind.css";
+            let start_tailwind = SystemTime::now();
+            let tailwind_output = Command::new("tailwindcss")
+                .arg("--minify")
+                .args(["--output", tmp_path])
+                .output()
+                .expect("failed to execute process");
+
+            info!("Tailwind took {:?}", start_tailwind.elapsed().unwrap());
+
+            if tailwind_output.status.success() {
+                return Some(tmp_path.into());
+            }
+        }
+
+        None
+    }
 
     fn hash(&self) -> [u8; 8] {
         [0; 8]

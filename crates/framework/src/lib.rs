@@ -12,7 +12,7 @@ pub use maudit_macros::generate_pages_mod;
 mod logging;
 
 use std::{
-    fs::{self, File},
+    fs::{self, remove_dir_all, File},
     io::{self, Write},
     path::{Path, PathBuf},
     process::Termination,
@@ -132,6 +132,7 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
 
     let mut build_pages_assets: FxHashSet<Box<dyn Asset>> = FxHashSet::default();
     let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
+    let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
 
     for route in routes {
         let routes = route.routes();
@@ -153,6 +154,7 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
 
                 build_pages_assets.extend(page_assets.assets);
                 build_pages_scripts.extend(page_assets.scripts);
+                build_pages_styles.extend(page_assets.styles);
 
                 build_metadata.pages.push(PageOutput {
                     route: route.route_raw().to_string(),
@@ -185,6 +187,7 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
 
                 build_pages_assets.extend(pages_assets.assets);
                 build_pages_scripts.extend(pages_assets.scripts);
+                build_pages_styles.extend(pages_assets.styles);
             }
         }
     }
@@ -202,12 +205,31 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
         // TODO: Add outputted assets to build_metadata, might need dedicated fs methods for this
     });
 
+    let css_inputs = build_pages_styles
+        .iter()
+        .map(|style| {
+            let processed_path = style.process();
+
+            InputItem {
+                import: {
+                    if let Some(processed_path) = processed_path {
+                        processed_path
+                    } else {
+                        style.path().to_string_lossy().to_string()
+                    }
+                },
+                ..Default::default()
+            }
+        })
+        .collect::<Vec<InputItem>>();
+
     let bundler_inputs = build_pages_scripts
         .iter()
         .map(|script| InputItem {
             import: script.path().to_string_lossy().to_string(),
             ..Default::default()
         })
+        .chain(css_inputs.into_iter())
         .collect::<Vec<InputItem>>();
 
     if !bundler_inputs.is_empty() {
@@ -240,6 +262,9 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
             format_elapsed_time(assets_start.elapsed(), &FormatElapsedTimeOptions::default())?;
         info!(target: "build", "{}", format!("Assets copied in {}", formatted_elasped_time).bold());
     }
+
+    // Remove temporary files
+    remove_dir_all("dist/_tmp").unwrap_or_default();
 
     let formatted_elasped_time =
         format_elapsed_time(build_start.elapsed(), &section_format_options)?;
