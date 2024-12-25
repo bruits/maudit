@@ -15,6 +15,7 @@ use std::{
     fs::{self, File},
     io::{self, Write},
     path::{Path, PathBuf},
+    process::Termination,
     str::FromStr,
     time::SystemTime,
 };
@@ -36,7 +37,34 @@ macro_rules! routes {
     };
 }
 
-pub fn coronate(routes: Vec<&dyn FullPage>) -> Result<(), Box<dyn std::error::Error>> {
+#[derive(Debug)]
+pub struct PageOutput {
+    pub route: String,
+    pub file_path: String,
+    pub params: Option<FxHashMap<String, String>>,
+}
+
+#[derive(Debug)]
+pub struct StaticAssetOutput {
+    pub file_path: String,
+    pub original_path: String,
+}
+
+#[derive(Debug)]
+pub struct BuildOutput {
+    pub start_time: SystemTime,
+    pub pages: Vec<PageOutput>,
+    pub assets: Vec<String>,
+    pub static_files: Vec<StaticAssetOutput>,
+}
+
+impl Termination for BuildOutput {
+    fn report(self) -> std::process::ExitCode {
+        0.into()
+    }
+}
+
+pub fn coronate(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn std::error::Error>> {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -44,7 +72,7 @@ pub fn coronate(routes: Vec<&dyn FullPage>) -> Result<(), Box<dyn std::error::Er
         .block_on(async { build(routes).await })
 }
 
-pub async fn build(routes: Vec<&dyn FullPage>) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn std::error::Error>> {
     let build_start = SystemTime::now();
     let logging_env = Env::default().filter_or("RUST_LOG", "info");
     Builder::from_env(logging_env)
@@ -95,6 +123,13 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<(), Box<dyn std::error:
         ..Default::default()
     };
 
+    let mut build_metadata = BuildOutput {
+        start_time: build_start,
+        pages: Vec::new(),
+        assets: Vec::new(),
+        static_files: Vec::new(),
+    };
+
     let mut build_pages_assets: FxHashSet<Box<dyn Asset>> = FxHashSet::default();
     let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
 
@@ -118,6 +153,12 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<(), Box<dyn std::error:
 
                 build_pages_assets.extend(page_assets.assets);
                 build_pages_scripts.extend(page_assets.scripts);
+
+                build_metadata.pages.push(PageOutput {
+                    route: route.route_raw().to_string(),
+                    file_path: file_path.to_string_lossy().to_string(),
+                    params: None,
+                });
             }
             false => {
                 info!(target: "build", "{}", route.route_raw().to_string().bold());
@@ -134,6 +175,12 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<(), Box<dyn std::error:
 
                     let formatted_elasped_time = format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap();
                     info!(target: "build", "├─ {} {}", file_path.to_string_lossy().dimmed(), formatted_elasped_time);
+
+                    build_metadata.pages.push(PageOutput {
+                        route: route.route_raw(),
+                        file_path: file_path.to_string_lossy().to_string(),
+                        params: Some(ctx.params.0.clone()),
+                    });
                 });
 
                 build_pages_assets.extend(pages_assets.assets);
@@ -151,6 +198,8 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<(), Box<dyn std::error:
 
     build_pages_assets.iter().for_each(|asset| {
         asset.process();
+
+        // TODO: Add outputted assets to build_metadata, might need dedicated fs methods for this
     });
 
     let bundler_inputs = build_pages_scripts
@@ -171,6 +220,8 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<(), Box<dyn std::error:
         });
 
         let _result = bundler.write().await.unwrap();
+
+        // TODO: Add outputted chunks to build_metadata
     }
 
     let formatted_elasped_time =
@@ -183,7 +234,7 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<(), Box<dyn std::error:
         info!(target: "SKIP_FORMAT", "{}", " copying assets ".on_green().bold());
 
         // Copy the static directory to the dist directory
-        copy_recursively("./static", "./dist")?;
+        copy_recursively("./static", "./dist", &mut build_metadata)?;
 
         let formatted_elasped_time =
             format_elapsed_time(assets_start.elapsed(), &FormatElapsedTimeOptions::default())?;
@@ -194,18 +245,34 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<(), Box<dyn std::error:
         format_elapsed_time(build_start.elapsed(), &section_format_options)?;
     info!(target: "build", "{}", format!("Build completed in {}", formatted_elasped_time).bold());
 
-    Ok(())
+    Ok(build_metadata)
 }
 
-fn copy_recursively(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io::Result<()> {
+fn copy_recursively(
+    source: impl AsRef<Path>,
+    destination: impl AsRef<Path>,
+    build_metadata: &mut BuildOutput,
+) -> io::Result<()> {
     fs::create_dir_all(&destination)?;
     for entry in fs::read_dir(source)? {
         let entry = entry?;
         let filetype = entry.file_type()?;
         if filetype.is_dir() {
-            copy_recursively(entry.path(), destination.as_ref().join(entry.file_name()))?;
+            copy_recursively(
+                entry.path(),
+                destination.as_ref().join(entry.file_name()),
+                build_metadata,
+            )?;
         } else {
             fs::copy(entry.path(), destination.as_ref().join(entry.file_name()))?;
+            build_metadata.static_files.push(StaticAssetOutput {
+                original_path: entry.path().to_string_lossy().to_string(),
+                file_path: destination
+                    .as_ref()
+                    .join(entry.file_name())
+                    .to_string_lossy()
+                    .to_string(),
+            });
         }
     }
     Ok(())
