@@ -12,9 +12,9 @@ impl Page for Endpoint {
         // Return some JSON
         RenderResult::Text(format!(
             r#"{{
-								"image": "{}",
-								"script": "{}"
-								}}"#,
+                    "image": "{}",
+                    "script": "{}"
+                }}"#,
             image.path.to_string_lossy(),
             some_script.path.to_string_lossy()
         ))
