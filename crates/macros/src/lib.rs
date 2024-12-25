@@ -148,10 +148,32 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 std::path::PathBuf::from(format!(#file_path_for_route))
             }
 
-            fn url<P: Into<maudit::page::RouteParams>>(params: P) -> String {
+            fn url_unsafe<P: Into<maudit::page::RouteParams>>(params: P) -> String {
                 let params = params.into();
                 #(#list_params;)*
                 format!(#path_for_route)
+            }
+
+            fn url<P: Into<maudit::page::RouteParams>>(&self, params: P) -> Result<String, maudit::page::UrlError> {
+                let params = params.into();
+
+                // Check that the params refer to a page that exists
+                let all_routes = self::DynamicPage::routes(self);
+                let mut found = false;
+
+                for route in all_routes {
+                    if (route.0 == params.0) {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if !found {
+                    return Err(maudit::page::UrlError::RouteNotFound);
+                }
+
+                #(#list_params;)*
+                Ok(format!(#path_for_route))
             }
         }
 

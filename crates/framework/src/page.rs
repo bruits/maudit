@@ -45,9 +45,20 @@ pub trait InternalPage {
     fn route_raw(&self) -> String;
     fn route(&self, params: &RouteParams) -> String;
     fn file_path(&self, params: &RouteParams) -> PathBuf;
-    fn url<P: Into<RouteParams>>(params: P) -> String
+    fn url_unsafe<P: Into<RouteParams>>(params: P) -> String
     where
         Self: Sized;
+    fn url<P: Into<RouteParams>>(&self, params: P) -> Result<String, UrlError>
+    where
+        Self: Sized;
+}
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum UrlError {
+    #[error("Route not found")]
+    RouteNotFound,
 }
 
 pub trait FullPage: Page + InternalPage + DynamicPage + Sync {}

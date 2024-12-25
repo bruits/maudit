@@ -1117,6 +1117,7 @@ dependencies = [
  "rayon",
  "rolldown",
  "rustc-hash",
+ "thiserror 2.0.9",
  "tokio",
 ]
 
