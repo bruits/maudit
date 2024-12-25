@@ -1,8 +1,15 @@
+// Modules the end-user will interact directly or indirectly with
 mod assets;
 pub mod page;
 pub mod params;
 mod routes;
 
+pub use routes::Router;
+
+// Re-exported dependencies for user convenience
+pub use rustc_hash::FxHashMap;
+
+// Internal modules
 mod logging;
 
 use std::{
@@ -13,20 +20,15 @@ use std::{
     time::SystemTime,
 };
 
-use assets::Asset;
 use colored::{ColoredString, Colorize};
 use env_logger::{Builder, Env};
-
-use logging::{format_elapsed_time, FormatElapsedTimeOptions};
-
-pub use routes::Router;
-
-pub use rustc_hash::FxHashMap;
-
 use log::{info, trace};
 use page::{RouteContext, RouteParams};
 use rolldown::{Bundler, BundlerOptions, InputItem};
 use rustc_hash::FxHashSet;
+
+use assets::Asset;
+use logging::{format_elapsed_time, FormatElapsedTimeOptions};
 
 pub async fn coronate(router: routes::Router<'_>) -> Result<(), Box<dyn std::error::Error>> {
     let build_start = SystemTime::now();
@@ -181,7 +183,7 @@ pub async fn coronate(router: routes::Router<'_>) -> Result<(), Box<dyn std::err
     Ok(())
 }
 
-pub fn copy_recursively(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io::Result<()> {
+fn copy_recursively(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io::Result<()> {
     fs::create_dir_all(&destination)?;
     for entry in fs::read_dir(source)? {
         let entry = entry?;
