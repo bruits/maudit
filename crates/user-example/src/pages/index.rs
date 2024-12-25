@@ -14,12 +14,11 @@ impl Page for Index {
 
         let link_to_first_dynamic = DynamicExample::url(&DynamicExampleParams { page: 1 });
 
-        println!("Link to endpoint: {}", link_to_first_dynamic);
-
         RenderResult::Html(html! {
-          h1 { "Index" }
-          img src=(image.path.to_string_lossy()) {}
-          script src=(script.path.to_string_lossy()) {}
+            h1 { "Index" }
+            img src=(image.path.to_string_lossy()) {}
+            script src=(script.path.to_string_lossy()) {}
+            a href=(link_to_first_dynamic) { "Go to first dynamic page" }
         })
     }
 }

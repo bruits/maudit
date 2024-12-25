@@ -100,7 +100,7 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
     fs::create_dir_all("dist").unwrap();
     fs::create_dir_all("dist/_assets").unwrap();
 
-    info!(target: "SKIP_FORMAT", "{}", " generating pages ".on_green().bold());
+    print_title("generating pages");
     let pages_start = SystemTime::now();
 
     let route_format_options = FormatElapsedTimeOptions {
@@ -194,7 +194,7 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
     info!(target: "build", "{}", format!("Pages generated in {}", formatted_elasped_time).bold());
 
     let assets_start = SystemTime::now();
-    info!(target: "SKIP_FORMAT", "{}", " generating assets ".on_green().bold());
+    print_title("generating assets");
 
     build_pages_assets.iter().for_each(|asset| {
         asset.process();
@@ -231,7 +231,7 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
     // Check if static directory exists
     if PathBuf::from_str("./static").unwrap().exists() {
         let assets_start = SystemTime::now();
-        info!(target: "SKIP_FORMAT", "{}", " copying assets ".on_green().bold());
+        print_title("copying assets");
 
         // Copy the static directory to the dist directory
         copy_recursively("./static", "./dist", &mut build_metadata)?;
@@ -243,6 +243,7 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
 
     let formatted_elasped_time =
         format_elapsed_time(build_start.elapsed(), &section_format_options)?;
+    info!(target: "SKIP_FORMAT", "{}", "");
     info!(target: "build", "{}", format!("Build completed in {}", formatted_elasped_time).bold());
 
     Ok(build_metadata)
@@ -311,4 +312,9 @@ fn render_route(
         }
     }
     Ok(())
+}
+
+fn print_title(title: &str) {
+    info!(target: "SKIP_FORMAT", "{}", "");
+    info!(target: "SKIP_FORMAT", "{}", format!(" {} ", title).on_green().bold());
 }
