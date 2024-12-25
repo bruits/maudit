@@ -1,13 +1,7 @@
-mod pages;
-use maudit::Router;
+use maudit::{coronate, generate_pages_mod, routes};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let router = Router::new(vec![
-        &pages::DynamicExample,
-        &pages::Endpoint,
-        &pages::Index,
-    ]);
+generate_pages_mod!();
 
-    maudit::coronate(router).await
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    coronate(routes![Index, DynamicExample, Endpoint])
 }

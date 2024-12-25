@@ -2,12 +2,11 @@
 mod assets;
 pub mod page;
 pub mod params;
-mod routes;
-
-pub use routes::Router;
 
 // Re-exported dependencies for user convenience
 pub use rustc_hash::FxHashMap;
+
+pub use maudit_macros::generate_pages_mod;
 
 // Internal modules
 mod logging;
@@ -23,14 +22,29 @@ use std::{
 use colored::{ColoredString, Colorize};
 use env_logger::{Builder, Env};
 use log::{info, trace};
-use page::{RouteContext, RouteParams};
+use page::{FullPage, RouteContext, RouteParams};
 use rolldown::{Bundler, BundlerOptions, InputItem};
 use rustc_hash::FxHashSet;
 
 use assets::Asset;
 use logging::{format_elapsed_time, FormatElapsedTimeOptions};
 
-pub async fn coronate(router: routes::Router<'_>) -> Result<(), Box<dyn std::error::Error>> {
+#[macro_export]
+macro_rules! routes {
+    [$($route:ident),*] => {
+        vec![$(&$route),*]
+    };
+}
+
+pub fn coronate(routes: Vec<&dyn FullPage>) -> Result<(), Box<dyn std::error::Error>> {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async { build(routes).await })
+}
+
+pub async fn build(routes: Vec<&dyn FullPage>) -> Result<(), Box<dyn std::error::Error>> {
     let build_start = SystemTime::now();
     let logging_env = Env::default().filter_or("RUST_LOG", "info");
     Builder::from_env(logging_env)
@@ -84,7 +98,7 @@ pub async fn coronate(router: routes::Router<'_>) -> Result<(), Box<dyn std::err
     let mut build_pages_assets: FxHashSet<Box<dyn Asset>> = FxHashSet::default();
     let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
 
-    for route in &router.routes {
+    for route in routes {
         let routes = route.routes();
         match routes.is_empty() {
             true => {
@@ -95,8 +109,8 @@ pub async fn coronate(router: routes::Router<'_>) -> Result<(), Box<dyn std::err
                     assets: &mut page_assets,
                 };
 
-                let (file_path, file) = create_route_file(&**route, &ctx.params)?;
-                render_route(file, &**route, &mut ctx)?;
+                let (file_path, file) = create_route_file(route, &ctx.params)?;
+                render_route(file, route, &mut ctx)?;
 
                 let formatted_elasped_time =
                     format_elapsed_time(route_start.elapsed(), &route_format_options)?;
@@ -115,8 +129,8 @@ pub async fn coronate(router: routes::Router<'_>) -> Result<(), Box<dyn std::err
                     let route_start = SystemTime::now();
                     let mut ctx = RouteContext { params, assets: &mut pages_assets };
 
-                    let (file_path, file) = create_route_file(&**route, &ctx.params).unwrap();
-                    render_route(file, &**route, &mut ctx).unwrap();
+                    let (file_path, file) = create_route_file(route, &ctx.params).unwrap();
+                    render_route(file, route, &mut ctx).unwrap();
 
                     let formatted_elasped_time = format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap();
                     info!(target: "build", "├─ {} {}", file_path.to_string_lossy().dimmed(), formatted_elasped_time);

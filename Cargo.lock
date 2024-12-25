@@ -1117,6 +1117,7 @@ dependencies = [
  "rayon",
  "rolldown",
  "rustc-hash",
+ "tokio",
 ]
 
 [[package]]
@@ -1125,7 +1126,6 @@ version = "0.1.0"
 dependencies = [
  "maud",
  "maudit",
- "tokio",
 ]
 
 [[package]]
