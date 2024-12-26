@@ -69,6 +69,7 @@ impl Termination for BuildOutput {
 pub struct BuildOptions {
     pub output_dir: String,
     pub assets_dir: String,
+    pub static_dir: String,
 }
 
 impl Default for BuildOptions {
@@ -76,6 +77,7 @@ impl Default for BuildOptions {
         Self {
             output_dir: "dist".to_string(),
             assets_dir: "_assets".to_string(),
+            static_dir: "static".to_string(),
         }
     }
 }
@@ -123,6 +125,7 @@ pub async fn build(
         .unwrap()
         .join(&options.assets_dir);
     let tmp_dir = dist_dir.join("_tmp");
+    let static_dir = PathBuf::from_str(&options.static_dir).unwrap();
 
     fs::remove_dir_all(&dist_dir).unwrap_or_default();
     fs::create_dir_all(&dist_dir).unwrap();
@@ -288,12 +291,12 @@ pub async fn build(
     info!(target: "build", "{}", format!("Assets generated in {}", formatted_elasped_time).bold());
 
     // Check if static directory exists
-    if PathBuf::from_str("./static").unwrap().exists() {
+    if static_dir.exists() {
         let assets_start = SystemTime::now();
         print_title("copying assets");
 
         // Copy the static directory to the dist directory
-        copy_recursively("./static", &dist_dir, &mut build_metadata)?;
+        copy_recursively(&static_dir, &dist_dir, &mut build_metadata)?;
 
         let formatted_elasped_time =
             format_elapsed_time(assets_start.elapsed(), &FormatElapsedTimeOptions::default())?;
