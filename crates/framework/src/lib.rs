@@ -23,12 +23,14 @@ use std::{
 use colored::{ColoredString, Colorize};
 use env_logger::{Builder, Env};
 use log::{info, trace};
-use page::{FullPage, RouteContext, RouteParams};
+use page::{FullPage, RenderResult, RouteContext, RouteParams};
 use rolldown::{Bundler, BundlerOptions, InputItem};
 use rustc_hash::FxHashSet;
 
 use assets::Asset;
 use logging::{format_elapsed_time, FormatElapsedTimeOptions};
+
+use lol_html::{element, rewrite_str, RewriteStrSettings};
 
 #[macro_export]
 macro_rules! routes {
@@ -145,12 +147,20 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
                     assets: &mut page_assets,
                 };
 
-                let (file_path, file) = create_route_file(route, &ctx.params)?;
-                render_route(file, route, &mut ctx)?;
+                let (file_path, mut file) = create_route_file(route, &ctx.params)?;
+                let result = route.render(&mut ctx);
+
+                finish_route(
+                    result,
+                    &mut file,
+                    &page_assets.included_styles,
+                    &page_assets.included_scripts,
+                )
+                .unwrap();
 
                 let formatted_elasped_time =
                     format_elapsed_time(route_start.elapsed(), &route_format_options)?;
-                info!(target: "build", "{} -> {} {}", route.route(&ctx.params), file_path.to_string_lossy().dimmed(), formatted_elasped_time);
+                info!(target: "build", "{} -> {} {}", route.route(&page::RouteParams(FxHashMap::default())), file_path.to_string_lossy().dimmed(), formatted_elasped_time);
 
                 build_pages_assets.extend(page_assets.assets);
                 build_pages_scripts.extend(page_assets.scripts);
@@ -165,29 +175,30 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
             false => {
                 info!(target: "build", "{}", route.route_raw().to_string().bold());
 
-                // Reuse the same PageAssets HashSet for all the routes of a dynamic page
-                let mut pages_assets = assets::PageAssets::default();
-
                 routes.into_iter().for_each(|params| {
+                    let mut pages_assets = assets::PageAssets::default();
                     let route_start = SystemTime::now();
                     let mut ctx = RouteContext { params, assets: &mut pages_assets };
 
-                    let (file_path, file) = create_route_file(route, &ctx.params).unwrap();
-                    render_route(file, route, &mut ctx).unwrap();
-
-                    let formatted_elasped_time = format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap();
-                    info!(target: "build", "├─ {} {}", file_path.to_string_lossy().dimmed(), formatted_elasped_time);
+                    let (file_path, mut file) = create_route_file(route, &ctx.params).unwrap();
+                    let result = route.render(&mut ctx);
 
                     build_metadata.pages.push(PageOutput {
                         route: route.route_raw(),
                         file_path: file_path.to_string_lossy().to_string(),
-                        params: Some(ctx.params.0.clone()),
+                        params: Some(ctx.params.0),
                     });
-                });
 
-                build_pages_assets.extend(pages_assets.assets);
-                build_pages_scripts.extend(pages_assets.scripts);
-                build_pages_styles.extend(pages_assets.styles);
+                    finish_route(result, &mut file, &pages_assets.included_styles, &pages_assets.included_scripts).unwrap();
+
+                    let formatted_elasped_time = format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap();
+                    info!(target: "build", "├─ {} {}", file_path.to_string_lossy().dimmed(), formatted_elasped_time);
+
+
+                    build_pages_assets.extend(pages_assets.assets);
+                    build_pages_scripts.extend(pages_assets.scripts);
+                    build_pages_styles.extend(pages_assets.styles);
+                });
             }
         }
     }
@@ -322,20 +333,54 @@ fn create_route_file(
     Ok((file_path, file))
 }
 
-fn render_route(
-    mut file: File,
-    route: &dyn page::FullPage,
-    ctx: &mut RouteContext,
+fn finish_route(
+    render_result: RenderResult,
+    file: &mut File,
+    included_styles: &Vec<assets::Style>,
+    included_scripts: &Vec<assets::Script>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rendered = route.render(ctx);
-    match rendered {
-        page::RenderResult::Html(html) => {
-            file.write_all(html.into_string().as_bytes())?;
+    match render_result {
+        RenderResult::Html(html) => {
+            let element_content_handlers = vec![
+                // Add included scripts and styles to the head
+                element!("head", |el| {
+                    for style in included_styles {
+                        el.append(
+                            &format!(
+                                "<link rel=\"stylesheet\" href=\"{}\">",
+                                style.url().unwrap()
+                            ),
+                            lol_html::html_content::ContentType::Html,
+                        );
+                    }
+
+                    for script in included_scripts {
+                        el.append(
+                            &format!("<script src=\"{}\"></script>", script.url().unwrap()),
+                            lol_html::html_content::ContentType::Html,
+                        );
+                    }
+
+                    Ok(())
+                }),
+            ];
+
+            let output = rewrite_str(
+                &html.into_string(),
+                RewriteStrSettings {
+                    element_content_handlers,
+                    ..RewriteStrSettings::new()
+                },
+            )
+            .unwrap();
+
+            file.write_all(output.as_bytes())?;
         }
-        page::RenderResult::Text(text) => {
+        RenderResult::Text(text) => {
             file.write_all(text.as_bytes())?;
         }
     }
+
     Ok(())
 }
 

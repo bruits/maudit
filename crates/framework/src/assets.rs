@@ -1,5 +1,6 @@
 use dyn_eq::DynEq;
 use log::info;
+use maud::{html, Markup, Render};
 use rustc_hash::FxHashSet;
 use std::hash::Hash;
 use std::process::Command;
@@ -11,6 +12,8 @@ pub struct PageAssets {
     pub(crate) assets: FxHashSet<Box<dyn Asset>>,
     pub(crate) scripts: FxHashSet<Script>,
     pub(crate) styles: FxHashSet<Style>,
+    pub(crate) included_styles: Vec<Style>,
+    pub(crate) included_scripts: Vec<Script>,
 }
 
 impl PageAssets {
@@ -30,6 +33,13 @@ impl PageAssets {
         script
     }
 
+    pub fn include_script(&mut self, script_path: PathBuf) {
+        let script = Script { path: script_path };
+
+        self.scripts.insert(script.clone());
+        self.included_scripts.push(script);
+    }
+
     pub fn add_style(&mut self, style_path: PathBuf, tailwind: bool) -> Style {
         let style = Style {
             path: style_path,
@@ -39,6 +49,16 @@ impl PageAssets {
         self.styles.insert(style.clone());
 
         style
+    }
+
+    pub fn include_style(&mut self, style_path: PathBuf, tailwind: bool) {
+        let style = Style {
+            path: style_path,
+            tailwind,
+        };
+
+        self.styles.insert(style.clone());
+        self.included_styles.push(style);
     }
 }
 
@@ -92,6 +112,14 @@ impl Asset for Image {
     }
 }
 
+impl Render for Image {
+    fn render(&self) -> Markup {
+        html! {
+            img src=(self.url().unwrap()) loading="lazy" decoding="async";
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct Script {
@@ -110,7 +138,16 @@ impl Asset for Script {
     }
 
     fn hash(&self) -> [u8; 8] {
+        // TODO: Proper hash
         [0; 8]
+    }
+}
+
+impl Render for Script {
+    fn render(&self) -> Markup {
+        html! {
+            script src=(self.url().unwrap()) r#type="module" {}
+        }
     }
 }
 
@@ -133,11 +170,12 @@ impl Asset for Style {
     }
 
     fn process(&self) -> Option<String> {
+        // TODO: Detect tailwind automatically
         if self.tailwind {
             let tmp_path = "dist/_tmp/tailwind.css";
             let start_tailwind = SystemTime::now();
-            let tailwind_output = Command::new("tailwindcss")
-                .arg("--minify")
+            let tailwind_output = Command::new("tailwindcss") // TODO: Allow custom tailwind binary path
+                .arg("--minify") // TODO: Allow disabling minification
                 .args(["--output", tmp_path])
                 .output()
                 .expect("failed to execute process");
@@ -153,6 +191,15 @@ impl Asset for Style {
     }
 
     fn hash(&self) -> [u8; 8] {
+        // TODO: Proper hash
         [0; 8]
+    }
+}
+
+impl Render for Style {
+    fn render(&self) -> Markup {
+        html! {
+            link rel="stylesheet" type="text/css" href=(self.url().unwrap());
+        }
     }
 }
