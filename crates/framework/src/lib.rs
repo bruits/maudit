@@ -66,15 +66,35 @@ impl Termination for BuildOutput {
     }
 }
 
-pub fn coronate(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn std::error::Error>> {
+pub struct BuildOptions {
+    pub output_dir: String,
+    pub assets_dir: String,
+}
+
+impl Default for BuildOptions {
+    fn default() -> Self {
+        Self {
+            output_dir: "dist".to_string(),
+            assets_dir: "_assets".to_string(),
+        }
+    }
+}
+
+pub fn coronate(
+    routes: Vec<&dyn FullPage>,
+    options: BuildOptions,
+) -> Result<BuildOutput, Box<dyn std::error::Error>> {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap()
-        .block_on(async { build(routes).await })
+        .block_on(async { build(routes, options).await })
 }
 
-pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn std::error::Error>> {
+pub async fn build(
+    routes: Vec<&dyn FullPage>,
+    options: BuildOptions,
+) -> Result<BuildOutput, Box<dyn std::error::Error>> {
     let build_start = SystemTime::now();
     let logging_env = Env::default().filter_or("RUST_LOG", "info");
     Builder::from_env(logging_env)
@@ -98,9 +118,15 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
 
     // Create a directory for the output
     trace!(target: "build", "Setting up required directories...");
-    fs::remove_dir_all("dist").unwrap_or_default();
-    fs::create_dir_all("dist").unwrap();
-    fs::create_dir_all("dist/_assets").unwrap();
+    let dist_dir = PathBuf::from_str(&options.output_dir).unwrap();
+    let assets_dir = PathBuf::from_str(&options.output_dir)
+        .unwrap()
+        .join(&options.assets_dir);
+    let tmp_dir = dist_dir.join("_tmp");
+
+    fs::remove_dir_all(&dist_dir).unwrap_or_default();
+    fs::create_dir_all(&dist_dir).unwrap();
+    fs::create_dir_all(&assets_dir).unwrap();
 
     print_title("generating pages");
     let pages_start = SystemTime::now();
@@ -147,7 +173,7 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
                     assets: &mut page_assets,
                 };
 
-                let (file_path, mut file) = create_route_file(route, &ctx.params)?;
+                let (file_path, mut file) = create_route_file(route, &ctx.params, &dist_dir)?;
                 let result = route.render(&mut ctx);
 
                 finish_route(
@@ -180,7 +206,7 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
                     let route_start = SystemTime::now();
                     let mut ctx = RouteContext { params, assets: &mut pages_assets };
 
-                    let (file_path, mut file) = create_route_file(route, &ctx.params).unwrap();
+                    let (file_path, mut file) = create_route_file(route, &ctx.params, &dist_dir).unwrap();
                     let result = route.render(&mut ctx);
 
                     build_metadata.pages.push(PageOutput {
@@ -211,7 +237,7 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
     print_title("generating assets");
 
     build_pages_assets.iter().for_each(|asset| {
-        asset.process();
+        asset.process(&assets_dir, &tmp_dir);
 
         // TODO: Add outputted assets to build_metadata, might need dedicated fs methods for this
     });
@@ -219,7 +245,7 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
     let css_inputs = build_pages_styles
         .iter()
         .map(|style| {
-            let processed_path = style.process();
+            let processed_path = style.process(&assets_dir, &tmp_dir);
 
             InputItem {
                 import: {
@@ -247,7 +273,7 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
         let mut bundler = Bundler::new(BundlerOptions {
             input: Some(bundler_inputs),
             minify: Some(true),
-            dir: Some("dist/_assets".to_string()),
+            dir: Some(assets_dir.to_string_lossy().to_string()),
 
             ..Default::default()
         });
@@ -267,7 +293,7 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
         print_title("copying assets");
 
         // Copy the static directory to the dist directory
-        copy_recursively("./static", "./dist", &mut build_metadata)?;
+        copy_recursively("./static", &dist_dir, &mut build_metadata)?;
 
         let formatted_elasped_time =
             format_elapsed_time(assets_start.elapsed(), &FormatElapsedTimeOptions::default())?;
@@ -275,7 +301,7 @@ pub async fn build(routes: Vec<&dyn FullPage>) -> Result<BuildOutput, Box<dyn st
     }
 
     // Remove temporary files
-    remove_dir_all("dist/_tmp").unwrap_or_default();
+    remove_dir_all(&tmp_dir).unwrap_or_default();
 
     let formatted_elasped_time =
         format_elapsed_time(build_start.elapsed(), &section_format_options)?;
@@ -318,10 +344,9 @@ fn copy_recursively(
 fn create_route_file(
     route: &dyn page::FullPage,
     params: &RouteParams,
+    dist_dir: &Path,
 ) -> Result<(PathBuf, File), Box<dyn std::error::Error>> {
-    let file_path = PathBuf::from_str("./dist/")
-        .unwrap()
-        .join(route.file_path(params));
+    let file_path = dist_dir.join(route.file_path(params));
 
     // Create the parent directories if it doesn't exist
     let parent_dir = Path::new(file_path.parent().unwrap());

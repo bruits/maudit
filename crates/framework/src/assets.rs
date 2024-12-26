@@ -3,6 +3,7 @@ use log::info;
 use maud::{html, Markup, Render};
 use rustc_hash::FxHashSet;
 use std::hash::Hash;
+use std::path::Path;
 use std::process::Command;
 use std::time::SystemTime;
 use std::{fs, path::PathBuf};
@@ -66,7 +67,7 @@ pub trait Asset: DynEq {
     fn url(&self) -> Option<String>;
     fn path(&self) -> &PathBuf;
 
-    fn process(&self) -> Option<String> {
+    fn process(&self, _dist_assets_dir: &Path, _tmp_dir: &Path) -> Option<String> {
         None
     }
     fn hash(&self) -> [u8; 8];
@@ -97,10 +98,10 @@ impl Asset for Image {
         &self.path
     }
 
-    fn process(&self) -> Option<String> {
+    fn process(&self, dist_assets_dir: &Path, _: &Path) -> Option<String> {
         fs::copy(
             &self.path,
-            "dist/_assets/".to_string() + self.path.file_name().unwrap().to_str().unwrap(),
+            dist_assets_dir.join(self.path.file_name().unwrap()),
         )
         .unwrap();
 
@@ -169,21 +170,23 @@ impl Asset for Style {
         &self.path
     }
 
-    fn process(&self) -> Option<String> {
+    fn process(&self, _: &Path, tmp_dir: &Path) -> Option<String> {
         // TODO: Detect tailwind automatically
         if self.tailwind {
-            let tmp_path = "dist/_tmp/tailwind.css";
+            let tmp_path = tmp_dir.join("tailwind.css");
+            let tmp_path_str = tmp_path.to_str().unwrap().to_string();
+
             let start_tailwind = SystemTime::now();
             let tailwind_output = Command::new("tailwindcss") // TODO: Allow custom tailwind binary path
+                .args(["--output", &tmp_path_str])
                 .arg("--minify") // TODO: Allow disabling minification
-                .args(["--output", tmp_path])
                 .output()
                 .expect("failed to execute process");
 
             info!("Tailwind took {:?}", start_tailwind.elapsed().unwrap());
 
             if tailwind_output.status.success() {
-                return Some(tmp_path.into());
+                return Some(tmp_path_str);
             }
         }
 
