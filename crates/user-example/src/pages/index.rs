@@ -9,9 +9,9 @@ pub struct Index;
 
 impl Page for Index {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-        let image = ctx.assets.add_image("data/logo.svg".into());
-        let script = ctx.assets.add_script("data/some_other_script.js".into());
-        let style = ctx.assets.add_style("data/tailwind.css".into(), true);
+        let image = ctx.assets.add_image("data/logo.svg");
+        let script = ctx.assets.add_script("data/some_other_script.js");
+        let style = ctx.assets.add_style("data/tailwind.css", true);
 
         let link_to_first_dynamic = DynamicExample::url_unsafe(&DynamicExampleParams { page: 1 });
 
@@ -19,7 +19,7 @@ impl Page for Index {
             .url(&DynamicExampleParams { page: 0 })
             .unwrap();
 
-        RenderResult::Html(html! {
+        html! {
             head {
                 title { "Index" }
                 link rel="stylesheet" href=(style.url().unwrap()) {}
@@ -29,6 +29,7 @@ impl Page for Index {
             script src=(script.url().unwrap()) {}
             a."text-red-500" href=(link_to_first_dynamic) { "Go to first dynamic page" }
             a href=(safe_link_to_first_dynamic) { "Go to first dynamic page (safe)" }
-        })
+        }
+        .into()
     }
 }

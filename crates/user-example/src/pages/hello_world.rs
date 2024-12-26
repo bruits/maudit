@@ -6,8 +6,9 @@ pub struct HelloWorld;
 
 impl Page for HelloWorld {
     fn render(&self, _: &mut RouteContext) -> RenderResult {
-        RenderResult::Html(html! {
+        html! {
           h1 { "Hello World" }
-        })
+        }
+        .into()
     }
 }

@@ -25,16 +25,17 @@ impl DynamicPage for DynamicExample {
 impl Page for DynamicExample {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let params = ctx.params.parse_into::<Params>();
-        let image = ctx.assets.add_image("data/social-card.png".into());
-        ctx.assets.include_style("data/tailwind.css".into(), true);
+        let image = ctx.assets.add_image("data/social-card.png");
+        ctx.assets.include_style("data/tailwind.css", true);
 
-        RenderResult::Html(html! {
+        html! {
             head {
                 title { "Index" }
             }
             h1 { "Hello, world!" }
             (image)
             p { (params.page) }
-        })
+        }
+        .into()
     }
 }

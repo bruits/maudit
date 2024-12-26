@@ -18,32 +18,50 @@ pub struct PageAssets {
 }
 
 impl PageAssets {
-    pub fn add_image(&mut self, image_path: PathBuf) -> Image {
-        let image = Box::new(Image { path: image_path });
+    pub fn add_image<P>(&mut self, image_path: P) -> Image
+    where
+        P: Into<PathBuf>,
+    {
+        let image = Box::new(Image {
+            path: image_path.into(),
+        });
 
         self.assets.insert(image.clone());
 
         *image
     }
 
-    pub fn add_script(&mut self, script_path: PathBuf) -> Script {
-        let script = Script { path: script_path };
+    pub fn add_script<P>(&mut self, script_path: P) -> Script
+    where
+        P: Into<PathBuf>,
+    {
+        let script = Script {
+            path: script_path.into(),
+        };
 
         self.scripts.insert(script.clone());
 
         script
     }
 
-    pub fn include_script(&mut self, script_path: PathBuf) {
-        let script = Script { path: script_path };
+    pub fn include_script<P>(&mut self, script_path: P)
+    where
+        P: Into<PathBuf>,
+    {
+        let script = Script {
+            path: script_path.into(),
+        };
 
         self.scripts.insert(script.clone());
         self.included_scripts.push(script);
     }
 
-    pub fn add_style(&mut self, style_path: PathBuf, tailwind: bool) -> Style {
+    pub fn add_style<P>(&mut self, style_path: P, tailwind: bool) -> Style
+    where
+        P: Into<PathBuf>,
+    {
         let style = Style {
-            path: style_path,
+            path: style_path.into(),
             tailwind,
         };
 
@@ -52,9 +70,12 @@ impl PageAssets {
         style
     }
 
-    pub fn include_style(&mut self, style_path: PathBuf, tailwind: bool) {
+    pub fn include_style<P>(&mut self, style_path: P, tailwind: bool)
+    where
+        P: Into<PathBuf>,
+    {
         let style = Style {
-            path: style_path,
+            path: style_path.into(),
             tailwind,
         };
 

@@ -9,6 +9,12 @@ pub enum RenderResult<T = maud::Markup> {
     Text(String),
 }
 
+impl From<maud::Markup> for RenderResult<maud::Markup> {
+    fn from(val: maud::Markup) -> Self {
+        RenderResult::Html(val)
+    }
+}
+
 pub struct RouteContext<'a> {
     pub params: RouteParams,
     pub assets: &'a mut PageAssets,
