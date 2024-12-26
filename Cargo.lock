@@ -1219,7 +1219,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "maudit-example"
+name = "maudit-example-basics"
+version = "0.1.0"
+dependencies = [
+ "maud",
+ "maudit",
+]
+
+[[package]]
+name = "maudit-example-kitchen-sink"
 version = "0.1.0"
 dependencies = [
  "maud",

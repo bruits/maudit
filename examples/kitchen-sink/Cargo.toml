@@ -1,0 +1,9 @@
+[package]
+name = "maudit-example-kitchen-sink"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+maudit = { workspace = true }
+maud = { workspace = true }

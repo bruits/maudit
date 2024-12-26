@@ -1,9 +1,0 @@
-[package]
-name = "maudit-example"
-version = "0.1.0"
-edition = "2021"
-publish = false
-
-[dependencies]
-maudit = { path = "../framework" }
-maud = "0.26.0"
