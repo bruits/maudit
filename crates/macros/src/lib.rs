@@ -154,7 +154,7 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 format!(#path_for_route)
             }
 
-            fn url<P: Into<maudit::page::RouteParams>>(&self, params: P) -> Result<String, maudit::page::UrlError> {
+            fn url<P: Into<maudit::page::RouteParams>>(&self, params: P) -> Result<String, maudit::errors::UrlError> {
                 let params = params.into();
 
                 // Check that the params refer to a page that exists
@@ -169,7 +169,7 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 }
 
                 if !found {
-                    return Err(maudit::page::UrlError::RouteNotFound);
+                    return Err(maudit::errors::UrlError::RouteNotFound);
                 }
 
                 #(#list_params;)*

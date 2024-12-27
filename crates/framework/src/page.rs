@@ -1,17 +1,16 @@
+use crate::assets::PageAssets;
+use crate::errors::UrlError;
+use rustc_hash::FxHashMap;
 use std::path::PathBuf;
 
-use rustc_hash::FxHashMap;
-
-use crate::assets::PageAssets;
-
-pub enum RenderResult<T = maud::Markup> {
-    Html(T),
+pub enum RenderResult {
+    Html(String),
     Text(String),
 }
 
-impl From<maud::Markup> for RenderResult<maud::Markup> {
+impl From<maud::Markup> for RenderResult {
     fn from(val: maud::Markup) -> Self {
-        RenderResult::Html(val)
+        RenderResult::Html(val.into_string())
     }
 }
 
@@ -57,14 +56,6 @@ pub trait InternalPage {
     fn url<P: Into<RouteParams>>(&self, params: P) -> Result<String, UrlError>
     where
         Self: Sized;
-}
-
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum UrlError {
-    #[error("Route not found")]
-    RouteNotFound,
 }
 
 pub trait FullPage: Page + InternalPage + DynamicPage + Sync {}
