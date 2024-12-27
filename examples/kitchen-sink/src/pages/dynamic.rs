@@ -1,4 +1,4 @@
-use maudit::page::prelude::*;
+use maudit::page::{prelude::*, DynamicRouteContext};
 
 use maud::html;
 
@@ -11,7 +11,7 @@ pub struct Params {
 }
 
 impl DynamicPage for DynamicExample {
-    fn routes(&self) -> Vec<RouteParams> {
+    fn routes(&self, _: &DynamicRouteContext) -> Vec<RouteParams> {
         let mut static_routes: Vec<Params> = vec![];
 
         for i in 0..1 {

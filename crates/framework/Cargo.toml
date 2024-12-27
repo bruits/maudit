@@ -19,3 +19,7 @@ rolldown = { git = "https://github.com/rolldown/rolldown", version = "0.1.0", re
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 thiserror = "2.0.9"
 lol_html = "2.1.0"
+glob = "0.3.1"
+markdown = "1.0.0-alpha.21"
+serde = { workspace = true }
+serde_yml = "0.0.12"

@@ -905,6 +905,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 
 [[package]]
+name = "glob"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
+
+[[package]]
 name = "glob-match"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1129,6 +1135,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "libyml"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3302702afa434ffa30847a83305f0a69d6abd74293b6554c18ec85c7ef30c980"
+dependencies = [
+ "anyhow",
+ "version_check",
+]
+
+[[package]]
 name = "lightningcss"
 version = "1.0.0-alpha.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1203,6 +1219,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "markdown"
+version = "1.0.0-alpha.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6491e6c702bf7e3b24e769d800746d5f2c06a6c6a2db7992612e0f429029e81"
+dependencies = [
+ "unicode-id",
+]
+
+[[package]]
 name = "matchers"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1247,13 +1272,17 @@ dependencies = [
  "colored",
  "dyn-eq",
  "env_logger",
+ "glob",
  "log",
  "lol_html",
+ "markdown",
  "maud",
  "maudit-macros",
  "rayon",
  "rolldown",
  "rustc-hash",
+ "serde",
+ "serde_yml",
  "thiserror 2.0.9",
  "tokio",
 ]
@@ -1275,6 +1304,15 @@ version = "0.1.0"
 dependencies = [
  "maud",
  "maudit",
+]
+
+[[package]]
+name = "maudit-example-blog"
+version = "0.1.0"
+dependencies = [
+ "maud",
+ "maudit",
+ "serde",
 ]
 
 [[package]]
@@ -2743,6 +2781,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_yml"
+version = "0.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59e2dd588bf1597a252c3b920e0143eb99b0f76e4e082f4c92ce34fbc9e71ddd"
+dependencies = [
+ "indexmap",
+ "itoa 1.0.14",
+ "libyml",
+ "memchr",
+ "ryu",
+ "serde",
+ "version_check",
+]
+
+[[package]]
 name = "servo_arc"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3097,6 +3150,12 @@ name = "typenum"
 version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
+
+[[package]]
+name = "unicode-id"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10103c57044730945224467c09f71a4db0071c123a0648cc3e818913bde6b561"
 
 [[package]]
 name = "unicode-id-start"

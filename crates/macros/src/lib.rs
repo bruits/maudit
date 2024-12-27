@@ -94,7 +94,7 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
         false => quote! {},
         true => quote! {
             impl maudit::page::DynamicPage for #struct_name {
-                fn routes(&self) -> Vec<maudit::page::RouteParams> {
+                fn routes(&self, _: &maudit::page::DynamicRouteContext) -> Vec<maudit::page::RouteParams> {
                     Vec::new()
                 }
             }
@@ -154,11 +154,11 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 format!(#path_for_route)
             }
 
-            fn url<P: Into<maudit::page::RouteParams>>(&self, params: P) -> Result<String, maudit::errors::UrlError> {
+            fn url<P: Into<maudit::page::RouteParams>>(&self, params: P, dynamic_route_context: &maudit::page::DynamicRouteContext) -> Result<String, maudit::errors::UrlError> {
                 let params = params.into();
 
                 // Check that the params refer to a page that exists
-                let all_routes = self::DynamicPage::routes(self);
+                let all_routes = self::DynamicPage::routes(self, dynamic_route_context);
                 let mut found = false;
 
                 for route in all_routes {

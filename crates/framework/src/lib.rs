@@ -1,9 +1,11 @@
 // Modules the end-user will interact directly or indirectly with
 mod assets;
+pub mod content;
 pub mod errors;
 pub mod page;
 pub mod params;
 
+use content::ContentSources;
 use errors::BuildError;
 // Re-exported dependencies for user convenience
 pub use rustc_hash::FxHashMap;
@@ -25,7 +27,7 @@ use std::{
 use colored::{ColoredString, Colorize};
 use env_logger::{Builder, Env};
 use log::{info, trace};
-use page::{FullPage, RenderResult, RouteContext, RouteParams};
+use page::{DynamicRouteContext, FullPage, RenderResult, RouteContext, RouteParams};
 use rolldown::{Bundler, BundlerOptions, InputItem};
 use rustc_hash::FxHashSet;
 
@@ -86,17 +88,19 @@ impl Default for BuildOptions {
 
 pub fn coronate(
     routes: Vec<&dyn FullPage>,
+    content_sources: ContentSources,
     options: BuildOptions,
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap()
-        .block_on(async { build(routes, options).await })
+        .block_on(async { build(routes, content_sources, options).await })
 }
 
 pub async fn build(
     routes: Vec<&dyn FullPage>,
+    content_sources: ContentSources,
     options: BuildOptions,
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
     let build_start = SystemTime::now();
@@ -165,14 +169,19 @@ pub async fn build(
     let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
     let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
 
+    let dynamic_route_context = DynamicRouteContext {
+        content: &content_sources,
+    };
+
     for route in routes {
-        let routes = route.routes();
+        let routes = route.routes(&dynamic_route_context);
         match routes.is_empty() {
             true => {
                 let route_start = SystemTime::now();
                 let mut page_assets = assets::PageAssets::default();
                 let mut ctx = RouteContext {
                     params: page::RouteParams(FxHashMap::default()),
+                    content: &content_sources,
                     assets: &mut page_assets,
                 };
 
@@ -209,6 +218,7 @@ pub async fn build(
                     let route_start = SystemTime::now();
                     let mut ctx = RouteContext {
                         params,
+                        content: &content_sources,
                         assets: &mut pages_assets,
                     };
 

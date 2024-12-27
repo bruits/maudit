@@ -1,4 +1,5 @@
 use crate::assets::PageAssets;
+use crate::content::ContentSources;
 use crate::errors::UrlError;
 use rustc_hash::FxHashMap;
 use std::path::PathBuf;
@@ -16,7 +17,12 @@ impl From<maud::Markup> for RenderResult {
 
 pub struct RouteContext<'a> {
     pub params: RouteParams,
+    pub content: &'a ContentSources,
     pub assets: &'a mut PageAssets,
+}
+
+pub struct DynamicRouteContext<'a> {
+    pub content: &'a ContentSources,
 }
 
 pub trait Page {
@@ -43,7 +49,7 @@ impl RouteParams {
 }
 
 pub trait DynamicPage {
-    fn routes(&self) -> Vec<RouteParams>;
+    fn routes(&self, context: &DynamicRouteContext) -> Vec<RouteParams>;
 }
 
 pub trait InternalPage {
@@ -53,7 +59,11 @@ pub trait InternalPage {
     fn url_unsafe<P: Into<RouteParams>>(params: P) -> String
     where
         Self: Sized;
-    fn url<P: Into<RouteParams>>(&self, params: P) -> Result<String, UrlError>
+    fn url<P: Into<RouteParams>>(
+        &self,
+        params: P,
+        dynamic_route_context: &DynamicRouteContext,
+    ) -> Result<String, UrlError>
     where
         Self: Sized;
 }
@@ -62,7 +72,8 @@ pub trait FullPage: Page + InternalPage + DynamicPage + Sync {}
 
 pub mod prelude {
     pub use super::{
-        DynamicPage, FullPage, InternalPage, Page, RenderResult, RouteContext, RouteParams,
+        DynamicPage, DynamicRouteContext, FullPage, InternalPage, Page, RenderResult, RouteContext,
+        RouteParams,
     };
     pub use crate::assets::Asset;
     pub use maudit_macros::{route, Params};
