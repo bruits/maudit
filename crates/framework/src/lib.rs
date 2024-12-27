@@ -10,8 +10,6 @@ use errors::BuildError;
 // Re-exported dependencies for user convenience
 pub use rustc_hash::FxHashMap;
 
-pub use maudit_macros::generate_pages_mod;
-
 // Internal modules
 mod logging;
 
@@ -38,7 +36,7 @@ use lol_html::{element, rewrite_str, RewriteStrSettings};
 
 #[macro_export]
 macro_rules! routes {
-    [$($route:ident),*] => {
+    [$($route:path),*] => {
         vec![$(&$route),*]
     };
 }

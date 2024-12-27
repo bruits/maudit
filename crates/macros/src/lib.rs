@@ -26,60 +26,6 @@ impl Parse for Args {
     }
 }
 
-struct GeneratePagesModAttributes {
-    directory: Option<String>,
-}
-
-impl Parse for GeneratePagesModAttributes {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let directory = input.parse::<Option<LitStr>>()?;
-
-        Ok(GeneratePagesModAttributes {
-            directory: directory.map(|d| d.value()),
-        })
-    }
-}
-
-#[proc_macro]
-pub fn generate_pages_mod(item: TokenStream) -> TokenStream {
-    // Add support for passing a directory to generate the pages mod
-    let attributes: GeneratePagesModAttributes = syn::parse_macro_input!(item);
-
-    let directory = attributes.directory.unwrap_or("pages".to_string());
-
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-    let directory_files = std::fs::read_dir(format!(
-        "{}/src/{}",
-        manifest_dir,
-        directory.trim_start_matches('/')
-    ))
-    .unwrap();
-
-    let mut page_mods = Vec::new();
-
-    for file in directory_files {
-        let file = file.unwrap();
-        let file_name = file.file_name();
-        let file_name = file_name.to_str().unwrap();
-        let file_name = file_name.trim_end_matches(".rs");
-
-        page_mods.push(format_ident!("{}", file_name));
-    }
-
-    let expanded = quote! {
-        mod pages {
-            #(
-                mod #page_mods;
-                pub use #page_mods::*;
-            )*
-        }
-
-        pub use pages::*;
-    };
-
-    TokenStream::from(expanded)
-}
-
 #[proc_macro_attribute]
 pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree

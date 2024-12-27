@@ -1,7 +1,11 @@
 use maud::html;
 use maudit::page::prelude::*;
 
-use crate::{content::ArticleContent, layout::layout, Article, ArticleParams};
+use crate::{
+    content::ArticleContent,
+    layout::layout,
+    pages::{article::ArticleParams, Article},
+};
 
 #[route("/")]
 pub struct Index;

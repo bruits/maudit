@@ -3,14 +3,19 @@ mod layout;
 use content::ArticleContent;
 use maudit::{
     content::{glob_markdown, ContentSource, ContentSources},
-    coronate, generate_pages_mod, routes, BuildOptions, BuildOutput,
+    coronate, routes, BuildOptions, BuildOutput,
 };
 
-generate_pages_mod!();
+mod pages {
+    mod article;
+    mod index;
+    pub use article::Article;
+    pub use index::Index;
+}
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(
-        routes![Index, Article],
+        routes![pages::Index, pages::Article],
         ContentSources(vec![Box::new(ContentSource {
             name: "articles".to_string(),
             entries: glob_markdown::<ArticleContent>("content/articles/*.md"),
