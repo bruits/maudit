@@ -41,6 +41,13 @@ macro_rules! routes {
     };
 }
 
+#[macro_export]
+macro_rules! content_sources {
+    ($($source:expr),*) => {
+        maudit::content::ContentSources(vec![$(Box::new($source)),*])
+    };
+}
+
 #[derive(Debug)]
 pub struct PageOutput {
     pub route: String,

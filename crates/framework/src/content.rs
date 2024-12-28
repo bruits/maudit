@@ -6,11 +6,15 @@ use markdown::{mdast::Node, to_html_with_options, to_mdast, Constructs, Options,
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 
+use crate::page::RouteParams;
+
 pub struct ContentEntry<T> {
     pub id: String,
     pub render: Box<dyn Fn() -> String>,
     pub data: T,
 }
+
+pub type Untyped = FxHashMap<String, String>;
 
 pub struct ContentSources(pub Vec<Box<dyn ContentSourceInternal>>);
 
@@ -83,11 +87,32 @@ pub struct ContentSource<T = FxHashMap<String, String>> {
 }
 
 impl<T> ContentSource<T> {
+    pub fn new<P>(name: P, entries: Vec<ContentEntry<T>>) -> Self
+    where
+        P: Into<String>,
+    {
+        Self {
+            name: name.into(),
+            entries,
+        }
+    }
+
     pub fn get_entry(&self, id: &str) -> &ContentEntry<T> {
         self.entries
             .iter()
             .find(|entry| entry.id == id)
             .unwrap_or_else(|| panic!("Entry with id '{}' not found", id))
+    }
+
+    pub fn get_entry_safe(&self, id: &str) -> Option<&ContentEntry<T>> {
+        self.entries.iter().find(|entry| entry.id == id)
+    }
+
+    pub fn into_params<P>(&self, cb: impl Fn(&ContentEntry<T>) -> P) -> Vec<RouteParams>
+    where
+        P: Into<RouteParams>,
+    {
+        self.entries.iter().map(cb).map(Into::into).collect()
     }
 }
 

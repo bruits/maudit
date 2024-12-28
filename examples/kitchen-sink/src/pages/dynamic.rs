@@ -12,19 +12,13 @@ pub struct Params {
 
 impl DynamicPage for DynamicExample {
     fn routes(&self, _: &DynamicRouteContext) -> Vec<RouteParams> {
-        let mut static_routes: Vec<Params> = vec![];
-
-        for i in 0..1 {
-            static_routes.push(Params { page: i });
-        }
-
-        RouteParams::from_vec(static_routes)
+        (0..1).map(|i| Params { page: i }.into()).collect()
     }
 }
 
 impl Page for DynamicExample {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-        let params = ctx.params.parse_into::<Params>();
+        let params = ctx.params::<Params>();
         let image = ctx.assets.add_image("data/social-card.png");
         ctx.assets.include_style("data/tailwind.css", true);
 

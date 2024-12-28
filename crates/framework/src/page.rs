@@ -21,6 +21,15 @@ pub struct RouteContext<'a> {
     pub assets: &'a mut PageAssets,
 }
 
+impl RouteContext<'_> {
+    pub fn params<T>(&self) -> T
+    where
+        T: From<RouteParams>,
+    {
+        T::from(self.params.clone())
+    }
+}
+
 pub struct DynamicRouteContext<'a> {
     pub content: &'a ContentSources,
 }
@@ -39,12 +48,19 @@ impl RouteParams {
     {
         params.into_iter().map(|p| p.into()).collect()
     }
+}
 
-    pub fn parse_into<T>(&self) -> T
-    where
-        T: From<RouteParams>,
-    {
-        T::from(self.clone())
+impl<T> FromIterator<T> for RouteParams
+where
+    T: Into<RouteParams>,
+{
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let mut map = FxHashMap::default();
+        for item in iter {
+            let item = item.into();
+            map.extend(item.0);
+        }
+        RouteParams(map)
     }
 }
 
