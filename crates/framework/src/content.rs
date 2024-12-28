@@ -29,30 +29,21 @@ impl ContentSources {
         Self(collections)
     }
 
-    pub fn get_untyped_collection(&self, name: &str) -> &ContentSource<FxHashMap<String, String>> {
+    pub fn get_untyped_collection(&self, name: &str) -> &ContentSource<Untyped> {
         self.0
             .iter()
-            .find_map(|source| {
-                match source
-                    .as_any()
-                    .downcast_ref::<ContentSource<FxHashMap<String, String>>>()
-                {
+            .find_map(
+                |source| match source.as_any().downcast_ref::<ContentSource<Untyped>>() {
                     Some(source) if source.name == name => Some(source),
                     _ => None,
-                }
-            })
+                },
+            )
             .unwrap_or_else(|| panic!("Collection with name '{}' not found", name))
     }
 
-    pub fn get_untyped_collection_safe(
-        &self,
-        name: &str,
-    ) -> Option<&ContentSource<FxHashMap<String, String>>> {
+    pub fn get_untyped_collection_safe(&self, name: &str) -> Option<&ContentSource<Untyped>> {
         self.0.iter().find_map(|source| {
-            match source
-                .as_any()
-                .downcast_ref::<ContentSource<FxHashMap<String, String>>>()
-            {
+            match source.as_any().downcast_ref::<ContentSource<Untyped>>() {
                 Some(source) if source.name == name => Some(source),
                 _ => None,
             }
@@ -81,7 +72,7 @@ impl ContentSources {
     }
 }
 
-pub struct ContentSource<T = FxHashMap<String, String>> {
+pub struct ContentSource<T = Untyped> {
     pub name: String,
     pub entries: Vec<ContentEntry<T>>,
 }
