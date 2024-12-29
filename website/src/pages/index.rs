@@ -1,28 +1,15 @@
 use maud::html;
 use maudit::page::prelude::*;
 
-use crate::layout::{header, layout};
+use crate::layout::layout;
 
 #[route("/")]
 pub struct Index;
 
 impl Page for Index {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-        let features = [("Feature 1", "Description 1")]
-            .iter()
-            .map(|(title, description)| {
-                html! {
-                div.card {
-                    h4 { (title) }
-                    p { (description) }
-                }
-                }
-            })
-            .collect::<Vec<_>>();
-
         layout(
             html! {
-                (header(ctx))
                 div.w-screen {
                     div."lg:container".mx-auto.hero-background {
                         div.px-6.py-10.mx-6.my-14 {
@@ -36,8 +23,8 @@ impl Page for Index {
                                 "Or, in simpler words, " span.text-brand-red {"a static site generator"} "."
                             }
                             div.mt-6.leading-tight {
-                                a.btn.block.group href="/docs" { "Get Started" span.inline-block."group-hover:translate-x-4".transition-transform.translate-x-2 { "→" } }
-                                span.opacity-75.italic { "or scroll down to learn more" }
+                                a.btn.block.group.inline-block href="/docs" { "Get Started" span.inline-block."group-hover:translate-x-3".transition-transform.translate-x-2 { "→" } }
+                                p.opacity-75.italic { "or scroll down to learn more" }
                             }
                         }
                     }

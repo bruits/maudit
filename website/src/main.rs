@@ -1,13 +1,16 @@
+use content::content_sources;
 use maudit::{coronate, routes, BuildOptions, BuildOutput};
 
+mod content;
 mod layout;
-mod pages {
-    mod index;
-    pub use index::Index;
-}
+mod pages;
 
-pub use pages::Index;
+use pages::{DocsIndex, DocsPage, Index};
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
-    coronate(routes![Index], vec![].into(), BuildOptions::default())
+    coronate(
+        routes![Index, DocsIndex, DocsPage],
+        content_sources(),
+        BuildOptions::default(),
+    )
 }

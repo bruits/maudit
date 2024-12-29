@@ -12,7 +12,7 @@ pub struct Index;
 
 impl Page for Index {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-        let articles = ctx.content.get_collection::<ArticleContent>("articles");
+        let articles = ctx.content.get_source::<ArticleContent>("articles");
 
         let markup = html! {
           ul {

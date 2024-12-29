@@ -6,3 +6,7 @@ resolver = "2"
 maudit = { version = "0.1.0", path = "crates/framework" }
 maud = { version = "0.26.0" }
 serde = { version = "1.0.216" }
+
+[profile.dev]
+debug = 0
+strip = "debuginfo"
