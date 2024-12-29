@@ -194,7 +194,8 @@ impl Asset for Style {
     fn process(&self, _: &Path, tmp_dir: &Path) -> Option<String> {
         // TODO: Detect tailwind automatically
         if self.tailwind {
-            let tmp_path = tmp_dir.join("tailwind.css");
+            let file_name = self.path.file_name().unwrap().to_str().unwrap();
+            let tmp_path = tmp_dir.join(file_name);
             let tmp_path_str = tmp_path.to_str().unwrap().to_string();
 
             let start_tailwind = SystemTime::now();
