@@ -68,12 +68,14 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let path_for_route = make_params_dynamic(&path, &params, 0);
     let file_path_for_route = url_to_file_path(&path, attrs.is_endpoint_file, &params);
 
+    let raw_params = format_ident!("RawParams_{}", struct_name);
+
     let expanded = quote! {
-        struct RawParams {
+        struct #raw_params {
             #(#struct_def_params,)*
         }
 
-        impl RawParams {
+        impl #raw_params {
             fn get_field_names() -> Vec<&'static str> {
                 vec![#(stringify!(#struct_def_params)),*]
             }
