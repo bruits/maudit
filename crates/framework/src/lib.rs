@@ -7,6 +7,7 @@ pub mod params;
 
 use content::ContentSources;
 use errors::BuildError;
+use maud::{html, Markup};
 // Re-exported dependencies for user convenience
 pub use rustc_hash::FxHashMap;
 
@@ -72,6 +73,13 @@ pub struct BuildOutput {
 impl Termination for BuildOutput {
     fn report(self) -> std::process::ExitCode {
         0.into()
+    }
+}
+
+pub const GENERATOR: &str = concat!("Maudit v", env!("CARGO_PKG_VERSION"));
+pub fn generator() -> Markup {
+    html! {
+        meta name="generator" content=(GENERATOR);
     }
 }
 
