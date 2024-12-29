@@ -29,7 +29,7 @@ impl ContentSources {
         Self(collections)
     }
 
-    pub fn get_untyped_collection(&self, name: &str) -> &ContentSource<Untyped> {
+    pub fn get_untyped_source(&self, name: &str) -> &ContentSource<Untyped> {
         self.0
             .iter()
             .find_map(
@@ -41,7 +41,7 @@ impl ContentSources {
             .unwrap_or_else(|| panic!("Collection with name '{}' not found", name))
     }
 
-    pub fn get_untyped_collection_safe(&self, name: &str) -> Option<&ContentSource<Untyped>> {
+    pub fn get_untyped_source_safe(&self, name: &str) -> Option<&ContentSource<Untyped>> {
         self.0.iter().find_map(|source| {
             match source.as_any().downcast_ref::<ContentSource<Untyped>>() {
                 Some(source) if source.name == name => Some(source),
@@ -50,7 +50,7 @@ impl ContentSources {
         })
     }
 
-    pub fn get_collection<T: 'static>(&self, name: &str) -> &ContentSource<T> {
+    pub fn get_source<T: 'static>(&self, name: &str) -> &ContentSource<T> {
         self.0
             .iter()
             .find_map(
@@ -62,7 +62,7 @@ impl ContentSources {
             .unwrap_or_else(|| panic!("Collection with name '{}' not found", name))
     }
 
-    pub fn get_collection_safe<T: 'static>(&self, name: &str) -> Option<&ContentSource<T>> {
+    pub fn get_source_safe<T: 'static>(&self, name: &str) -> Option<&ContentSource<T>> {
         self.0.iter().find_map(
             |source| match source.as_any().downcast_ref::<ContentSource<T>>() {
                 Some(source) if source.name == name => Some(source),

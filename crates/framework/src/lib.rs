@@ -124,6 +124,8 @@ pub async fn build(
                 return writeln!(buf, "{}", record.args());
             }
 
+            // TODO: Add different formatting for warn, error, etc.
+
             writeln!(
                 buf,
                 "{} {} {}",
@@ -229,7 +231,12 @@ pub async fn build(
             page::RouteType::Dynamic => {
                 let routes = route.routes(&dynamic_route_context);
 
-                info!(target: "build", "{}", route.route_raw().to_string().bold());
+                if routes.is_empty() {
+                    info!(target: "build", "{} is a registered dynamic route, but it returned no routes. No pages will be generated for this route.", route.route_raw().to_string().bold());
+                    continue;
+                } else {
+                    info!(target: "build", "{}", route.route_raw().to_string().bold());
+                }
 
                 for params in routes {
                     let mut pages_assets = assets::PageAssets {
