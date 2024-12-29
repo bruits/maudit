@@ -132,7 +132,7 @@ impl Asset for Image {
     fn url(&self) -> Option<String> {
         let file_name = self.path.file_name().unwrap().to_str().unwrap();
 
-        format!("{}/{}", self.assets_dir().to_string_lossy(), file_name).into()
+        format!("/{}/{}", self.assets_dir().to_string_lossy(), file_name).into()
     }
 
     fn path(&self) -> &PathBuf {
@@ -179,7 +179,7 @@ impl Asset for Script {
     fn url(&self) -> Option<String> {
         let file_name = self.path.file_name().unwrap().to_str().unwrap();
 
-        format!("{}/{}", self.assets_dir().to_string_lossy(), file_name).into()
+        format!("/{}/{}", self.assets_dir().to_string_lossy(), file_name).into()
     }
 
     fn path(&self) -> &PathBuf {
@@ -218,7 +218,7 @@ impl Asset for Style {
     fn url(&self) -> Option<String> {
         let file_name = self.path.file_name().unwrap().to_str().unwrap();
 
-        format!("{}/{}", self.assets_dir().to_string_lossy(), file_name).into()
+        format!("/{}/{}", self.assets_dir().to_string_lossy(), file_name).into()
     }
 
     fn path(&self) -> &PathBuf {
