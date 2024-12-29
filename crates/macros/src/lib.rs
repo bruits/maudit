@@ -39,7 +39,7 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let dynamic_page_impl = match params.is_empty() {
         false => quote! {},
         true => quote! {
-            impl maudit::page::DynamicPage for #struct_name {
+            impl maudit::page::DynamicRoute for #struct_name {
                 fn routes(&self, _: &maudit::page::DynamicRouteContext) -> Vec<maudit::page::RouteParams> {
                     Vec::new()
                 }
@@ -57,31 +57,21 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect::<Vec<_>>();
 
-    let struct_def_params = params
-        .iter()
-        .map(|v| {
-            let key = format_ident!("{}", v.key);
-            quote! { #key: String }
-        })
-        .collect::<Vec<_>>();
-
     let path_for_route = make_params_dynamic(&path, &params, 0);
     let file_path_for_route = url_to_file_path(&path, attrs.is_endpoint_file, &params);
 
-    let raw_params = format_ident!("RawParams_{}", struct_name);
+    let route_type = if params.is_empty() {
+        quote! { maudit::page::RouteType::Static }
+    } else {
+        quote! { maudit::page::RouteType::Dynamic }
+    };
 
     let expanded = quote! {
-        struct #raw_params {
-            #(#struct_def_params,)*
-        }
-
-        impl #raw_params {
-            fn get_field_names() -> Vec<&'static str> {
-                vec![#(stringify!(#struct_def_params)),*]
-            }
-        }
-
         impl maudit::page::InternalPage for #struct_name {
+            fn route_type(&self) -> maudit::page::RouteType {
+                #route_type
+            }
+
             fn route_raw(&self) -> String {
                 #path.to_string()
             }
@@ -106,7 +96,7 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 let params = params.into();
 
                 // Check that the params refer to a page that exists
-                let all_routes = self::DynamicPage::routes(self, dynamic_route_context);
+                let all_routes = self::DynamicRoute::routes(self, dynamic_route_context);
                 let mut found = false;
 
                 for route in all_routes {

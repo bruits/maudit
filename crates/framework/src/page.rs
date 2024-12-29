@@ -64,11 +64,19 @@ where
     }
 }
 
-pub trait DynamicPage {
+pub trait DynamicRoute {
+    // Intentionally does not have a default implementation even though it'd be useful in our macros in order to force
+    // the user to implement it explicitly, even if it's just returning an empty Vec.
     fn routes(&self, context: &DynamicRouteContext) -> Vec<RouteParams>;
 }
 
+pub enum RouteType {
+    Static,
+    Dynamic,
+}
+
 pub trait InternalPage {
+    fn route_type(&self) -> RouteType;
     fn route_raw(&self) -> String;
     fn route(&self, params: &RouteParams) -> String;
     fn file_path(&self, params: &RouteParams) -> PathBuf;
@@ -84,12 +92,12 @@ pub trait InternalPage {
         Self: Sized;
 }
 
-pub trait FullPage: Page + InternalPage + DynamicPage + Sync {}
+pub trait FullPage: Page + InternalPage + DynamicRoute + Sync {}
 
 pub mod prelude {
     pub use super::{
-        DynamicPage, DynamicRouteContext, FullPage, InternalPage, Page, RenderResult, RouteContext,
-        RouteParams,
+        DynamicRoute, DynamicRouteContext, FullPage, InternalPage, Page, RenderResult,
+        RouteContext, RouteParams,
     };
     pub use crate::assets::Asset;
     pub use maudit_macros::{route, Params};

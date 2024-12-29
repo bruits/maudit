@@ -187,9 +187,8 @@ pub async fn build(
     };
 
     for route in routes {
-        let routes = route.routes(&dynamic_route_context);
-        match routes.is_empty() {
-            true => {
+        match route.route_type() {
+            page::RouteType::Static => {
                 let route_start = SystemTime::now();
                 let mut page_assets = assets::PageAssets {
                     assets_dir: options.assets_dir.clone().into(),
@@ -227,7 +226,9 @@ pub async fn build(
                     params: None,
                 });
             }
-            false => {
+            page::RouteType::Dynamic => {
+                let routes = route.routes(&dynamic_route_context);
+
                 info!(target: "build", "{}", route.route_raw().to_string().bold());
 
                 for params in routes {
