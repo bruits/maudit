@@ -93,7 +93,7 @@ impl Default for BuildOptions {
     fn default() -> Self {
         Self {
             output_dir: "dist".to_string(),
-            assets_dir: "_assets".to_string(),
+            assets_dir: "_maudit".to_string(),
             static_dir: "static".to_string(),
         }
     }
@@ -191,7 +191,11 @@ pub async fn build(
         match routes.is_empty() {
             true => {
                 let route_start = SystemTime::now();
-                let mut page_assets = assets::PageAssets::default();
+                let mut page_assets = assets::PageAssets {
+                    assets_dir: options.assets_dir.clone().into(),
+                    ..Default::default()
+                };
+
                 let mut ctx = RouteContext {
                     params: page::RouteParams(FxHashMap::default()),
                     content: &content_sources,
@@ -227,7 +231,10 @@ pub async fn build(
                 info!(target: "build", "{}", route.route_raw().to_string().bold());
 
                 for params in routes {
-                    let mut pages_assets = assets::PageAssets::default();
+                    let mut pages_assets = assets::PageAssets {
+                        assets_dir: options.assets_dir.clone().into(),
+                        ..Default::default()
+                    };
                     let route_start = SystemTime::now();
                     let mut ctx = RouteContext {
                         params,

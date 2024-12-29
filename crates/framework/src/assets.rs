@@ -13,8 +13,11 @@ pub struct PageAssets {
     pub(crate) assets: FxHashSet<Box<dyn Asset>>,
     pub(crate) scripts: FxHashSet<Script>,
     pub(crate) styles: FxHashSet<Style>,
+
     pub(crate) included_styles: Vec<Style>,
     pub(crate) included_scripts: Vec<Script>,
+
+    pub(crate) assets_dir: PathBuf,
 }
 
 impl PageAssets {
@@ -24,6 +27,7 @@ impl PageAssets {
     {
         let image = Box::new(Image {
             path: image_path.into(),
+            assets_dir: self.assets_dir.clone(),
         });
 
         self.assets.insert(image.clone());
@@ -37,6 +41,7 @@ impl PageAssets {
     {
         let script = Script {
             path: script_path.into(),
+            assets_dir: self.assets_dir.clone(),
         };
 
         self.scripts.insert(script.clone());
@@ -50,6 +55,7 @@ impl PageAssets {
     {
         let script = Script {
             path: script_path.into(),
+            assets_dir: self.assets_dir.clone(),
         };
 
         self.scripts.insert(script.clone());
@@ -63,6 +69,7 @@ impl PageAssets {
         let style = Style {
             path: style_path.into(),
             tailwind,
+            assets_dir: self.assets_dir.clone(),
         };
 
         self.styles.insert(style.clone());
@@ -77,6 +84,7 @@ impl PageAssets {
         let style = Style {
             path: style_path.into(),
             tailwind,
+            assets_dir: self.assets_dir.clone(),
         };
 
         self.styles.insert(style.clone());
@@ -84,7 +92,8 @@ impl PageAssets {
     }
 }
 
-pub trait Asset: DynEq {
+#[allow(private_bounds)] // Users never interact with the internal trait, so it's fine
+pub trait Asset: DynEq + InternalAsset {
     fn url(&self) -> Option<String>;
     fn path(&self) -> &PathBuf;
 
@@ -92,6 +101,10 @@ pub trait Asset: DynEq {
         None
     }
     fn hash(&self) -> [u8; 8];
+}
+
+trait InternalAsset {
+    fn assets_dir(&self) -> PathBuf;
 }
 
 impl Hash for dyn Asset {
@@ -106,13 +119,20 @@ dyn_eq::eq_trait_object!(Asset);
 #[non_exhaustive]
 pub struct Image {
     pub path: PathBuf,
+    pub(crate) assets_dir: PathBuf,
+}
+
+impl InternalAsset for Image {
+    fn assets_dir(&self) -> PathBuf {
+        self.assets_dir.clone()
+    }
 }
 
 impl Asset for Image {
     fn url(&self) -> Option<String> {
         let file_name = self.path.file_name().unwrap().to_str().unwrap();
 
-        format!("/_assets/{}", file_name).into()
+        format!("{}/{}", self.assets_dir().to_string_lossy(), file_name).into()
     }
 
     fn path(&self) -> &PathBuf {
@@ -146,13 +166,20 @@ impl Render for Image {
 #[non_exhaustive]
 pub struct Script {
     pub path: PathBuf,
+    pub(crate) assets_dir: PathBuf,
+}
+
+impl InternalAsset for Script {
+    fn assets_dir(&self) -> PathBuf {
+        self.assets_dir.clone()
+    }
 }
 
 impl Asset for Script {
     fn url(&self) -> Option<String> {
         let file_name = self.path.file_name().unwrap().to_str().unwrap();
 
-        format!("/_assets/{}", file_name).into()
+        format!("{}/{}", self.assets_dir().to_string_lossy(), file_name).into()
     }
 
     fn path(&self) -> &PathBuf {
@@ -178,13 +205,20 @@ impl Render for Script {
 pub struct Style {
     pub path: PathBuf,
     pub(crate) tailwind: bool,
+    pub(crate) assets_dir: PathBuf,
+}
+
+impl InternalAsset for Style {
+    fn assets_dir(&self) -> PathBuf {
+        self.assets_dir.clone()
+    }
 }
 
 impl Asset for Style {
     fn url(&self) -> Option<String> {
         let file_name = self.path.file_name().unwrap().to_str().unwrap();
 
-        format!("/_assets/{}", file_name).into()
+        format!("{}/{}", self.assets_dir().to_string_lossy(), file_name).into()
     }
 
     fn path(&self) -> &PathBuf {
