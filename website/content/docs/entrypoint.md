@@ -13,7 +13,7 @@ use maudit::{coronate, routes, BuildOptions, BuildOutput};
 use pages::Index;
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
-    coronate(routes![Index], vec![].into(), BuildOptions::default())
+  coronate(routes![Index], vec![].into(), BuildOptions::default())
 }
 ```
 

@@ -20,24 +20,24 @@ use maud::html;
 pub struct Blog;
 
 impl Page for Blog {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-        let image = ctx.assets.add_image("logo.png");
+  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+    let image = ctx.assets.add_image("logo.png");
 
-        html! {
-            (image) // Generates <img src="IMAGE_URL" loading="lazy" decoding="async" />
-        }
-    }
+    html! {
+      (image) // Generates <img src="IMAGE_URL" loading="lazy" decoding="async" />
+    }.into()
+  }
 }
 ```
 
 Alternatively, if not using Maud, the `url()` method on the image can be used to generate the HTML.
 
 ```rust
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-      let image = ctx.assets.add_image("logo.png");
+fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+  let image = ctx.assets.add_image("logo.png");
 
-      RenderResult::Html(format!("<img src=\"{}\" loading=\"lazy\" decoding=\"async\" />", image.url().unwrap()))
-  }
+  RenderResult::Html(format!("<img src=\"{}\" loading=\"lazy\" decoding=\"async\" />", image.url().unwrap()))
+}
 ```
 
 At this time, images are not automatically optimized or resized, but this will be added in the future.
@@ -56,28 +56,28 @@ use maud::html;
 pub struct Blog;
 
 impl Page for Blog {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-        let style = ctx.assets.add_style("style.css", false);
+  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+    let style = ctx.assets.add_style("style.css", false);
 
-        html! {
-            (style) // Generates <link rel="stylesheet" href="STYLE_URL" />
-        }
-    }
+    html! {
+      (style) // Generates <link rel="stylesheet" href="STYLE_URL" />
+    }.into()
+  }
 }
 ```
 
 Alternatively, the `include_style()` method can be used to automatically include the stylesheet in the page, without needing to manually add it to the template.
 
 ```rust
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-      ctx.assets.include_style("style.css", false);
+fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+  ctx.assets.include_style("style.css", false);
 
-      html! {
-        div {
-          "Look ma, no explicit link tag!"
-        }
-      }
-  }
+  html! {
+    div {
+      "Look ma, no explicit link tag!"
+    }
+  }.into()
+}
 ```
 
 #### Tailwind support
@@ -85,15 +85,15 @@ Alternatively, the `include_style()` method can be used to automatically include
 Maudit includes built-in support for [Tailwind CSS](https://tailwindcss.com/). To use it, pass `true` as the second argument to `add_style()` or `include_style()`.
 
 ```rust
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-      ctx.assets.add_style("style.css", true);
+fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+  ctx.assets.add_style("style.css", true);
 
-      html! {
-        div.bg-red-500 {
-          "Wow, such red!"
-        }
-      }
-  }
+  html! {
+    div.bg-red-500 {
+      "Wow, such red!"
+    }
+  }.into()
+}
 ```
 
 To configure Tailwind, add a [`tailwind.config.js` file](https://tailwindcss.com/docs/configuration) to your project's root directory. This file will be automatically detected and used by Maudit.
@@ -109,28 +109,28 @@ use maudit::page::prelude::*;
 pub struct Blog;
 
 impl Page for Blog {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-        let script = ctx.assets.add_script("script.js");
+  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+    let script = ctx.assets.add_script("script.js");
 
-        html! {
-            (script) // Generates <script src="SCRIPT_URL" type="module"></script>
-        }
-    }
+    html! {
+      (script) // Generates <script src="SCRIPT_URL" type="module"></script>
+    }.into()
+  }
 }
 ```
 
 As with stylesheets, the `include_script()` method can be used to automatically include the script in the page, which can be useful when using layouts or other shared templates.
 
 ```rust
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-      ctx.assets.include_script("script.js");
+fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+  ctx.assets.include_script("script.js");
 
-      html! {
-        div {
-          "Look ma, no explicit script tag!"
-        }
-      }
-  }
+  html! {
+    div {
+      "Look ma, no explicit script tag!"
+    }
+  }.into()
+}
 ```
 
 When using `include_script()`, the script will be included inside the `head` tag with the `type="module"` attribute. Note that this attribute implicitely means that your script will be deferred after the page has loaded. At this time, pages without a `head` tag won't have the script included.

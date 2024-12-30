@@ -15,9 +15,9 @@ use maudit::page::prelude::*;
 pub struct HelloWorld;
 
 impl Page for HelloWorld {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-        RenderResult::Text("Hello, world!".to_string())
-    }
+  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+    RenderResult::Text("Hello, world!".to_string())
+  }
 }
 ```
 
@@ -40,9 +40,9 @@ use maudit::route::prelude::*;
 pub struct Post;
 
 impl Page for Post {
-    fn render(&self, ctx: &mut RouteContext) -> String {
-        format!("Hello, {}!", ctx.params.get("slug").unwrap())
-    }
+  fn render(&self, ctx: &mut RouteContext) -> String {
+    format!("Hello, {}!", ctx.params.get("slug").unwrap())
+  }
 }
 ```
 
@@ -55,18 +55,18 @@ use maudit::{page::prelude::*, FxHashMap};
 pub struct Post;
 
 impl DynamicRoute for Post {
-    fn routes(&self, ctx: &DynamicRouteContext) -> Vec<RouteParams> {
-        let mut routes = FxHashMap::default();
-        routes.insert("slug".to_string(), "hello-world".to_string());
+  fn routes(&self, ctx: &DynamicRouteContext) -> Vec<RouteParams> {
+    let mut routes = FxHashMap::default();
+    routes.insert("slug".to_string(), "hello-world".to_string());
 
-        vec![RouteParams(routes)]
-    }
+    vec![RouteParams(routes)]
+  }
 }
 
 impl Page for Post {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-        RenderResult::Text(format!("Hello, {}!", ctx.params.get("slug").unwrap()))
-    }
+  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+    RenderResult::Text(format!("Hello, {}!", ctx.params.get("slug").unwrap()))
+  }
 }
 ```
 
@@ -77,17 +77,17 @@ Interacting with HashMaps in Rust can be a bit cumbersome, so Maudit provides th
 ```rust
 #[derive(Params)]
 pub struct Params {
-    pub slug: String,
+  pub slug: String,
 }
 
 impl DynamicRoute for Post {
-    fn routes(&self, ctx: &DynamicRouteContext) -> Vec<RouteParams> {
-        let routes = vec![ArticleParams {
-            slug: "hello-world".to_string(),
-        }];
+  fn routes(&self, ctx: &DynamicRouteContext) -> Vec<RouteParams> {
+    let routes = vec![ArticleParams {
+      slug: "hello-world".to_string(),
+    }];
 
-        RouteParams::from_vec(routes)
-    }
+    RouteParams::from_vec(routes)
+  }
 }
 ```
 
@@ -96,15 +96,15 @@ This struct can also be used when defining the `Page` implementation, making it 
 ```rust
 #[derive(Params)]
 pub struct Params {
-    pub slug: String,
+  pub slug: String,
 }
 
 impl Page for Post {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-        let params = ctx.params::<Params>();
+  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+    let params = ctx.params::<Params>();
 
-        RenderResult::Text(format!("Hello, {}!", params.slug))
-    }
+    RenderResult::Text(format!("Hello, {}!", params.slug))
+  }
 }
 ```
 
@@ -121,9 +121,9 @@ use maudit::page::prelude::*;
 pub struct HelloWorldJson;
 
 impl Page for HelloWorldJson {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-        RenderResult::Text(r#"{"message": "Hello, world!"}"#.to_string())
-    }
+  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+    RenderResult::Text(r#"{"message": "Hello, world!"}"#.to_string())
+  }
 }
 ```
 
@@ -137,23 +137,23 @@ pub struct PostJson;
 
 #[derive(Params)]
 pub struct Params {
-    pub slug: String,
+  pub slug: String,
 }
 
 impl DynamicRoute for PostJson {
-    fn routes(&self, ctx: &DynamicRouteContext) -> Vec<RouteParams> {
-        let routes = vec![Params { slug: "hello-world".to_string() }];
+  fn routes(&self, ctx: &DynamicRouteContext) -> Vec<RouteParams> {
+    let routes = vec![Params { slug: "hello-world".to_string() }];
 
-        RouteParams::from_vec(routes)
-    }
+    RouteParams::from_vec(routes)
+  }
 }
 
 impl Page for PostJson {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-        let params = ctx.params::<Params>();
+  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+    let params = ctx.params::<Params>();
 
-        RenderResult::Text(format!(r#"{{"message": "Hello, {}!"}}"#, params.slug))
-    }
+    RenderResult::Text(format!(r#"{{"message": "Hello, {}!"}}"#, params.slug))
+  }
 }
 ```
 
