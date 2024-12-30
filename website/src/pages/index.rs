@@ -16,7 +16,7 @@ impl Page for Index {
                             a.bg-our-black.text-our-white.rounded-sm.px-2.py-1.text-sm.mb-2.inline-block."hover:text-white"."hover:cursor-pointer" href="#" {
                                 "Maudit v0.1.0 is out →"
                             }
-                            h2.text-5xl."w-[24ch]"."xl:w-[30ch]"."mb-1"."leading-[1.15]" {
+                            h2.text-5xl."w-[22ch]"."xl:w-[30ch]"."mb-1"."leading-[1.15]" {
                                 "Lo, " span.text-brand-red { "the still scrolls of the web"} ", unchanging and steadfast, at last!"
                             }
                             p.opacity-75.italic {

@@ -33,7 +33,7 @@ export default {
 
 				body: {
 					fontFamily:
-						"'Iowan Old Style', 'Palatino Linotype', 'URW Palladio L', P052, serif",
+						"Charter, 'Bitstream Charter', 'Sitka Text', Cambria, serif;",
 				},
 
 				a: {
