@@ -38,6 +38,7 @@ pub fn layout(main: Markup, bottom_border: bool, ctx: &mut RouteContext) -> Rend
         html lang="en" {
             head {
                 meta charset="utf-8";
+                meta name="viewport" content="width=device-width, initial-scale=1";
                 title { "Maudit" }
                 (generator())
                 link rel="icon" href="/favicon.svg";
