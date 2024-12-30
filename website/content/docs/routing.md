@@ -15,7 +15,7 @@ use maudit::page::prelude::*;
 pub struct HelloWorld;
 
 impl Page for HelloWorld {
-    fn render(&self, ctx: &PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         RenderResult::Text("Hello, world!".to_string())
     }
 }
@@ -40,7 +40,7 @@ use maudit::route::prelude::*;
 pub struct Post;
 
 impl Page for Post {
-    fn render(&self, ctx: &PageContext) -> String {
+    fn render(&self, ctx: &mut RouteContext) -> String {
         format!("Hello, {}!", ctx.params.get("slug").unwrap())
     }
 }
@@ -64,7 +64,7 @@ impl DynamicRoute for Post {
 }
 
 impl Page for Post {
-    fn render(&self, ctx: &PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         RenderResult::Text(format!("Hello, {}!", ctx.params.get("slug").unwrap()))
     }
 }
@@ -100,7 +100,7 @@ pub struct Params {
 }
 
 impl Page for Post {
-    fn render(&self, ctx: &PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let params = ctx.params::<Params>();
 
         RenderResult::Text(format!("Hello, {}!", params.slug))
@@ -121,7 +121,7 @@ use maudit::page::prelude::*;
 pub struct HelloWorldJson;
 
 impl Page for HelloWorldJson {
-    fn render(&self, ctx: &PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         RenderResult::Text(r#"{"message": "Hello, world!"}"#.to_string())
     }
 }
@@ -149,7 +149,7 @@ impl DynamicRoute for PostJson {
 }
 
 impl Page for PostJson {
-    fn render(&self, ctx: &PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let params = ctx.params::<Params>();
 
         RenderResult::Text(format!(r#"{{"message": "Hello, {}!"}}"#, params.slug))

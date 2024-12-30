@@ -25,13 +25,23 @@ pub fn left_sidebar(ctx: &mut RouteContext) -> Markup {
         }
     });
 
+    let static_links: Vec<(&str, &str)> = vec![
+        ("Reference", "https://docs.rs/maudit"),
+        (
+            "Examples",
+            "https://github.com/Princesseuh/maudit/tree/main/examples",
+        ),
+    ];
+
     let entries = sections.iter().map(|(section, entries)| {
         html! {
             li.mb-4 {
                 h2.text-lg.font-bold { (section) }
-                ul.pl-1 {
+                ul {
                     @for entry in entries {
-                        li {
+                        @let url = format!("/docs/{}", entry.id);
+                        @let is_current_page = url == ctx.current_url;
+                        li."border-l-2"."border-[#e9e9e7]"."hover:border-brand-red"."pl-3"."py-1".(if is_current_page { "text-brand-red border-brand-red" } else { "" }) {
                             a href=(format!("/docs/{}", entry.id)) { (entry.data.title) }
                         }
                     }
@@ -41,6 +51,13 @@ pub fn left_sidebar(ctx: &mut RouteContext) -> Markup {
     });
 
     html! {
+        ul.mb-4 {
+            @for (name, link) in static_links {
+                li.mb-1 {
+                    a.text-lg href=(link) { (name) }
+                }
+            }
+        }
         ul {
             @for entry in entries {
                 (entry)

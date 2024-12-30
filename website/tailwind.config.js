@@ -14,7 +14,7 @@ export default {
 				"brighter-brand": "#FA3252",
 			},
 			gridTemplateColumns: {
-				docs: "0.15fr 0.70fr 0.15fr",
+				docs: "0.17fr 0.72fr 0.15fr",
 			},
 			maxWidth: {
 				"larger-prose": "75ch",
