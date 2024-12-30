@@ -7,9 +7,11 @@ export default {
 	theme: {
 		extend: {
 			colors: {
-				"our-white": "#F1F1EE",
+				"our-white": "#FFFCF7",
 				"our-black": "#12130F",
 				"faded-black": "#1d1e1b",
+				"darker-white": "#f8f7f2",
+				borders: "#e9e9e7",
 				"brand-red": "#BA1F33",
 				"brighter-brand": "#FA3252",
 			},
@@ -26,8 +28,8 @@ export default {
 		plugin(({ addBase, theme }) => {
 			addBase({
 				"html, body": {
-					backgroundColor: "#F1F1EE",
-					color: "#12130F",
+					backgroundColor: theme("colors.our-white"),
+					color: theme("colors.our-black"),
 					height: "100%",
 				},
 

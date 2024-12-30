@@ -14,7 +14,7 @@ pub fn docs_layout(main: Markup, ctx: &mut RouteContext) -> RenderResult {
     layout(
         html! {
             div.container.mx-auto.grid-cols-docs.grid."min-h-[calc(100%-64px)]" {
-                aside.bg-gradient-to-l."from-[#e9e9e7]"."py-8"."h-full" {
+                aside.bg-gradient-to-l."from-darker-white"."py-8"."h-full".border-r.border-r-borders {
                     (left_sidebar(ctx))
                 }
                 main.w-full.max-w-larger-prose.mx-auto.py-8 {

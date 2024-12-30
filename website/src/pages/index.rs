@@ -29,7 +29,7 @@ impl Page for Index {
                         }
                     }
                 }
-                div.h-12.bg-gradient-to-b."from-[#e9e9e7]"{}
+                div.h-12.bg-gradient-to-b."from-darker-white".border-t.border-t-borders{}
 
                 div."px-12"."lg:container".mx-auto {
                     section {
