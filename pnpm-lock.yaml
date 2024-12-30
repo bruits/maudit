@@ -11,7 +11,6 @@ importers:
       '@tailwindcss/typography':
         specifier: ^0.5.15
         version: 0.5.15(tailwindcss@3.4.17)
-    devDependencies:
       tailwindcss:
         specifier: ^3.4.17
         version: 3.4.17
