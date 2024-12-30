@@ -14,8 +14,8 @@ pub fn header(_: &mut RouteContext, bottom_border: bool) -> Markup {
                     h1.text-2xl.tracking-wide { "Maudit" }
                 }
                 nav.text-lg.flex.gap-x-12.relative."top-[2px]" {
-                    a."hover:text-brighter-brand" href="/docs" { "Documentation" }
-                    a."hover:text-brighter-brand" href="/news" { "News" }
+                    a."hover:text-brighter-brand" href="/docs/" { "Documentation" }
+                    a."hover:text-brighter-brand" href="/news/" { "News" }
                 }
                 div {}
             }

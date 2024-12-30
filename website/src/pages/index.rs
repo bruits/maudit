@@ -23,7 +23,7 @@ impl Page for Index {
                                 "Or, in simpler words, " span.text-brand-red {"a static site generator"} "."
                             }
                             div.mt-6.leading-tight {
-                                a.btn.block.group.inline-block href="/docs" { "Get Started" span.inline-block."group-hover:translate-x-3".transition-transform.translate-x-2 { "→" } }
+                                a.btn.block.group.inline-block href="/docs/" { "Get Started" span.inline-block."group-hover:translate-x-3".transition-transform.translate-x-2 { "→" } }
                                 p.opacity-75.italic { "or scroll down to learn more" }
                             }
                         }

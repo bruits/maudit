@@ -42,7 +42,7 @@ pub fn left_sidebar(ctx: &mut RouteContext) -> Markup {
                         @let url = format!("/docs/{}", entry.id);
                         @let is_current_page = url == ctx.current_url;
                         li."border-l-2"."border-borders"."hover:border-brand-red"."pl-3"."py-1".(if is_current_page { "text-brand-red border-brand-red" } else { "" }) {
-                            a.block href=(format!("/docs/{}", entry.id)) { (entry.data.title) }
+                            a.block href=(format!("/docs/{}/", entry.id)) { (entry.data.title) } // TODO: Use type-safe routing
                         }
                     }
                 }
@@ -66,7 +66,7 @@ pub fn left_sidebar(ctx: &mut RouteContext) -> Markup {
     }
 }
 
-pub fn right_sidebar(ctx: &mut RouteContext) -> Markup {
+pub fn right_sidebar(_: &mut RouteContext) -> Markup {
     html!(
         h2.text-lg.font-bold { "On This Page" }
         nav.sticky.top-8 {
