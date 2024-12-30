@@ -29,7 +29,7 @@ impl Page for Index {
                         }
                     }
                 }
-                div.h-12.bg-gradient-to-b."from-[#e6e6e3]"{}
+                div.h-12.bg-gradient-to-b."from-[#e9e9e7]"{}
 
                 div."px-12"."lg:container".mx-auto {
                     section {
@@ -39,6 +39,7 @@ impl Page for Index {
                 }
 
             },
+            false,
             ctx,
         )
     }

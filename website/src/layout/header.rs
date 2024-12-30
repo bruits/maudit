@@ -3,9 +3,11 @@ use maud::Markup;
 use maud::PreEscaped;
 use maudit::page::RouteContext;
 
-pub fn header(_: &mut RouteContext) -> Markup {
+pub fn header(_: &mut RouteContext, bottom_border: bool) -> Markup {
+    let border = if bottom_border { "border-b" } else { "" };
+
     html! {
-        header.px-8.py-4.bg-faded-black.text-our-white {
+        header.px-8.py-4.text-faded-black.bg-our-white."border-[#e9e9e7]".(border) {
             div.container.flex.items-center.gap-x-8.mx-auto {
                 a.flex.gap-x-2.items-center."hover:text-brighter-brand" href="/" {
                     (PreEscaped(include_str!("../../assets/logo.svg")))

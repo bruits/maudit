@@ -7,12 +7,14 @@ use serde::Deserialize;
 #[serde(rename_all = "kebab-case")]
 pub enum DocsSection {
     GettingStarted,
+    CoreConcepts,
 }
 
 impl Render for DocsSection {
     fn render(&self) -> PreEscaped<String> {
         match self {
             DocsSection::GettingStarted => PreEscaped("Getting Started".to_string()),
+            DocsSection::CoreConcepts => PreEscaped("Core Concepts".to_string()),
         }
     }
 }
@@ -20,7 +22,7 @@ impl Render for DocsSection {
 #[derive(Deserialize)]
 pub struct DocsContent {
     pub title: String,
-    pub description: String,
+    pub description: Option<String>,
     pub section: Option<DocsSection>,
 }
 

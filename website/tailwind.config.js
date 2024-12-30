@@ -28,6 +28,7 @@ export default {
 				"html, body": {
 					backgroundColor: "#F1F1EE",
 					color: "#12130F",
+					height: "100%",
 				},
 
 				body: {
