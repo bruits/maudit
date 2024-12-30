@@ -197,13 +197,15 @@ pub async fn build(
                     ..Default::default()
                 };
 
+                let params = RouteParams(FxHashMap::default());
                 let mut ctx = RouteContext {
-                    params: page::RouteParams(FxHashMap::default()),
+                    params: &params,
                     content: &content_sources,
                     assets: &mut page_assets,
+                    current_url: route.url_untyped(&params),
                 };
 
-                let (file_path, mut file) = create_route_file(route, &ctx.params, &dist_dir)?;
+                let (file_path, mut file) = create_route_file(route, ctx.params, &dist_dir)?;
                 let result = route.render(&mut ctx);
 
                 finish_route(
@@ -245,18 +247,19 @@ pub async fn build(
                     };
                     let route_start = SystemTime::now();
                     let mut ctx = RouteContext {
-                        params,
+                        params: &params,
                         content: &content_sources,
                         assets: &mut pages_assets,
+                        current_url: route.url_untyped(&params),
                     };
 
-                    let (file_path, mut file) = create_route_file(route, &ctx.params, &dist_dir)?;
+                    let (file_path, mut file) = create_route_file(route, ctx.params, &dist_dir)?;
                     let result = route.render(&mut ctx);
 
                     build_metadata.pages.push(PageOutput {
                         route: route.route_raw(),
                         file_path: file_path.to_string_lossy().to_string(),
-                        params: Some(ctx.params.0),
+                        params: Some(params.0),
                     });
 
                     finish_route(

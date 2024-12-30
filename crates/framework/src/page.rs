@@ -16,9 +16,10 @@ impl From<maud::Markup> for RenderResult {
 }
 
 pub struct RouteContext<'a> {
-    pub params: RouteParams,
+    pub params: &'a RouteParams,
     pub content: &'a ContentSources,
     pub assets: &'a mut PageAssets,
+    pub current_url: String,
 }
 
 impl RouteContext<'_> {
@@ -90,6 +91,7 @@ pub trait InternalPage {
     ) -> Result<String, UrlError>
     where
         Self: Sized;
+    fn url_untyped(&self, params: &RouteParams) -> String;
 }
 
 pub trait FullPage: Page + InternalPage + DynamicRoute + Sync {}

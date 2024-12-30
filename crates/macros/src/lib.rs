@@ -113,6 +113,11 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 #(#list_params;)*
                 Ok(format!(#path_for_route))
             }
+
+            fn url_untyped(&self, params: &maudit::page::RouteParams) -> String {
+                #(#list_params;)*
+                format!(#path_for_route)
+            }
         }
 
 
