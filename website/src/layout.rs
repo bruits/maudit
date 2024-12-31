@@ -44,11 +44,13 @@ pub fn layout(main: Markup, bottom_border: bool, ctx: &mut RouteContext) -> Rend
                 link rel="icon" href="/favicon.svg";
             }
             body {
-                (header(ctx, bottom_border))
-                (main)
-                footer.bg-our-black.text-white {
-                    div.container.mx-auto.py-8 {
-                        p.text-center.text-sm.italic { "Maudit" }
+                div.bg-our-white {
+                    (header(ctx, bottom_border))
+                    (main)
+                    footer.bg-our-black.text-white {
+                        div.container.mx-auto.py-8 {
+                            p.text-center.text-sm.italic { "Maudit" }
+                        }
                     }
                 }
             }

@@ -11,6 +11,7 @@ export default {
 				"our-black": "#12130F",
 				"faded-black": "#1d1e1b",
 				"darker-white": "#f8f7f2",
+				"brighter-white": "#fefcf9",
 				borders: "#e9e9e7",
 				"brand-red": "#BA1F33",
 				"brighter-brand": "#FA3252",
@@ -28,7 +29,7 @@ export default {
 		plugin(({ addBase, theme }) => {
 			addBase({
 				"html, body": {
-					backgroundColor: theme("colors.our-white"),
+					backgroundColor: theme("colors.our-black"),
 					color: theme("colors.our-black"),
 					height: "100%",
 				},
@@ -58,7 +59,12 @@ export default {
 					borderWidth: "1px",
 					borderStyle: "solid",
 					borderRadius: "0.5rem",
-					padding: "2rem",
+					padding: "1.5rem",
+					boxShadow: "0 0 0.25rem 0 rgba(0, 0, 0, 0.025)",
+					"&:hover": {
+						boxShadow: "0 0 0.5rem 0 rgba(0, 0, 0, 0.05)",
+						backgroundColor: theme("colors.brighter-white"),
+					},
 				},
 
 				".banner": {
