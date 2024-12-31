@@ -8,6 +8,11 @@ pub struct Index;
 
 impl Page for Index {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+        let features = [("Fast", "Maudit is fast, and it's not just because it's a static site generator. It's also because it's written in Rust."),
+            ("Flexible", "Maudit is designed to be flexible and extensible. It's easy to add new features and customize the output."),
+            ("Type-safe", "Maudit uses type-safe routing, so you can't link to a page that doesn't exist. It also has a built-in search feature."),
+            ("Easy to use", "Maudit is easy to use, even if you're not familiar with Rust. It has a simple API and clear documentation.")];
+
         layout(
             html! {
                 div.w-screen {
@@ -31,10 +36,29 @@ impl Page for Index {
                 }
                 div.h-12.bg-gradient-to-b."from-darker-white".border-t.border-t-borders{}
 
-                div."px-12"."lg:container".mx-auto {
+                div."px-12"."lg:container".mx-auto.mb-12 {
                     section {
-                        h3.text-3xl."mb-4" { "1. Features" }
-                        p { "TODO: Find a subtitle" }
+                        h3.text-3xl."mb-4".border-b.border-b-borders.inline-block { "1. Features." }
+                        div.grid."grid-cols-1"."lg:grid-cols-2"."gap-y-4"."lg:gap-x-8" {
+                            @for (name, description) in features {
+                                div.card {
+                                    h4.text-xl.font-bold { (name) }
+                                    p { (description) }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                section.banner.mb-4.py-12 {
+                    div."px-12"."lg:container".mx-auto {
+                        h3.text-3xl."mb-4".border-b.border-borders.inline-block { "2. Built for static websites." }
+                        p.font-bold {
+                            "Maudit was built for one purpose: creating static websites."
+                        }
+                        p {
+                            "By focusing only on static sites, Maudit is able to provide every optimization and features needed for fast performance, low maintenance, and effortless reliability—making it a better fit than general-purpose tools."
+                        }
                     }
                 }
 

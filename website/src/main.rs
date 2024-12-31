@@ -5,11 +5,11 @@ mod content;
 mod layout;
 mod pages;
 
-use pages::{DocsIndex, DocsPage, Index};
+use pages::{ChatRedirect, DocsIndex, DocsPage, Index};
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(
-        routes![Index, DocsIndex, DocsPage],
+        routes![Index, DocsIndex, DocsPage, ChatRedirect],
         content_sources(),
         BuildOptions::default(),
     )

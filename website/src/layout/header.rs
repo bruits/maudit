@@ -8,16 +8,26 @@ pub fn header(_: &mut RouteContext, bottom_border: bool) -> Markup {
 
     html! {
         header.px-8.py-4.text-faded-black.bg-our-white."border-borders".(border) {
-            div.container.flex.items-center.gap-x-8.mx-auto {
-                a.flex.gap-x-2.items-center."hover:text-brighter-brand" href="/" {
-                    (PreEscaped(include_str!("../../assets/logo.svg")))
-                    h1.text-2xl.tracking-wide { "Maudit" }
+            div.container.flex.items-center.mx-auto.justify-between {
+                div.flex.items-center.gap-x-8 {
+                    a.flex.gap-x-2.items-center href="/" {
+                        (PreEscaped(include_str!("../../assets/logo.svg")))
+                        h1.text-2xl.tracking-wide { "Maudit" }
+                    }
+                    nav.text-lg.flex.gap-x-12.relative."top-[2px]" {
+                        a href="/docs/" { "Documentation" }
+                        a href="/news/" { "News" }
+                    }
                 }
-                nav.text-lg.flex.gap-x-12.relative."top-[2px]" {
-                    a."hover:text-brighter-brand" href="/docs/" { "Documentation" }
-                    a."hover:text-brighter-brand" href="/news/" { "News" }
+
+                div.flex.gap-x-3 {
+                    a href="/chat/" {
+                        (PreEscaped(include_str!("../../assets/discord.svg")))
+                    }
+                    a href="https://github.com/Princesseuh/maudit" {
+                        (PreEscaped(include_str!("../../assets/github.svg")))
+                    }
                 }
-                div {}
             }
         }
     }
