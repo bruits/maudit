@@ -1,4 +1,7 @@
+mod dev;
+
 use clap::{Parser, Subcommand};
+use dev::coordinate_dev_env;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -16,7 +19,8 @@ enum Commands {
     Dev,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let cli = Cli::parse();
 
     // You can check for the existence of subcommands, and if found use their
@@ -26,7 +30,7 @@ fn main() {
             println!("Building...");
         }
         Commands::Dev {} => {
-            println!("Running in development mode...");
+            let _ = coordinate_dev_env(".".to_string()).await;
         }
     }
 }

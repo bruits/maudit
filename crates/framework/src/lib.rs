@@ -7,7 +7,9 @@ pub mod params;
 
 use content::ContentSources;
 use errors::BuildError;
+use ipc_channel::ipc::{self, IpcReceiver, IpcSender};
 use maud::{html, Markup};
+use maudit_ipc::{Message, MessageCommand};
 // Re-exported dependencies for user convenience
 pub use rustc_hash::FxHashMap;
 
@@ -15,6 +17,7 @@ pub use rustc_hash::FxHashMap;
 mod logging;
 
 use std::{
+    env,
     fs::{self, remove_dir_all, File},
     io::{self, Write},
     path::{Path, PathBuf},
@@ -99,24 +102,25 @@ impl Default for BuildOptions {
     }
 }
 
+fn do_a_build(
+    routes: &Vec<&dyn FullPage>,
+    content_sources: &ContentSources,
+    options: &BuildOptions,
+) -> Result<BuildOutput, Box<dyn std::error::Error>> {
+    let result = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async { build(routes, content_sources, options).await });
+
+    result
+}
+
 pub fn coronate(
     routes: Vec<&dyn FullPage>,
     content_sources: ContentSources,
     options: BuildOptions,
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async { build(routes, content_sources, options).await })
-}
-
-pub async fn build(
-    routes: Vec<&dyn FullPage>,
-    content_sources: ContentSources,
-    options: BuildOptions,
-) -> Result<BuildOutput, Box<dyn std::error::Error>> {
-    let build_start = SystemTime::now();
     let logging_env = Env::default().filter_or("RUST_LOG", "info");
     Builder::from_env(logging_env)
         .format(|buf, record| {
@@ -138,6 +142,68 @@ pub async fn build(
             )
         })
         .init();
+
+    let ipc_server_name = env::args().nth(2).unwrap();
+    let (to_child, from_parent): (IpcSender<Message>, IpcReceiver<Message>) =
+        ipc::channel().unwrap();
+    let (to_parent, from_child): (IpcSender<Message>, IpcReceiver<Message>) =
+        ipc::channel().unwrap();
+
+    let bootstrap = IpcSender::connect(ipc_server_name).unwrap();
+    bootstrap.send((to_child, from_child)).unwrap();
+
+    // Send ready message
+    let _ = to_parent.send(Message {
+        command: MessageCommand::Ready,
+        data: None,
+    });
+
+    // Send initial build message
+    let _ = to_parent.send(Message {
+        command: MessageCommand::InitialBuild,
+        data: None,
+    });
+
+    let mut result = do_a_build(&routes, &content_sources, &options);
+
+    // Send initial build finished message
+    let _ = to_parent.send(Message {
+        command: MessageCommand::InitialBuildFinished,
+        data: None,
+    });
+
+    // Infinite loop for further messages
+    loop {
+        if let Ok(data) = from_parent.recv() {
+            println!("Client received: {:?}", data);
+
+            match data.command {
+                MessageCommand::Something => {
+                    println!("Client received something!");
+                }
+                MessageCommand::Build => {
+                    result = do_a_build(&routes, &content_sources, &options);
+                }
+                MessageCommand::Exit => {
+                    println!("Client is exiting...");
+                    break;
+                }
+                _ => {
+                    println!("Client is still running...");
+                }
+            }
+        }
+    }
+
+    result
+}
+
+pub async fn build(
+    routes: &Vec<&dyn FullPage>,
+    content_sources: &ContentSources,
+    options: &BuildOptions,
+) -> Result<BuildOutput, Box<dyn std::error::Error>> {
+    let build_start = SystemTime::now();
 
     // Create a directory for the output
     trace!(target: "build", "Setting up required directories...");
@@ -185,7 +251,7 @@ pub async fn build(
     let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
 
     let dynamic_route_context = DynamicRouteContext {
-        content: &content_sources,
+        content: content_sources,
     };
 
     for route in routes {
@@ -200,12 +266,12 @@ pub async fn build(
                 let params = RouteParams(FxHashMap::default());
                 let mut ctx = RouteContext {
                     params: &params,
-                    content: &content_sources,
+                    content: content_sources,
                     assets: &mut page_assets,
                     current_url: route.url_untyped(&params),
                 };
 
-                let (file_path, mut file) = create_route_file(route, ctx.params, &dist_dir)?;
+                let (file_path, mut file) = create_route_file(*route, ctx.params, &dist_dir)?;
                 let result = route.render(&mut ctx);
 
                 finish_route(
@@ -248,12 +314,12 @@ pub async fn build(
                     let route_start = SystemTime::now();
                     let mut ctx = RouteContext {
                         params: &params,
-                        content: &content_sources,
+                        content: content_sources,
                         assets: &mut pages_assets,
                         current_url: route.url_untyped(&params),
                     };
 
-                    let (file_path, mut file) = create_route_file(route, ctx.params, &dist_dir)?;
+                    let (file_path, mut file) = create_route_file(*route, ctx.params, &dist_dir)?;
                     let result = route.render(&mut ctx);
 
                     build_metadata.pages.push(PageOutput {
