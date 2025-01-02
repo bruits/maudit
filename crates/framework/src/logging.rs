@@ -1,4 +1,6 @@
 use colored::{ColoredString, Colorize};
+use env_logger::{Builder, Env};
+use std::io::Write;
 use std::time::{Duration, SystemTimeError};
 
 pub struct FormatElapsedTimeOptions<'a> {
@@ -19,6 +21,30 @@ impl Default for FormatElapsedTimeOptions<'_> {
             additional_fn: None,
         }
     }
+}
+
+pub fn init_logging() {
+    let logging_env = Env::default().filter_or("RUST_LOG", "info");
+    Builder::from_env(logging_env)
+        .format(|buf, record| {
+            if record.target() == "SKIP_FORMAT" {
+                return writeln!(buf, "{}", record.args());
+            }
+
+            // TODO: Add different formatting for warn, error, etc.
+
+            writeln!(
+                buf,
+                "{} {} {}",
+                chrono::Local::now().format("%H:%M:%S").to_string().dimmed(),
+                format!("[{}]", record.target())
+                    .to_string()
+                    .to_ascii_lowercase()
+                    .bright_yellow(),
+                record.args()
+            )
+        })
+        .init();
 }
 
 pub fn format_elapsed_time(

@@ -41,7 +41,7 @@ pub fn left_sidebar(ctx: &mut RouteContext) -> Markup {
                     @for entry in entries {
                         @let url = format!("/docs/{}", entry.id);
                         @let is_current_page = url == ctx.current_url;
-                        li."border-l-2"."border-borders"."hover:border-brand-red"."pl-3"."py-1".(if is_current_page { "text-brand-red border-brand-red" } else { "" }) {
+                        li."border-l-2"."hover:border-brand-red"."pl-3"."py-1".(if is_current_page { "text-brand-red border-brand-red" } else { "border-borders" }) {
                             a.block href=(format!("/docs/{}/", entry.id)) { (entry.data.title) } // TODO: Use type-safe routing
                         }
                     }

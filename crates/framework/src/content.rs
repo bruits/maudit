@@ -75,16 +75,18 @@ impl ContentSources {
 pub struct ContentSource<T = Untyped> {
     pub name: String,
     pub entries: Vec<ContentEntry<T>>,
+    pub(crate) init_methods: Box<dyn Fn() -> Vec<ContentEntry<T>>>,
 }
 
 impl<T> ContentSource<T> {
-    pub fn new<P>(name: P, entries: Vec<ContentEntry<T>>) -> Self
+    pub fn new<P>(name: P, entries: Box<dyn Fn() -> Vec<ContentEntry<T>>>) -> Self
     where
         P: Into<String>,
     {
         Self {
             name: name.into(),
-            entries,
+            entries: vec![],
+            init_methods: entries,
         }
     }
 
@@ -108,10 +110,18 @@ impl<T> ContentSource<T> {
 }
 
 pub trait ContentSourceInternal {
+    fn init(&mut self);
+    fn get_name(&self) -> &str;
     fn as_any(&self) -> &dyn Any; // Used for type checking at runtime
 }
 
 impl<T: 'static> ContentSourceInternal for ContentSource<T> {
+    fn init(&mut self) {
+        self.entries = (self.init_methods)();
+    }
+    fn get_name(&self) -> &str {
+        &self.name
+    }
     fn as_any(&self) -> &dyn Any {
         self
     }

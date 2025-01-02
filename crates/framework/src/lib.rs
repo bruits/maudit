@@ -27,14 +27,13 @@ use std::{
 };
 
 use colored::{ColoredString, Colorize};
-use env_logger::{Builder, Env};
 use log::{info, trace};
 use page::{DynamicRouteContext, FullPage, RenderResult, RouteContext, RouteParams};
 use rolldown::{Bundler, BundlerOptions, InputItem};
 use rustc_hash::FxHashSet;
 
 use assets::Asset;
-use logging::{format_elapsed_time, FormatElapsedTimeOptions};
+use logging::{format_elapsed_time, init_logging, FormatElapsedTimeOptions};
 
 use lol_html::{element, rewrite_str, RewriteStrSettings};
 
@@ -47,8 +46,8 @@ macro_rules! routes {
 
 #[macro_export]
 macro_rules! content_sources {
-    ($($source:expr),*) => {
-        maudit::content::ContentSources(vec![$(Box::new($source)),*])
+    ($($name:expr => $entries:expr),*) => {
+        maudit::content::ContentSources(vec![$(Box::new(maudit::content::ContentSource::new($name, Box::new(|| $entries)))),*])
     };
 }
 
@@ -104,7 +103,7 @@ impl Default for BuildOptions {
 
 fn do_a_build(
     routes: &Vec<&dyn FullPage>,
-    content_sources: &ContentSources,
+    content_sources: &mut ContentSources,
     options: &BuildOptions,
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
     let result = tokio::runtime::Builder::new_multi_thread()
@@ -116,40 +115,18 @@ fn do_a_build(
     result
 }
 
-pub fn coronate(
+fn setup_ipc_server(
+    server_name: String,
     routes: Vec<&dyn FullPage>,
-    content_sources: ContentSources,
+    mut content_sources: ContentSources,
     options: BuildOptions,
-) -> Result<BuildOutput, Box<dyn std::error::Error>> {
-    let logging_env = Env::default().filter_or("RUST_LOG", "info");
-    Builder::from_env(logging_env)
-        .format(|buf, record| {
-            if record.target() == "SKIP_FORMAT" {
-                return writeln!(buf, "{}", record.args());
-            }
-
-            // TODO: Add different formatting for warn, error, etc.
-
-            writeln!(
-                buf,
-                "{} {} {}",
-                chrono::Local::now().format("%H:%M:%S").to_string().dimmed(),
-                format!("[{}]", record.target())
-                    .to_string()
-                    .to_ascii_lowercase()
-                    .bright_yellow(),
-                record.args()
-            )
-        })
-        .init();
-
-    let ipc_server_name = env::args().nth(2).unwrap();
+) -> std::result::Result<BuildOutput, dyn_eq::Box<(dyn std::error::Error + 'static)>> {
     let (to_child, from_parent): (IpcSender<Message>, IpcReceiver<Message>) =
         ipc::channel().unwrap();
     let (to_parent, from_child): (IpcSender<Message>, IpcReceiver<Message>) =
         ipc::channel().unwrap();
 
-    let bootstrap = IpcSender::connect(ipc_server_name).unwrap();
+    let bootstrap = IpcSender::connect(server_name).unwrap();
     bootstrap.send((to_child, from_child)).unwrap();
 
     // Send ready message
@@ -164,7 +141,7 @@ pub fn coronate(
         data: None,
     });
 
-    let mut result = do_a_build(&routes, &content_sources, &options);
+    let mut initial_build = do_a_build(&routes, &mut content_sources, &options)?;
 
     // Send initial build finished message
     let _ = to_parent.send(Message {
@@ -182,7 +159,7 @@ pub fn coronate(
                     println!("Client received something!");
                 }
                 MessageCommand::Build => {
-                    result = do_a_build(&routes, &content_sources, &options);
+                    initial_build = do_a_build(&routes, &mut content_sources, &options)?;
                 }
                 MessageCommand::Exit => {
                     println!("Client is exiting...");
@@ -195,12 +172,28 @@ pub fn coronate(
         }
     }
 
-    result
+    Ok(initial_build)
+}
+
+pub fn coronate(
+    routes: Vec<&dyn FullPage>,
+    mut content_sources: ContentSources,
+    options: BuildOptions,
+) -> Result<BuildOutput, Box<dyn std::error::Error>> {
+    init_logging();
+
+    // If `--ipc-server` argument is found, start IPC server
+    if let Some(ipc_server_index) = env::args().position(|arg| arg == "--ipc-server") {
+        let ipc_server_name = env::args().nth(ipc_server_index + 1).unwrap();
+        return setup_ipc_server(ipc_server_name, routes, content_sources, options);
+    }
+
+    do_a_build(&routes, &mut content_sources, &options)
 }
 
 pub async fn build(
     routes: &Vec<&dyn FullPage>,
-    content_sources: &ContentSources,
+    content_sources: &mut ContentSources,
     options: &BuildOptions,
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
     let build_start = SystemTime::now();
@@ -215,6 +208,25 @@ pub async fn build(
     let _ = fs::remove_dir_all(&dist_dir);
     fs::create_dir_all(&dist_dir)?;
     fs::create_dir_all(&assets_dir)?;
+
+    info!(target: "build", "Output directory: {}", dist_dir.to_string_lossy());
+
+    let content_sources_start = SystemTime::now();
+    print_title("initializing content sources");
+    content_sources.0.iter_mut().for_each(|source| {
+        let source_start = SystemTime::now();
+        source.init();
+        let formatted_elasped_time =
+            format_elapsed_time(source_start.elapsed(), &FormatElapsedTimeOptions::default())
+                .unwrap();
+        info!(target: "build", "{}", format!("{} initialized in {}", source.get_name(), formatted_elasped_time));
+    });
+
+    let formatted_elasped_time = format_elapsed_time(
+        content_sources_start.elapsed(),
+        &FormatElapsedTimeOptions::default(),
+    )?;
+    info!(target: "build", "{}", format!("Content sources initialized in {}", formatted_elasped_time).bold());
 
     print_title("generating pages");
     let pages_start = SystemTime::now();

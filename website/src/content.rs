@@ -1,5 +1,5 @@
 use maud::{PreEscaped, Render};
-use maudit::content::{glob_markdown, ContentSource, ContentSources};
+use maudit::content::{glob_markdown, ContentSources};
 use maudit::content_sources;
 use serde::Deserialize;
 
@@ -27,8 +27,5 @@ pub struct DocsContent {
 }
 
 pub fn content_sources() -> ContentSources {
-    content_sources!(ContentSource::new(
-        "docs",
-        glob_markdown::<DocsContent>("content/docs/*.md")
-    ))
+    content_sources!["docs" => glob_markdown::<DocsContent>("content/docs/*.md")]
 }

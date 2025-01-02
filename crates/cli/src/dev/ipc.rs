@@ -1,4 +1,4 @@
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 use ipc_channel::ipc::{IpcOneShotServer, IpcReceiver, IpcSender};
 use maudit_ipc::{Message, MessageCommand};
