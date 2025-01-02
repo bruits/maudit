@@ -12,9 +12,9 @@ pub struct ArticleParams {
 
 impl DynamicRoute for Article {
     fn routes(&self, ctx: &DynamicRouteContext) -> Vec<RouteParams> {
-        let collection = ctx.content.get_source::<ArticleContent>("articles");
+        let articles = ctx.content.get_source::<ArticleContent>("articles");
 
-        collection.into_params(|entry| ArticleParams {
+        articles.into_params(|entry| ArticleParams {
             article: entry.id.clone(),
         })
     }

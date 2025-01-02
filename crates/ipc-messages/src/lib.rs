@@ -13,7 +13,7 @@ pub enum MessageCommand {
     InitialBuild,
     InitialBuildFinished,
     Build,
-    Something,
+    BuildFinished,
 }
 
 // TODO: This should probably use separate messages for the server / client, ha

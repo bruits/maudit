@@ -19,14 +19,14 @@ pub type Untyped = FxHashMap<String, String>;
 pub struct ContentSources(pub Vec<Box<dyn ContentSourceInternal>>);
 
 impl From<Vec<Box<dyn ContentSourceInternal>>> for ContentSources {
-    fn from(collections: Vec<Box<dyn ContentSourceInternal>>) -> Self {
-        Self(collections)
+    fn from(content_sources: Vec<Box<dyn ContentSourceInternal>>) -> Self {
+        Self(content_sources)
     }
 }
 
 impl ContentSources {
-    pub fn new(collections: Vec<Box<dyn ContentSourceInternal>>) -> Self {
-        Self(collections)
+    pub fn new(content_sources: Vec<Box<dyn ContentSourceInternal>>) -> Self {
+        Self(content_sources)
     }
 
     pub fn get_untyped_source(&self, name: &str) -> &ContentSource<Untyped> {
@@ -38,7 +38,7 @@ impl ContentSources {
                     _ => None,
                 },
             )
-            .unwrap_or_else(|| panic!("Collection with name '{}' not found", name))
+            .unwrap_or_else(|| panic!("Content source with name '{}' not found", name))
     }
 
     pub fn get_untyped_source_safe(&self, name: &str) -> Option<&ContentSource<Untyped>> {
@@ -59,7 +59,7 @@ impl ContentSources {
                     _ => None,
                 },
             )
-            .unwrap_or_else(|| panic!("Collection with name '{}' not found", name))
+            .unwrap_or_else(|| panic!("Content source with name '{}' not found", name))
     }
 
     pub fn get_source_safe<T: 'static>(&self, name: &str) -> Option<&ContentSource<T>> {
@@ -75,7 +75,7 @@ impl ContentSources {
 pub struct ContentSource<T = Untyped> {
     pub name: String,
     pub entries: Vec<ContentEntry<T>>,
-    pub(crate) init_methods: Box<dyn Fn() -> Vec<ContentEntry<T>>>,
+    pub(crate) init_method: Box<dyn Fn() -> Vec<ContentEntry<T>>>,
 }
 
 impl<T> ContentSource<T> {
@@ -86,7 +86,7 @@ impl<T> ContentSource<T> {
         Self {
             name: name.into(),
             entries: vec![],
-            init_methods: entries,
+            init_method: entries,
         }
     }
 
@@ -117,7 +117,7 @@ pub trait ContentSourceInternal {
 
 impl<T: 'static> ContentSourceInternal for ContentSource<T> {
     fn init(&mut self) {
-        self.entries = (self.init_methods)();
+        self.entries = (self.init_method)();
     }
     fn get_name(&self) -> &str {
         &self.name

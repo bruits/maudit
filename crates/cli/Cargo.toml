@@ -28,3 +28,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 maudit-ipc = { path = "../ipc-messages", version = "0.1" }
 notify = "7.0.0"
 crossbeam-channel = "0.5.14"
+notify-debouncer-full = "0.3.1"

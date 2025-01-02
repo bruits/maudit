@@ -29,11 +29,5 @@ pub fn start_build_process(cwd: String) -> (IpcSender<Message>, IpcReceiver<Mess
         panic!("Server failed to start!");
     }
 
-    // Send initial build message
-    let _ = sender.send(Message {
-        command: MessageCommand::Something,
-        data: None,
-    });
-
     (sender, receiver)
 }

@@ -1,35 +1,41 @@
 use std::{
     io::{self},
     path::Path,
+    time::Duration,
 };
 
 pub(crate) mod ipc;
 pub(crate) mod server;
 
+use event::ModifyKind;
 use maudit_ipc::{Message, MessageCommand};
-use notify::{Event, RecursiveMode, Result, Watcher};
-use std::sync::mpsc;
+use notify_debouncer_full::{new_debouncer, notify::*};
+use server::WebSocketMessage;
+use tokio::sync::broadcast;
 
 pub async fn coordinate_dev_env(cwd: String) -> io::Result<()> {
-    let (tx, rx) = mpsc::channel::<Result<Event>>();
+    let (tx, rx) = std::sync::mpsc::channel();
 
-    // Use recommended_watcher() to automatically select the best implementation
-    // for your platform. The `EventHandler` passed to this constructor can be a
-    // closure, a `std::sync::mpsc::Sender`, a `crossbeam_channel::Sender`, or
-    // another type the trait is implemented for.
-    let mut watcher = notify::recommended_watcher(tx).unwrap();
+    // no specific tickrate, max debounce time 2 seconds
+    let mut debouncer = new_debouncer(Duration::from_secs(1), None, tx).unwrap();
 
     // Add a path to be watched. All files and directories at that path and
     // below will be monitored for changes.
-    watcher
+    debouncer
+        .watcher()
         .watch(Path::new("./src"), RecursiveMode::Recursive)
         .unwrap();
 
-    watcher
+    debouncer
+        .watcher()
         .watch(Path::new("./content"), RecursiveMode::Recursive)
         .unwrap();
 
     let (build_process_writer, build_process_reader) = ipc::start_build_process(cwd);
+
+    let (tx_ws, _) = broadcast::channel::<WebSocketMessage>(100);
+
+    let web_server_thread = tokio::spawn(server::start_web_server(tx_ws.clone()));
 
     let build_process_thread = std::thread::spawn(move || loop {
         if let Ok(data) = build_process_reader.recv() {
@@ -42,20 +48,31 @@ pub async fn coordinate_dev_env(cwd: String) -> io::Result<()> {
                 MessageCommand::InitialBuildFinished => {
                     println!("Done with initial build!");
                 }
+                MessageCommand::BuildFinished => {
+                    println!("Done with build!");
+
+                    // Send a message to the websocket that a build is done
+                    match tx_ws.send(WebSocketMessage {
+                        data: "done".to_string(),
+                    }) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            dbg!(&e);
+                            println!("Error sending message to websocket: {:?}", e.0);
+                        }
+                    }
+                }
                 _ => {}
             }
         }
     });
 
-    let web_server_thread = tokio::spawn(server::start_web_server());
-
-    for res in rx {
-        match res {
-            Ok(event) => match event.kind {
-                notify::EventKind::Create(_) => {
-                    println!("created {:?}", event.paths);
-                }
-                notify::EventKind::Modify(_) => {
+    for result in rx {
+        match result {
+            Ok(events) => events.iter().for_each(|event| match event.event.kind {
+                EventKind::Create(_)
+                | EventKind::Remove(_)
+                | EventKind::Modify(ModifyKind::Data(_) | ModifyKind::Name(_)) => {
                     build_process_writer
                         .send(Message {
                             command: MessageCommand::Build,
@@ -63,13 +80,11 @@ pub async fn coordinate_dev_env(cwd: String) -> io::Result<()> {
                         })
                         .unwrap();
                 }
-                notify::EventKind::Remove(_) => {
-                    println!("removed {:?}", event.paths);
-                }
                 _ => {}
-            },
-            Err(e) => println!("watch error: {:?}", e),
+            }),
+            Err(errors) => errors.iter().for_each(|error| println!("{error:?}")),
         }
+        println!();
     }
 
     // Wait for the build process to finish

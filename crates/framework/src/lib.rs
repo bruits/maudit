@@ -106,6 +106,7 @@ fn do_a_build(
     content_sources: &mut ContentSources,
     options: &BuildOptions,
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
+    // TODO: Reuse the same runtime for multiple builds
     let result = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -130,24 +131,24 @@ fn setup_ipc_server(
     bootstrap.send((to_child, from_child)).unwrap();
 
     // Send ready message
-    let _ = to_parent.send(Message {
+    to_parent.send(Message {
         command: MessageCommand::Ready,
         data: None,
-    });
+    })?;
 
     // Send initial build message
-    let _ = to_parent.send(Message {
+    to_parent.send(Message {
         command: MessageCommand::InitialBuild,
         data: None,
-    });
+    })?;
 
     let mut initial_build = do_a_build(&routes, &mut content_sources, &options)?;
 
     // Send initial build finished message
-    let _ = to_parent.send(Message {
+    to_parent.send(Message {
         command: MessageCommand::InitialBuildFinished,
         data: None,
-    });
+    })?;
 
     // Infinite loop for further messages
     loop {
@@ -155,11 +156,13 @@ fn setup_ipc_server(
             println!("Client received: {:?}", data);
 
             match data.command {
-                MessageCommand::Something => {
-                    println!("Client received something!");
-                }
                 MessageCommand::Build => {
                     initial_build = do_a_build(&routes, &mut content_sources, &options)?;
+
+                    to_parent.send(Message {
+                        command: MessageCommand::BuildFinished,
+                        data: None,
+                    })?;
                 }
                 MessageCommand::Exit => {
                     println!("Client is exiting...");
