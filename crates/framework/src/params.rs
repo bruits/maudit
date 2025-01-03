@@ -15,7 +15,6 @@ pub trait FromParam: Sized {
 impl FromParam for String {
     type Error = Empty;
 
-    #[track_caller]
     #[inline(always)]
     fn from_param(param: &str) -> Result<String, Self::Error> {
         Ok(param.to_string())

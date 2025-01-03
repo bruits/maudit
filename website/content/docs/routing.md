@@ -27,11 +27,11 @@ Finally, make sure to [register the page](#registering-routes) in the `coronate`
 
 ### Dynamic Routes
 
-Maudit supports creating dynamic routes with parameters. Allowing one to create many pages that share the same structure and logic, but with different content.
+Maudit supports creating dynamic routes with parameters. Allowing one to create many pages that share the same structure and logic, but with different content. For example, a blog where each post has a unique URL, e.g., `/posts/my-blog-post`.
 
-For example, one could create a route that matches `/posts/[slug]` and renders a page with the content of the post with the given slug.
+To create a dynamic route, export a struct using the `route!` attribute and add parameters by enclosing them in square brackets (ex: `/posts/[slug]`) in the route's path.
 
-To create a dynamic route, export a struct using the `route!` macro and add parameters to the route path using the `[]` syntax. For example, to create a route that matches `/posts/[slug]`, you would write:
+The parameters will automatically be extracted from the URL and passed to the `render` method in the `RouteContext` struct.
 
 ```rust
 use maudit::route::prelude::*;
@@ -70,9 +70,13 @@ impl Page for Post {
 }
 ```
 
-The `RouteParams` type is a [newtype](https://doc.rust-lang.org/rust-by-example/generics/new_types.html) around a `FxHashMap<String, String>`, representing the raw parameters as if they were directly extracted from an URL.
+The `RouteParams` type is a [newtype](https://doc.rust-lang.org/rust-by-example/generics/new_types.html) around a `FxHashMap<String, String>`, representing the raw parameters as if they were directly extracted from an URL. If the hashmap contains a key that is not present in the route path, it will be ignored and a warning will be logged during the build process.
 
-Interacting with HashMaps in Rust can be a bit cumbersome, so Maudit provides the ability to use a custom struct to define your params and easily convert them into `RouteParams` after.
+Like static routes, dynamic routes must be [registered](#registering-routes) in the `coronate` function in order for them to be built.
+
+#### Type-safe parameters
+
+Interacting with HashMaps in Rust can be a bit cumbersome, so Maudit provides the ability to use a struct to define your params and easily convert them into `RouteParams` after.
 
 ```rust
 #[derive(Params)]
@@ -91,7 +95,7 @@ impl DynamicRoute for Post {
 }
 ```
 
-This struct can also be used when defining the `Page` implementation, making it possible to access the parameters in a type-safe way. For more information on how to use the `Params` derive, see the [TODO](TODO) section.
+This struct can also be used when implementing the `Page` trait, making it possible to access the parameters in a type-safe way.
 
 ```rust
 #[derive(Params)]
@@ -108,7 +112,11 @@ impl Page for Post {
 }
 ```
 
-Like static routes, dynamic routes must be [registered](#registering-routes) in the `coronate` function in order for them to be built.
+Maudit implements conversions from string route parameters for the following types:
+
+- `String`
+- `f32`, `f64`, `isize`, `i8`, `i16`, `i32`, `i64`, `i128`, `usize`, `u8`, `u16`, `u32`, `u64`, `u128`, `bool`
+- `NonZeroIsize`, `NonZeroI8`, `NonZeroI16`, `NonZeroI32`, `NonZeroI64`, `NonZeroI128`, `NonZeroUsize`, `NonZeroU8`, `NonZeroU16`, `NonZeroU32`, `NonZeroU64`, `NonZeroU128`
 
 ### Endpoints
 
