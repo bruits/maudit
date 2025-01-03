@@ -35,7 +35,7 @@ pub async fn coordinate_dev_env(cwd: String) -> io::Result<()> {
 
     let (tx_ws, _) = broadcast::channel::<WebSocketMessage>(100);
 
-    let web_server_thread = tokio::spawn(server::start_web_server(tx_ws.clone()));
+    let web_server_thread = tokio::spawn(server::start_dev_web_server(tx_ws.clone()));
 
     let build_process_thread = std::thread::spawn(move || loop {
         if let Ok(data) = build_process_reader.recv() {

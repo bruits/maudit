@@ -34,7 +34,7 @@ struct AppState {
     tx: broadcast::Sender<WebSocketMessage>,
 }
 
-pub async fn start_web_server(tx: broadcast::Sender<WebSocketMessage>) {
+pub async fn start_dev_web_server(tx: broadcast::Sender<WebSocketMessage>) {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
