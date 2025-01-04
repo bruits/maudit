@@ -2,7 +2,7 @@ use std::any::Any;
 
 use glob::glob as glob_fs;
 use log::warn;
-use markdown::{mdast::Node, to_html_with_options, to_mdast, Constructs, Options, ParseOptions};
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 
@@ -127,10 +127,6 @@ impl<T: 'static> ContentSourceInternal for ContentSource<T> {
     }
 }
 
-enum FrontmatterHolder {
-    Yaml(String),
-}
-
 pub fn glob_markdown<T>(pattern: &str) -> Vec<ContentEntry<T>>
 where
     T: DeserializeOwned,
@@ -141,6 +137,7 @@ where
         let entry = entry.unwrap();
         let id = entry.file_stem().unwrap().to_str().unwrap().to_string();
         let content = std::fs::read_to_string(&entry).unwrap();
+        let content_clone = content.clone();
 
         let extension = match entry.extension() {
             Some(extension) => extension,
@@ -152,55 +149,48 @@ where
             continue;
         }
 
-        let ast = to_mdast(
-            &content,
-            &ParseOptions {
-                constructs: Constructs {
-                    frontmatter: true,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        let mut options = Options::empty();
+        options.insert(
+            Options::ENABLE_STRIKETHROUGH
+                | Options::ENABLE_TABLES
+                | Options::ENABLE_FOOTNOTES
+                | Options::ENABLE_TASKLISTS
+                | Options::ENABLE_YAML_STYLE_METADATA_BLOCKS,
+        );
+        let mut events = Vec::new();
+        let mut frontmatter = String::new();
 
-        // Check if children
-        let children = match ast.children() {
-            Some(children) => children,
-            None => continue,
-        };
+        let mut in_frontmatter = false;
+        for (event, _) in Parser::new_ext(&content_clone, options).into_offset_iter() {
+            match event {
+                Event::Start(Tag::MetadataBlock(_)) => {
+                    in_frontmatter = true;
+                }
+                Event::End(TagEnd::MetadataBlock(_)) => {
+                    in_frontmatter = false;
+                }
+                Event::Text(ref text) => {
+                    if in_frontmatter {
+                        frontmatter.push_str(text);
+                    } else {
+                        events.push(event);
+                    }
+                }
+                _ => events.push(event),
+            }
+        }
 
-        // Check if frontmatter
-        let frontmatter: Option<FrontmatterHolder> =
-            children.iter().find_map(|child| match child {
-                Node::Yaml(frontmatter) => Some(FrontmatterHolder::Yaml(frontmatter.value.clone())),
-                _ => None,
-            });
-
-        let parsed: Option<T> = frontmatter.map(|FrontmatterHolder::Yaml(frontmatter)| {
-            serde_yml::from_str::<T>(&frontmatter).unwrap()
+        let html_output = events.iter().fold(String::new(), |mut acc, event| {
+            pulldown_cmark::html::push_html(&mut acc, std::iter::once(event.clone()));
+            acc
         });
+
+        let parsed = serde_yml::from_str::<T>(&frontmatter).unwrap();
 
         entries.push(ContentEntry {
             id,
-            render: Box::new({
-                let content = to_html_with_options(
-                    &content,
-                    &Options {
-                        parse: ParseOptions {
-                            constructs: Constructs {
-                                frontmatter: true,
-                                ..Default::default()
-                            },
-                            ..Default::default()
-                        },
-                        compile: Default::default(),
-                    },
-                )
-                .unwrap();
-                move || content.clone()
-            }),
-            data: parsed.unwrap(),
+            render: { Box::new(move || html_output.to_string()) },
+            data: parsed,
         });
     }
 
