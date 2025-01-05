@@ -19,12 +19,16 @@ mod logging;
 
 use std::{
     any::{Any, TypeId},
+    borrow::BorrowMut,
+    cell::RefCell,
     env,
     fs::{self, remove_dir_all, File},
     io::{self, Write},
+    ops::DerefMut,
     path::{Path, PathBuf},
     process::Termination,
     str::FromStr,
+    sync::Arc,
     time::SystemTime,
 };
 
@@ -49,7 +53,7 @@ macro_rules! routes {
 #[macro_export]
 macro_rules! content_sources {
     ($($name:expr => $entries:expr),*) => {
-        maudit::content::ContentSources(vec![$(Box::new(maudit::content::ContentSource::new($name, Box::new(|| $entries)))),*])
+        maudit::content::ContentSources(vec![$(std::sync::Arc::new(maudit::content::ContentSource::new($name, Box::new(|| $entries)))),*])
     };
 }
 
@@ -218,14 +222,17 @@ pub async fn build(
 
     let content_sources_start = SystemTime::now();
     print_title("initializing content sources");
-    content_sources.0.iter_mut().for_each(|source| {
+
+    for source in content_sources.deref_mut().iter_mut() {
         let source_start = SystemTime::now();
-        source.init();
+        if let Some(source_mut) = Arc::get_mut(source) {
+            source_mut.borrow_mut().init();
+        }
         let formatted_elasped_time =
             format_elapsed_time(source_start.elapsed(), &FormatElapsedTimeOptions::default())
                 .unwrap();
         info!(target: "build", "{}", format!("{} initialized in {}", source.get_name(), formatted_elasped_time));
-    });
+    }
 
     let formatted_elasped_time = format_elapsed_time(
         content_sources_start.elapsed(),
@@ -288,10 +295,21 @@ pub async fn build(
                     current_url: route.url_untyped(&params),
                 };
 
-                let mut page_resources: FxHashMap<TypeId, Box<dyn Any>> = FxHashMap::default();
+                let mut page_resources: FxHashMap<TypeId, RefCell<Box<dyn Any>>> =
+                    FxHashMap::default();
 
-                page_resources.insert(TypeId::of::<RouteParams>(), Box::new(params.clone()));
-                page_resources.insert(TypeId::of::<String>(), Box::new(route.url_untyped(&params)));
+                page_resources.insert(
+                    TypeId::of::<RouteParams>(),
+                    RefCell::new(Box::new(params.clone())),
+                );
+                page_resources.insert(
+                    TypeId::of::<String>(),
+                    RefCell::new(Box::new(route.url_untyped(&params))),
+                );
+                page_resources.insert(
+                    TypeId::of::<ContentSources>(),
+                    RefCell::new(Box::new(content_sources.clone())),
+                );
 
                 let (file_path, mut file) = create_route_file(*route, ctx.params, &dist_dir)?;
                 let result = route.internal_render(page_resources);
@@ -343,8 +361,16 @@ pub async fn build(
 
                     let (file_path, mut file) = create_route_file(*route, ctx.params, &dist_dir)?;
 
-                    let mut page_resources: FxHashMap<TypeId, Box<dyn Any>> = FxHashMap::default();
-                    page_resources.insert(TypeId::of::<RouteParams>(), Box::new(params.clone()));
+                    let mut page_resources: FxHashMap<TypeId, RefCell<Box<dyn Any>>> =
+                        FxHashMap::default();
+                    page_resources.insert(
+                        TypeId::of::<RouteParams>(),
+                        RefCell::new(Box::new(params.clone())),
+                    );
+                    page_resources.insert(
+                        TypeId::of::<ContentSources>(),
+                        RefCell::new(Box::new(content_sources.clone())),
+                    );
 
                     let result = route.internal_render(page_resources);
 

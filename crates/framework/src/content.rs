@@ -7,25 +7,42 @@ use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 
 use crate::page::RouteParams;
+use std::ops::{Deref, DerefMut};
 
+#[derive(Clone)]
 pub struct ContentEntry<T> {
     pub id: String,
-    pub render: Box<dyn Fn() -> String>,
+    pub render: std::sync::Arc<dyn Fn() -> String>,
     pub data: T,
 }
 
 pub type Untyped = FxHashMap<String, String>;
 
-pub struct ContentSources(pub Vec<Box<dyn ContentSourceInternal>>);
+#[derive(Clone)]
+pub struct ContentSources(pub Vec<std::sync::Arc<dyn ContentSourceInternal>>);
 
-impl From<Vec<Box<dyn ContentSourceInternal>>> for ContentSources {
-    fn from(content_sources: Vec<Box<dyn ContentSourceInternal>>) -> Self {
+impl Deref for ContentSources {
+    type Target = Vec<std::sync::Arc<dyn ContentSourceInternal>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ContentSources {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl From<Vec<std::sync::Arc<dyn ContentSourceInternal>>> for ContentSources {
+    fn from(content_sources: Vec<std::sync::Arc<dyn ContentSourceInternal>>) -> Self {
         Self(content_sources)
     }
 }
 
 impl ContentSources {
-    pub fn new(content_sources: Vec<Box<dyn ContentSourceInternal>>) -> Self {
+    pub fn new(content_sources: Vec<std::sync::Arc<dyn ContentSourceInternal>>) -> Self {
         Self(content_sources)
     }
 
@@ -72,13 +89,14 @@ impl ContentSources {
     }
 }
 
+#[derive(Clone)]
 pub struct ContentSource<T = Untyped> {
     pub name: String,
     pub entries: Vec<ContentEntry<T>>,
-    pub(crate) init_method: Box<dyn Fn() -> Vec<ContentEntry<T>>>,
+    pub(crate) init_method: std::sync::Arc<dyn Fn() -> Vec<ContentEntry<T>>>,
 }
 
-impl<T> ContentSource<T> {
+impl<T: 'static> ContentSource<T> {
     pub fn new<P>(name: P, entries: Box<dyn Fn() -> Vec<ContentEntry<T>>>) -> Self
     where
         P: Into<String>,
@@ -86,7 +104,7 @@ impl<T> ContentSource<T> {
         Self {
             name: name.into(),
             entries: vec![],
-            init_method: entries,
+            init_method: std::sync::Arc::new(entries),
         }
     }
 
@@ -189,7 +207,7 @@ where
 
         entries.push(ContentEntry {
             id,
-            render: { Box::new(move || html_output.to_string()) },
+            render: std::sync::Arc::new(move || html_output.to_string()),
             data: parsed,
         });
     }

@@ -1,11 +1,11 @@
 use crate::layout::layout;
 use maud::html;
-use maudit::page::prelude::*;
+use maudit::{page::prelude::*, trying::Res};
 
 #[route("/")]
 impl Index {
-    pub fn render(current_url: String) -> RenderResult {
-        println!("{:?}", current_url);
+    pub fn render(current_url: Res<String>) -> RenderResult {
+        println!("{:?}", current_url.value);
 
         layout(html! {
             // (logo)

@@ -3,6 +3,7 @@ use crate::content::ContentSources;
 use crate::errors::UrlError;
 use rustc_hash::FxHashMap;
 use std::any::{Any, TypeId};
+use std::cell::RefCell;
 use std::path::PathBuf;
 
 pub enum RenderResult {
@@ -74,7 +75,7 @@ pub enum RouteType {
 }
 
 pub trait InternalPage {
-    fn internal_render(&self, ctx: FxHashMap<TypeId, Box<dyn Any>>) -> RenderResult;
+    fn internal_render(&self, ctx: FxHashMap<TypeId, RefCell<Box<dyn Any>>>) -> RenderResult;
     fn route_type(&self) -> RouteType;
     fn route_raw(&self) -> String;
     fn route(&self, params: &RouteParams) -> String;

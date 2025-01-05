@@ -1,4 +1,11 @@
-use maudit::page::prelude::*;
+use std::vec;
+
+use maudit::{
+    content::{ContentSource, ContentSources},
+    page::prelude::*,
+    trying::Res,
+    FxHashMap,
+};
 
 use crate::{content::ArticleContent, layout::layout};
 
@@ -12,19 +19,20 @@ pub struct ArticleParams {
 
 impl DynamicRoute for Article {
     fn routes(&self, ctx: &DynamicRouteContext) -> Vec<RouteParams> {
-        let articles = ctx.content.get_source::<ArticleContent>("articles");
+        //let articles = ctx.content.get_source::<ArticleContent>("articles");
 
-        articles.into_params(|entry| ArticleParams {
-            article: entry.id.clone(),
-        })
+        let mut params = FxHashMap::default();
+
+        params.insert("article".to_string(), "first-post".to_string());
+
+        vec![RouteParams(params)]
     }
 }
 
 impl Article {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-        let params = ctx.params::<ArticleParams>();
-        let articles = ctx.content.get_source::<ArticleContent>("articles");
-        let article = articles.get_entry(&params.article);
+    fn render(content: Res<ContentSources>) -> RenderResult {
+        let articles = content.get_source::<ArticleContent>("articles");
+        let article = articles.get_entry("first-post");
 
         layout((article.render)()).into()
     }

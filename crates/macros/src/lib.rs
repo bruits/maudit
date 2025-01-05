@@ -83,7 +83,7 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
         #struct_def
 
         impl maudit::page::InternalPage for #item_name {
-            fn internal_render(&self, resources: maudit::FxHashMap<std::any::TypeId, Box<dyn std::any::Any>>) -> maudit::page::RenderResult {
+            fn internal_render(&self, resources: maudit::FxHashMap<std::any::TypeId, std::cell::RefCell<Box<dyn std::any::Any>>>) -> maudit::page::RenderResult {
                 let mut scheduler = maudit::trying::Scheduler {
                     system: Box::new(maudit::trying::IntoSystem::into_system(Self::render)),
                     resources: resources,

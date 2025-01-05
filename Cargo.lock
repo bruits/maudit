@@ -1578,14 +1578,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "maudit-example-kitchen-sink"
-version = "0.1.0"
-dependencies = [
- "maud",
- "maudit",
-]
-
-[[package]]
 name = "maudit-ipc"
 version = "0.1.0"
 dependencies = [
@@ -1598,15 +1590,6 @@ version = "0.1.0"
 dependencies = [
  "quote",
  "syn 2.0.91",
-]
-
-[[package]]
-name = "maudit-website"
-version = "0.1.0"
-dependencies = [
- "maud",
- "maudit",
- "serde",
 ]
 
 [[package]]

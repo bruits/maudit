@@ -1,54 +1,19 @@
 // ANCHOR: All
 use std::any::{Any, TypeId};
+use std::cell::{Ref, RefCell, RefMut};
 use std::marker::PhantomData;
-
-use rustc_hash::FxHashMap;
+use std::ops::{Deref, DerefMut};
 
 use crate::page::RenderResult;
+use rustc_hash::FxHashMap;
+
 pub struct FunctionSystem<Input, F> {
     f: F,
     marker: PhantomData<fn() -> Input>,
 }
 
 pub trait System {
-    fn run(&mut self, resources: &mut FxHashMap<TypeId, Box<dyn Any>>) -> RenderResult;
-}
-
-impl<F: FnMut() -> RenderResult> System for FunctionSystem<(), F> {
-    fn run(&mut self, resources: &mut FxHashMap<TypeId, Box<dyn Any>>) -> RenderResult {
-        (self.f)()
-    }
-}
-
-impl<F: FnMut(T1) -> RenderResult, T1: 'static> System for FunctionSystem<(T1,), F> {
-    fn run(&mut self, resources: &mut FxHashMap<TypeId, Box<dyn Any>>) -> RenderResult {
-        let _0 = *resources
-            .remove(&TypeId::of::<T1>())
-            .unwrap()
-            .downcast::<T1>()
-            .unwrap();
-
-        (self.f)(_0)
-    }
-}
-
-impl<F: FnMut(T1, T2) -> RenderResult, T1: 'static, T2: 'static> System
-    for FunctionSystem<(T1, T2), F>
-{
-    fn run(&mut self, resources: &mut FxHashMap<TypeId, Box<dyn Any>>) -> RenderResult {
-        let _0 = *resources
-            .remove(&TypeId::of::<T1>())
-            .unwrap()
-            .downcast::<T1>()
-            .unwrap();
-        let _1 = *resources
-            .remove(&TypeId::of::<T2>())
-            .unwrap()
-            .downcast::<T2>()
-            .unwrap();
-
-        (self.f)(_0, _1)
-    }
+    fn run(&mut self, resources: &mut FxHashMap<TypeId, RefCell<Box<dyn Any>>>) -> RenderResult;
 }
 
 pub trait IntoSystem<Input> {
@@ -57,18 +22,132 @@ pub trait IntoSystem<Input> {
     fn into_system(self) -> Self::System;
 }
 
-impl<F: FnMut() -> RenderResult> IntoSystem<()> for F {
-    type System = FunctionSystem<(), Self>;
+pub type StoredSystem = Box<dyn System>;
 
-    fn into_system(self) -> Self::System {
-        FunctionSystem {
-            f: self,
-            marker: Default::default(),
+pub struct Scheduler {
+    pub system: StoredSystem,
+    pub resources: FxHashMap<TypeId, RefCell<Box<dyn Any>>>,
+}
+
+impl Scheduler {
+    pub fn run(&mut self) -> RenderResult {
+        self.system.run(&mut self.resources)
+    }
+
+    pub fn add_system<I, S: System + 'static>(&mut self, system: impl IntoSystem<I, System = S>) {
+        self.system = Box::new(system.into_system());
+    }
+
+    pub fn add_resource<R: 'static>(&mut self, res: R) {
+        self.resources
+            .insert(TypeId::of::<R>(), RefCell::new(Box::new(res)));
+    }
+}
+
+pub trait SystemParam {
+    type Item<'new>;
+
+    fn retrieve<'r>(resources: &'r FxHashMap<TypeId, RefCell<Box<dyn Any>>>) -> Self::Item<'r>;
+}
+
+pub struct Res<'a, T: 'static> {
+    pub value: Ref<'a, Box<dyn Any>>,
+    _marker: PhantomData<&'a T>,
+}
+
+impl<T: 'static> Deref for Res<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        self.value.downcast_ref().unwrap()
+    }
+}
+
+impl<'res, T: 'static> SystemParam for Res<'res, T> {
+    type Item<'new> = Res<'new, T>;
+
+    fn retrieve<'r>(resources: &'r FxHashMap<TypeId, RefCell<Box<dyn Any>>>) -> Self::Item<'r> {
+        Res {
+            value: resources.get(&TypeId::of::<T>()).unwrap().borrow(),
+            _marker: PhantomData,
         }
     }
 }
 
-impl<F: FnMut(T1) -> RenderResult, T1: 'static> IntoSystem<(T1,)> for F {
+pub struct ResMut<'a, T: 'static> {
+    value: RefMut<'a, Box<dyn Any>>,
+    _marker: PhantomData<&'a mut T>,
+}
+
+impl<T: 'static> Deref for ResMut<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        self.value.downcast_ref().unwrap()
+    }
+}
+
+impl<T: 'static> DerefMut for ResMut<'_, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.value.downcast_mut().unwrap()
+    }
+}
+
+impl<'res, T: 'static> SystemParam for ResMut<'res, T> {
+    type Item<'new> = ResMut<'new, T>;
+
+    fn retrieve<'r>(resources: &'r FxHashMap<TypeId, RefCell<Box<dyn Any>>>) -> Self::Item<'r> {
+        ResMut {
+            value: resources.get(&TypeId::of::<T>()).unwrap().borrow_mut(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<F, T1: SystemParam> System for FunctionSystem<(T1,), F>
+where
+    for<'a, 'b> &'a mut F:
+        FnMut(T1) -> RenderResult + FnMut(<T1 as SystemParam>::Item<'b>) -> RenderResult,
+{
+    fn run(&mut self, resources: &mut FxHashMap<TypeId, RefCell<Box<dyn Any>>>) -> RenderResult {
+        // necessary to tell rust exactly which impl to call; it gets a bit confused otherwise
+        fn call_inner<T1>(mut f: impl FnMut(T1) -> RenderResult, _0: T1) -> RenderResult {
+            f(_0)
+        }
+
+        let _0 = T1::retrieve(resources);
+
+        call_inner(&mut self.f, _0)
+    }
+}
+
+impl<F, T1: SystemParam, T2: SystemParam> System for FunctionSystem<(T1, T2), F>
+where
+    for<'a, 'b> &'a mut F: FnMut(T1, T2) -> RenderResult
+        + FnMut(<T1 as SystemParam>::Item<'b>, <T2 as SystemParam>::Item<'b>) -> RenderResult,
+{
+    fn run(&mut self, resources: &mut FxHashMap<TypeId, RefCell<Box<dyn Any>>>) -> RenderResult {
+        // necessary to tell rust exactly which impl to call; it gets a bit confused otherwise
+        fn call_inner<T1, T2>(
+            mut f: impl FnMut(T1, T2) -> RenderResult,
+            _0: T1,
+            _1: T2,
+        ) -> RenderResult {
+            f(_0, _1)
+        }
+
+        let _0 = T1::retrieve(resources);
+        let _1 = T2::retrieve(resources);
+
+        call_inner(&mut self.f, _0, _1)
+    }
+}
+
+impl<F: FnMut(T1) -> RenderResult, T1: SystemParam> IntoSystem<(T1,)> for F
+where
+    for<'a, 'b> &'a mut F:
+        FnMut(T1) -> RenderResult + FnMut(<T1 as SystemParam>::Item<'b>) -> RenderResult,
+{
     type System = FunctionSystem<(T1,), Self>;
 
     fn into_system(self) -> Self::System {
@@ -79,7 +158,11 @@ impl<F: FnMut(T1) -> RenderResult, T1: 'static> IntoSystem<(T1,)> for F {
     }
 }
 
-impl<F: FnMut(T1, T2) -> RenderResult, T1: 'static, T2: 'static> IntoSystem<(T1, T2)> for F {
+impl<F: FnMut(T1, T2) -> RenderResult, T1: SystemParam, T2: SystemParam> IntoSystem<(T1, T2)> for F
+where
+    for<'a, 'b> &'a mut F: FnMut(T1, T2) -> RenderResult
+        + FnMut(<T1 as SystemParam>::Item<'b>, <T2 as SystemParam>::Item<'b>) -> RenderResult,
+{
     type System = FunctionSystem<(T1, T2), Self>;
 
     fn into_system(self) -> Self::System {
@@ -89,47 +172,4 @@ impl<F: FnMut(T1, T2) -> RenderResult, T1: 'static, T2: 'static> IntoSystem<(T1,
         }
     }
 }
-
-type StoredSystem = Box<dyn System>;
-
-pub struct Scheduler {
-    pub system: StoredSystem,
-    pub resources: FxHashMap<TypeId, Box<dyn Any>>,
-}
-
-struct Something;
-
-impl Something {
-    fn do_something(&self) -> RenderResult {
-        println!("Something was done");
-
-        RenderResult::Text("Something was done".to_string())
-    }
-}
-
-impl Scheduler {
-    pub fn run(&mut self) -> RenderResult {
-        self.system.run(&mut self.resources)
-    }
-
-    pub fn add_resource<R: 'static>(&mut self, res: R) {
-        self.resources.insert(TypeId::of::<R>(), Box::new(res));
-    }
-}
 // ANCHOR_END: All
-
-pub fn do_try() {
-    let mut scheduler = Scheduler {
-        system: Box::new(Something::do_something.into_system()),
-        resources: FxHashMap::default(),
-    };
-
-    scheduler.add_resource(&Something);
-    scheduler.add_resource(12i32);
-
-    scheduler.run();
-}
-
-fn foo(int: i32) {
-    println!("int! {int}");
-}
