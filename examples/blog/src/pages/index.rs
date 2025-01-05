@@ -10,7 +10,7 @@ use crate::{
 #[route("/")]
 pub struct Index;
 
-impl Page for Index {
+impl Index {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let articles = ctx.content.get_source::<ArticleContent>("articles");
 

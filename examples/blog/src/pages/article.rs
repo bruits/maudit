@@ -20,7 +20,7 @@ impl DynamicRoute for Article {
     }
 }
 
-impl Page for Article {
+impl Article {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let params = ctx.params::<ArticleParams>();
         let articles = ctx.content.get_source::<ArticleContent>("articles");

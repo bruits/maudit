@@ -29,17 +29,30 @@ impl Parse for Args {
 #[proc_macro_attribute]
 pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree
-    let item_struct = syn::parse_macro_input!(item as ItemStruct);
-    let attrs = syn::parse_macro_input!(attrs as Args);
+    let parsed_item = syn::parse_macro_input!(item as syn::Item);
+    let item_name = match parsed_item {
+        syn::Item::Struct(ref item_struct) => &item_struct.ident,
+        syn::Item::Impl(ref item_impl) => &match &*item_impl.self_ty {
+            syn::Type::Path(tp) => tp.path.segments.first().unwrap().ident.clone(),
+            _ => panic!("not supported tokens"),
+        },
+        _ => panic!("Only structs and impls are supported"),
+    };
 
-    let struct_name = &item_struct.ident;
+    let struct_def = match parsed_item {
+        syn::Item::Struct(_) => quote! {},
+        syn::Item::Impl(_) => quote! { pub struct #item_name; },
+        _ => panic!("Only structs and impls are supported"),
+    };
+
+    let attrs = syn::parse_macro_input!(attrs as Args);
 
     let params = extract_values(&attrs.path.value());
 
     let dynamic_page_impl = match params.is_empty() {
         false => quote! {},
         true => quote! {
-            impl maudit::page::DynamicRoute for #struct_name {
+            impl maudit::page::DynamicRoute for #item_name {
                 fn routes(&self, _: &maudit::page::DynamicRouteContext) -> Vec<maudit::page::RouteParams> {
                     Vec::new()
                 }
@@ -67,7 +80,17 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let expanded = quote! {
-        impl maudit::page::InternalPage for #struct_name {
+        #struct_def
+
+        impl maudit::page::InternalPage for #item_name {
+            fn internal_render(&self, resources: maudit::FxHashMap<std::any::TypeId, Box<dyn std::any::Any>>) -> maudit::page::RenderResult {
+                let mut scheduler = maudit::trying::Scheduler {
+                    system: Box::new(maudit::trying::IntoSystem::into_system(Self::render)),
+                    resources: resources,
+                };
+                scheduler.run()
+            }
+
             fn route_type(&self) -> maudit::page::RouteType {
                 #route_type
             }
@@ -123,9 +146,9 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
 
         #dynamic_page_impl
 
-        impl maudit::page::FullPage for #struct_name {}
+        impl maudit::page::FullPage for #item_name {}
 
-        #item_struct
+        #parsed_item
     };
 
     TokenStream::from(expanded)

@@ -2,6 +2,7 @@ use crate::assets::PageAssets;
 use crate::content::ContentSources;
 use crate::errors::UrlError;
 use rustc_hash::FxHashMap;
+use std::any::{Any, TypeId};
 use std::path::PathBuf;
 
 pub enum RenderResult {
@@ -33,10 +34,6 @@ impl RouteContext<'_> {
 
 pub struct DynamicRouteContext<'a> {
     pub content: &'a ContentSources,
-}
-
-pub trait Page {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult;
 }
 
 #[derive(Clone, Default, Debug)]
@@ -77,6 +74,7 @@ pub enum RouteType {
 }
 
 pub trait InternalPage {
+    fn internal_render(&self, ctx: FxHashMap<TypeId, Box<dyn Any>>) -> RenderResult;
     fn route_type(&self) -> RouteType;
     fn route_raw(&self) -> String;
     fn route(&self, params: &RouteParams) -> String;
@@ -94,12 +92,12 @@ pub trait InternalPage {
     fn url_untyped(&self, params: &RouteParams) -> String;
 }
 
-pub trait FullPage: Page + InternalPage + DynamicRoute + Sync {}
+pub trait FullPage: InternalPage + DynamicRoute + Sync {}
 
 pub mod prelude {
     pub use super::{
-        DynamicRoute, DynamicRouteContext, FullPage, InternalPage, Page, RenderResult,
-        RouteContext, RouteParams,
+        DynamicRoute, DynamicRouteContext, FullPage, InternalPage, RenderResult, RouteContext,
+        RouteParams,
     };
     pub use crate::assets::Asset;
     pub use maudit_macros::{route, Params};

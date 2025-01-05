@@ -16,7 +16,7 @@ impl DynamicRoute for DynamicExample {
     }
 }
 
-impl Page for DynamicExample {
+impl DynamicExample {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let params = ctx.params::<Params>();
         let image = ctx.assets.add_image("data/social-card.png");

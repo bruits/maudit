@@ -3,14 +3,12 @@ use maud::html;
 use maudit::page::prelude::*;
 
 #[route("/")]
-pub struct Index;
-
-impl Page for Index {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-        let logo = ctx.assets.add_image("images/logo.svg");
+impl Index {
+    pub fn render(current_url: String) -> RenderResult {
+        println!("{:?}", current_url);
 
         layout(html! {
-            (logo)
+            // (logo)
             h1 { "Hello World" }
         })
         .into()

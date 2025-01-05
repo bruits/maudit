@@ -14,7 +14,7 @@ use maudit::page::prelude::*;
 #[route("/hello-world")]
 pub struct HelloWorld;
 
-impl Page for HelloWorld {
+impl HelloWorld {
   fn render(&self, ctx: &mut RouteContext) -> RenderResult {
     RenderResult::Text("Hello, world!".to_string())
   }
@@ -39,7 +39,7 @@ use maudit::route::prelude::*;
 #[route("/posts/[slug]")]
 pub struct Post;
 
-impl Page for Post {
+impl Post {
   fn render(&self, ctx: &mut RouteContext) -> String {
     format!("Hello, {}!", ctx.params.get("slug").unwrap())
   }
@@ -63,7 +63,7 @@ impl DynamicRoute for Post {
   }
 }
 
-impl Page for Post {
+impl Post {
   fn render(&self, ctx: &mut RouteContext) -> RenderResult {
     RenderResult::Text(format!("Hello, {}!", ctx.params.get("slug").unwrap()))
   }
@@ -103,7 +103,7 @@ pub struct Params {
   pub slug: String,
 }
 
-impl Page for Post {
+impl Post {
   fn render(&self, ctx: &mut RouteContext) -> RenderResult {
     let params = ctx.params::<Params>();
 
@@ -128,7 +128,7 @@ use maudit::page::prelude::*;
 #[route("/api.json")]
 pub struct HelloWorldJson;
 
-impl Page for HelloWorldJson {
+impl HelloWorldJson {
   fn render(&self, ctx: &mut RouteContext) -> RenderResult {
     RenderResult::Text(r#"{"message": "Hello, world!"}"#.to_string())
   }
@@ -156,7 +156,7 @@ impl DynamicRoute for PostJson {
   }
 }
 
-impl Page for PostJson {
+impl PostJson {
   fn render(&self, ctx: &mut RouteContext) -> RenderResult {
     let params = ctx.params::<Params>();
 

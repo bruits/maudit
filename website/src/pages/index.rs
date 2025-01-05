@@ -9,7 +9,7 @@ pub struct Index;
 
 const LATEST_NEWS: (&str, &str) = ("Maudit v0.1.0 is out", "/");
 
-impl Page for Index {
+impl Index {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let features = [("Performant", "Maudit can generate a site with thousands of pages in seconds and using minimal resources."),
             ("Content", "Bring your content to life with Maudit's built-in support for Markdown, syntax highlighting, and more."),

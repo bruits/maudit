@@ -4,6 +4,7 @@ pub mod content;
 pub mod errors;
 pub mod page;
 pub mod params;
+pub mod trying;
 
 use content::ContentSources;
 use errors::BuildError;
@@ -17,6 +18,7 @@ pub use rustc_hash::FxHashMap;
 mod logging;
 
 use std::{
+    any::{Any, TypeId},
     env,
     fs::{self, remove_dir_all, File},
     io::{self, Write},
@@ -266,7 +268,7 @@ pub async fn build(
     let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
 
     let dynamic_route_context = DynamicRouteContext {
-        content: content_sources,
+        content: &ContentSources(vec![]),
     };
 
     for route in routes {
@@ -281,13 +283,18 @@ pub async fn build(
                 let params = RouteParams(FxHashMap::default());
                 let mut ctx = RouteContext {
                     params: &params,
-                    content: content_sources,
+                    content: &ContentSources(vec![]),
                     assets: &mut page_assets,
                     current_url: route.url_untyped(&params),
                 };
 
+                let mut page_resources: FxHashMap<TypeId, Box<dyn Any>> = FxHashMap::default();
+
+                page_resources.insert(TypeId::of::<RouteParams>(), Box::new(params.clone()));
+                page_resources.insert(TypeId::of::<String>(), Box::new(route.url_untyped(&params)));
+
                 let (file_path, mut file) = create_route_file(*route, ctx.params, &dist_dir)?;
-                let result = route.render(&mut ctx);
+                let result = route.internal_render(page_resources);
 
                 finish_route(
                     result,
@@ -329,13 +336,17 @@ pub async fn build(
                     let route_start = SystemTime::now();
                     let mut ctx = RouteContext {
                         params: &params,
-                        content: content_sources,
+                        content: &ContentSources(vec![]),
                         assets: &mut pages_assets,
                         current_url: route.url_untyped(&params),
                     };
 
                     let (file_path, mut file) = create_route_file(*route, ctx.params, &dist_dir)?;
-                    let result = route.render(&mut ctx);
+
+                    let mut page_resources: FxHashMap<TypeId, Box<dyn Any>> = FxHashMap::default();
+                    page_resources.insert(TypeId::of::<RouteParams>(), Box::new(params.clone()));
+
+                    let result = route.internal_render(page_resources);
 
                     build_metadata.pages.push(PageOutput {
                         route: route.route_raw(),

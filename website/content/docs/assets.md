@@ -19,7 +19,7 @@ use maud::html;
 #[route("/blog")]
 pub struct Blog;
 
-impl Page for Blog {
+impl Blog {
   fn render(&self, ctx: &mut RouteContext) -> RenderResult {
     let image = ctx.assets.add_image("logo.png");
 
@@ -55,7 +55,7 @@ use maud::html;
 #[route("/blog")]
 pub struct Blog;
 
-impl Page for Blog {
+impl Blog {
   fn render(&self, ctx: &mut RouteContext) -> RenderResult {
     let style = ctx.assets.add_style("style.css", false);
 
@@ -108,7 +108,7 @@ use maudit::page::prelude::*;
 #[route("/blog")]
 pub struct Blog;
 
-impl Page for Blog {
+impl Blog {
   fn render(&self, ctx: &mut RouteContext) -> RenderResult {
     let script = ctx.assets.add_script("script.js");
 

@@ -6,7 +6,7 @@ use crate::{content::DocsContent, layout::docs_layout};
 #[route("/docs")]
 pub struct DocsIndex;
 
-impl Page for DocsIndex {
+impl DocsIndex {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let index_page = ctx
             .content
@@ -52,7 +52,7 @@ impl DynamicRoute for DocsPage {
     }
 }
 
-impl Page for DocsPage {
+impl DocsPage {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let entry = ctx
             .content
