@@ -38,12 +38,12 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
 
     let dynamic_page_impl = match params.is_empty() {
         false => quote! {
-            fn routes_internal(&self, ctx: &maudit::page::DynamicRouteContext) -> Vec<maudit::page::RouteParams> {
+            fn routes_internal(&self, ctx: &mut maudit::page::DynamicRouteContext) -> Vec<maudit::page::RouteParams> {
                 self.routes(ctx).iter().map(Into::into).collect()
             }
         },
         true => quote! {
-            fn routes_internal(&self, _: &maudit::page::DynamicRouteContext) -> Vec<maudit::page::RouteParams> {
+            fn routes_internal(&self, _: &mut maudit::page::DynamicRouteContext) -> Vec<maudit::page::RouteParams> {
                 Vec::new()
             }
         },
@@ -92,28 +92,6 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 let params = params.into();
                 #(#list_params;)*
                 format!(#path_for_route)
-            }
-
-            fn url<P: Into<maudit::page::RouteParams>>(&self, params: P, dynamic_route_context: &maudit::page::DynamicRouteContext) -> Result<String, maudit::errors::UrlError> {
-                let params = params.into();
-
-                // Check that the params refer to a page that exists
-                let all_routes = self.routes_internal(dynamic_route_context);
-                let mut found = false;
-
-                for route in all_routes {
-                    if (route.0 == params.0) {
-                        found = true;
-                        break;
-                    }
-                }
-
-                if !found {
-                    return Err(maudit::errors::UrlError::RouteNotFound);
-                }
-
-                #(#list_params;)*
-                Ok(format!(#path_for_route))
             }
 
             fn url_untyped(&self, params: &maudit::page::RouteParams) -> String {

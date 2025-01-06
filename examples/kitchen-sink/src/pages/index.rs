@@ -15,15 +15,6 @@ impl Page for Index {
 
         let link_to_first_dynamic = DynamicExample::url_unsafe(&DynamicExampleParams { page: 1 });
 
-        let safe_link_to_first_dynamic = DynamicExample
-            .url(
-                &DynamicExampleParams { page: 0 },
-                &DynamicRouteContext {
-                    content: ctx.content,
-                },
-            )
-            .unwrap();
-
         html! {
             head {
                 title { "Index" }
@@ -33,7 +24,6 @@ impl Page for Index {
             img src=(image.url().unwrap()) {}
             script src=(script.url().unwrap()) {}
             a."text-red-500" href=(link_to_first_dynamic) { "Go to first dynamic page" }
-            a href=(safe_link_to_first_dynamic) { "Go to first dynamic page (safe)" }
         }
         .into()
     }

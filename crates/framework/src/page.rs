@@ -1,6 +1,5 @@
 use crate::assets::PageAssets;
-use crate::content::ContentSources;
-use crate::errors::UrlError;
+use crate::content::Content;
 use rustc_hash::FxHashMap;
 use std::path::PathBuf;
 
@@ -29,7 +28,7 @@ impl From<Vec<u8>> for RenderResult {
 
 pub struct RouteContext<'a> {
     pub raw_params: &'a RouteParams,
-    pub content: &'a ContentSources,
+    pub content: &'a mut Content<'a>,
     pub assets: &'a mut PageAssets,
     pub current_url: String,
 }
@@ -44,7 +43,7 @@ impl RouteContext<'_> {
 }
 
 pub struct DynamicRouteContext<'a> {
-    pub content: &'a ContentSources,
+    pub content: &'a mut Content<'a>,
 }
 
 pub trait Page<T = RenderResult>
@@ -92,7 +91,7 @@ where
 {
     // Intentionally does not have a default implementation even though it'd be useful in our macros in order to force
     // the user to implement it explicitly, even if it's just returning an empty Vec.
-    fn routes(&self, context: &DynamicRouteContext) -> Vec<P>;
+    fn routes(&self, context: &mut DynamicRouteContext) -> Vec<P>;
 }
 
 pub enum RouteType {
@@ -108,19 +107,12 @@ pub trait InternalPage {
     fn url_unsafe<P: Into<RouteParams>>(params: P) -> String
     where
         Self: Sized;
-    fn url<P: Into<RouteParams>>(
-        &self,
-        params: P,
-        dynamic_route_context: &DynamicRouteContext,
-    ) -> Result<String, UrlError>
-    where
-        Self: Sized;
     fn url_untyped(&self, params: &RouteParams) -> String;
 }
 
 pub trait FullPage: InternalPage + Sync {
     fn render_internal(&self, ctx: &mut RouteContext) -> RenderResult;
-    fn routes_internal(&self, context: &DynamicRouteContext) -> Vec<RouteParams>;
+    fn routes_internal(&self, context: &mut DynamicRouteContext) -> Vec<RouteParams>;
 }
 
 pub mod prelude {

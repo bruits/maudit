@@ -29,7 +29,7 @@ fn render_entry(entry: &ContentEntry<DocsContent>) -> Markup {
             }
         }
         section.prose."lg:prose-lg".max-w-none {
-            (PreEscaped((entry.render)()))
+            (PreEscaped(entry.render()))
         }
     }
 }
@@ -43,7 +43,7 @@ struct DocsPageParams {
 }
 
 impl DynamicRoute<DocsPageParams> for DocsPage {
-    fn routes(&self, ctx: &DynamicRouteContext) -> Vec<DocsPageParams> {
+    fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<DocsPageParams> {
         let content = ctx.content.get_source::<DocsContent>("docs");
 
         content.into_params(|entry| DocsPageParams {
@@ -54,10 +54,11 @@ impl DynamicRoute<DocsPageParams> for DocsPage {
 
 impl Page for DocsPage {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+        let slug = ctx.params::<DocsPageParams>().slug.clone();
         let entry = ctx
             .content
             .get_source::<DocsContent>("docs")
-            .get_entry(&ctx.params::<DocsPageParams>().slug);
+            .get_entry(&slug);
 
         docs_layout(render_entry(entry), ctx)
     }

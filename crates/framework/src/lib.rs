@@ -5,7 +5,7 @@ pub mod errors;
 pub mod page;
 pub mod params;
 
-use content::ContentSources;
+use content::{Content, ContentSources};
 use errors::BuildError;
 use ipc_channel::ipc::{self, IpcReceiver, IpcSender};
 use maud::{html, Markup};
@@ -265,10 +265,6 @@ pub async fn build(
     let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
     let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
 
-    let dynamic_route_context = DynamicRouteContext {
-        content: content_sources,
-    };
-
     for route in routes {
         match route.route_type() {
             page::RouteType::Static => {
@@ -279,9 +275,10 @@ pub async fn build(
                 };
 
                 let params = RouteParams(FxHashMap::default());
+                let mut content = Content::new(&content_sources.0);
                 let mut ctx = RouteContext {
                     raw_params: &params,
-                    content: content_sources,
+                    content: &mut content,
                     assets: &mut page_assets,
                     current_url: route.url_untyped(&params),
                 };
@@ -312,7 +309,12 @@ pub async fn build(
                 });
             }
             page::RouteType::Dynamic => {
-                let routes = route.routes_internal(&dynamic_route_context);
+                let mut dynamic_content = Content::new(&content_sources.0);
+                let mut dynamic_route_context = DynamicRouteContext {
+                    content: &mut dynamic_content,
+                };
+
+                let routes = route.routes_internal(&mut dynamic_route_context);
 
                 if routes.is_empty() {
                     info!(target: "build", "{} is a registered dynamic route, but it returned no routes. No pages will be generated for this route.", route.route_raw().to_string().bold());
@@ -327,9 +329,10 @@ pub async fn build(
                         ..Default::default()
                     };
                     let route_start = SystemTime::now();
+                    let mut content = Content::new(&content_sources.0);
                     let mut ctx = RouteContext {
                         raw_params: &params,
-                        content: content_sources,
+                        content: &mut content,
                         assets: &mut pages_assets,
                         current_url: route.url_untyped(&params),
                     };
