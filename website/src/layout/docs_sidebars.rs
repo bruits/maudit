@@ -1,5 +1,5 @@
 use maud::{html, Markup};
-use maudit::page::RouteContext;
+use maudit::{content::MarkdownHeading, page::RouteContext};
 
 use crate::content::{DocsContent, DocsSection};
 
@@ -66,14 +66,25 @@ pub fn left_sidebar(ctx: &mut RouteContext) -> Markup {
     }
 }
 
-pub fn right_sidebar(_: &mut RouteContext) -> Markup {
+pub fn right_sidebar(headings: &[MarkdownHeading]) -> Markup {
+    let html_headings: Vec<maud::PreEscaped<String>> = headings
+        .iter()
+        .map(|heading| {
+            html! {
+                li {
+                    a href=(format!("#{}", heading.id)) { (heading.title) }
+                }
+            }
+        })
+        .collect();
+
     html!(
         h2.text-lg.font-bold { "On This Page" }
         nav.sticky.top-8 {
             // TODO: Implement this properly
             ul {
-                li {
-                    a href="#hello-world" { "Hello World" }
+                @for heading in html_headings {
+                    (heading)
                 }
             }
         }

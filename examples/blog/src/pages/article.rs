@@ -27,6 +27,9 @@ impl Page<Markup> for Article {
         let articles = ctx.content.get_source::<ArticleContent>("articles");
         let article = articles.get_entry(&params.article);
 
+        let headings = article.data.get_headings();
+        println!("{:?}", headings);
+
         layout(article.render())
     }
 }

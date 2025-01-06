@@ -2,8 +2,8 @@ use std::path::Path;
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::parse::{Parse, ParseStream, Result};
-use syn::{ItemStruct, LitStr};
+use syn::parse::{self, Parse, ParseStream, Parser as _, Result};
+use syn::{parse_macro_input, ItemStruct, LitStr};
 
 struct Args {
     path: LitStr,
@@ -241,6 +241,45 @@ pub fn derive_params(item: TokenStream) -> TokenStream {
             }
         }
 
+    };
+
+    TokenStream::from(expanded)
+}
+
+#[proc_macro_attribute]
+pub fn markdown_entry(args: TokenStream, item: TokenStream) -> TokenStream {
+    let mut item_struct = syn::parse_macro_input!(item as ItemStruct);
+    let _ = parse_macro_input!(args as parse::Nothing);
+
+    let struct_name = &item_struct.ident;
+
+    // Add __internal_headings field
+    if let syn::Fields::Named(ref mut fields) = item_struct.fields {
+        fields.named.push(
+            syn::Field::parse_named
+                .parse2(quote! {
+                    #[serde(skip)]
+                    __internal_headings: Vec<maudit::content::MarkdownHeading>
+                })
+                .unwrap(),
+        );
+    }
+
+    let expanded = quote! {
+        #[derive(serde::Deserialize)]
+        #item_struct
+
+        impl maudit::content::MarkdownContent for #struct_name {
+            fn get_headings(&self) -> &Vec<maudit::content::MarkdownHeading> {
+                &self.__internal_headings
+            }
+        }
+
+        impl maudit::content::InternalMarkdownContent for #struct_name {
+            fn set_headings(&mut self, headings: Vec<maudit::content::MarkdownHeading>) {
+                self.__internal_headings = headings;
+            }
+        }
     };
 
     TokenStream::from(expanded)

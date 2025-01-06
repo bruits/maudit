@@ -7,6 +7,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use serde::de::DeserializeOwned;
 
 use crate::page::RouteParams;
+pub use maudit_macros::markdown_entry;
 
 pub struct ContentEntry<T> {
     pub id: String,
@@ -164,9 +165,26 @@ impl<T: 'static> ContentSourceInternal for ContentSource<T> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct MarkdownHeading {
+    pub title: String,
+    pub id: String,
+    pub level: u8,
+    pub classes: Vec<String>,
+    pub attrs: Vec<(String, Option<String>)>,
+}
+
+pub trait MarkdownContent {
+    fn get_headings(&self) -> &Vec<MarkdownHeading>;
+}
+
+pub trait InternalMarkdownContent {
+    fn set_headings(&mut self, headings: Vec<MarkdownHeading>);
+}
+
 pub fn glob_markdown<T>(pattern: &str) -> Vec<ContentEntry<T>>
 where
-    T: DeserializeOwned,
+    T: DeserializeOwned + MarkdownContent + InternalMarkdownContent,
 {
     let mut entries = vec![];
 
@@ -187,33 +205,64 @@ where
 
         let mut options = Options::empty();
         options.insert(
-            Options::ENABLE_STRIKETHROUGH
-                | Options::ENABLE_TABLES
-                | Options::ENABLE_FOOTNOTES
-                | Options::ENABLE_TASKLISTS
-                | Options::ENABLE_YAML_STYLE_METADATA_BLOCKS,
+            Options::ENABLE_YAML_STYLE_METADATA_BLOCKS | Options::ENABLE_HEADING_ATTRIBUTES,
         );
-        let mut frontmatter = String::new();
 
+        let mut frontmatter = String::new();
         let mut in_frontmatter = false;
+
+        let mut headings: Vec<MarkdownHeading> = vec![];
+        let mut last_heading: Option<MarkdownHeading> = Option::None;
+
         for (event, _) in Parser::new_ext(&content, options).into_offset_iter() {
             match event {
-                Event::Start(Tag::MetadataBlock(_)) => {
-                    in_frontmatter = true;
-                }
-                Event::End(TagEnd::MetadataBlock(_)) => {
-                    in_frontmatter = false;
-                }
+                Event::Start(Tag::MetadataBlock(_)) => in_frontmatter = true,
+                Event::End(TagEnd::MetadataBlock(_)) => in_frontmatter = false,
                 Event::Text(ref text) => {
                     if in_frontmatter {
                         frontmatter.push_str(text);
+                    }
+
+                    // TODO: Take the entire content, not just the text
+                    if let Some(ref mut heading) = last_heading {
+                        heading.title.push_str(text);
+                    }
+                }
+                Event::Start(Tag::Heading {
+                    level,
+                    id,
+                    classes,
+                    attrs,
+                }) => {
+                    if !in_frontmatter {
+                        last_heading = Some(MarkdownHeading {
+                            title: String::new(),
+                            id: if let Some(id) = id {
+                                id.to_string()
+                            } else {
+                                String::new()
+                            },
+                            level: level as u8,
+                            classes: classes.iter().map(|c| c.to_string()).collect(),
+                            attrs: attrs
+                                .iter()
+                                .map(|(k, v)| (k.to_string(), v.as_ref().map(|v| v.to_string())))
+                                .collect(),
+                        });
+                    }
+                }
+                Event::End(TagEnd::Heading(_)) => {
+                    if let Some(heading) = last_heading.take() {
+                        headings.push(heading);
                     }
                 }
                 _ => {}
             }
         }
 
-        let parsed = serde_yml::from_str::<T>(&frontmatter).unwrap();
+        let mut parsed = serde_yml::from_str::<T>(&frontmatter).unwrap();
+
+        parsed.set_headings(headings);
 
         entries.push(ContentEntry {
             id,

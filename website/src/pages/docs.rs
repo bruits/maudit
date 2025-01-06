@@ -13,7 +13,9 @@ impl Page for DocsIndex {
             .get_source::<DocsContent>("docs")
             .get_entry("index");
 
-        docs_layout(render_entry(index_page), ctx)
+        let headings = index_page.data.get_headings().clone();
+
+        docs_layout(render_entry(index_page), ctx, &headings)
     }
 }
 
@@ -60,6 +62,7 @@ impl Page for DocsPage {
             .get_source::<DocsContent>("docs")
             .get_entry(&slug);
 
-        docs_layout(render_entry(entry), ctx)
+        let headings = entry.data.get_headings().clone();
+        docs_layout(render_entry(entry), ctx, &headings)
     }
 }

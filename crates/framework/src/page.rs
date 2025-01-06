@@ -121,5 +121,6 @@ pub mod prelude {
         RouteContext, RouteParams,
     };
     pub use crate::assets::Asset;
+    pub use crate::content::MarkdownContent;
     pub use maudit_macros::{route, Params};
 }

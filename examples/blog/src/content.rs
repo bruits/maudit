@@ -1,6 +1,6 @@
-use serde::Deserialize;
+use maudit::content::markdown_entry;
 
-#[derive(Deserialize)]
+#[markdown_entry]
 pub struct ArticleContent {
     pub title: String,
     pub description: String,

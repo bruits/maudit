@@ -1,5 +1,5 @@
 use maud::{PreEscaped, Render};
-use maudit::content::{glob_markdown, ContentSources};
+use maudit::content::{glob_markdown, markdown_entry, ContentSources};
 use maudit::content_sources;
 use serde::Deserialize;
 
@@ -19,7 +19,7 @@ impl Render for DocsSection {
     }
 }
 
-#[derive(Deserialize)]
+#[markdown_entry]
 pub struct DocsContent {
     pub title: String,
     pub description: Option<String>,

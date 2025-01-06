@@ -5,10 +5,15 @@ mod header;
 use docs_sidebars::{left_sidebar, right_sidebar};
 
 pub use header::header;
+use maudit::content::MarkdownHeading;
 use maudit::generator;
 use maudit::page::{RenderResult, RouteContext};
 
-pub fn docs_layout(main: Markup, ctx: &mut RouteContext) -> RenderResult {
+pub fn docs_layout(
+    main: Markup,
+    ctx: &mut RouteContext,
+    headings: &[MarkdownHeading],
+) -> RenderResult {
     ctx.assets.include_style("assets/prin.css", true);
 
     layout(
@@ -21,7 +26,7 @@ pub fn docs_layout(main: Markup, ctx: &mut RouteContext) -> RenderResult {
                     (main)
                 }
                 aside."py-8" {
-                    (right_sidebar(ctx))
+                    (right_sidebar(headings))
                 }
             }
         },

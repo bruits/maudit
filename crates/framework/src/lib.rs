@@ -10,6 +10,7 @@ use errors::BuildError;
 use ipc_channel::ipc::{self, IpcReceiver, IpcSender};
 use maud::{html, Markup};
 use maudit_ipc::{Message, MessageCommand};
+
 // Re-exported dependencies for user convenience
 pub use rustc_hash::FxHashMap;
 
