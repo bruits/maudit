@@ -280,14 +280,14 @@ pub async fn build(
 
                 let params = RouteParams(FxHashMap::default());
                 let mut ctx = RouteContext {
-                    params: &params,
+                    raw_params: &params,
                     content: content_sources,
                     assets: &mut page_assets,
                     current_url: route.url_untyped(&params),
                 };
 
-                let (file_path, mut file) = create_route_file(*route, ctx.params, &dist_dir)?;
-                let result = route.render(&mut ctx);
+                let (file_path, mut file) = create_route_file(*route, ctx.raw_params, &dist_dir)?;
+                let result = route.render_internal(&mut ctx);
 
                 finish_route(
                     result,
@@ -312,7 +312,7 @@ pub async fn build(
                 });
             }
             page::RouteType::Dynamic => {
-                let routes = route.routes(&dynamic_route_context);
+                let routes = route.routes_internal(&dynamic_route_context);
 
                 if routes.is_empty() {
                     info!(target: "build", "{} is a registered dynamic route, but it returned no routes. No pages will be generated for this route.", route.route_raw().to_string().bold());
@@ -328,14 +328,15 @@ pub async fn build(
                     };
                     let route_start = SystemTime::now();
                     let mut ctx = RouteContext {
-                        params: &params,
+                        raw_params: &params,
                         content: content_sources,
                         assets: &mut pages_assets,
                         current_url: route.url_untyped(&params),
                     };
 
-                    let (file_path, mut file) = create_route_file(*route, ctx.params, &dist_dir)?;
-                    let result = route.render(&mut ctx);
+                    let (file_path, mut file) =
+                        create_route_file(*route, ctx.raw_params, &dist_dir)?;
+                    let result = route.render_internal(&mut ctx);
 
                     build_metadata.pages.push(PageOutput {
                         route: route.route_raw(),
@@ -501,7 +502,7 @@ fn finish_route(
     route: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match render_result {
-        RenderResult::Html(html) => {
+        RenderResult::Text(html) => {
             let element_content_handlers = vec![
                 // Add included scripts and styles to the head
                 element!("head", |el| {
@@ -545,12 +546,12 @@ fn finish_route(
 
             file.write_all(output.as_bytes())?;
         }
-        RenderResult::Text(text) => {
+        RenderResult::Raw(content) => {
             if !included_scripts.is_empty() || !included_styles.is_empty() {
                 Err(BuildError::InvalidRenderResult { route })?;
             }
 
-            file.write_all(text.as_bytes())?;
+            file.write_all(&content)?;
         }
     }
 

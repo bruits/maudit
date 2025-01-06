@@ -101,11 +101,11 @@ impl<T> ContentSource<T> {
         self.entries.iter().find(|entry| entry.id == id)
     }
 
-    pub fn into_params<P>(&self, cb: impl Fn(&ContentEntry<T>) -> P) -> Vec<RouteParams>
+    pub fn into_params<P>(&self, cb: impl Fn(&ContentEntry<T>) -> P) -> Vec<P>
     where
         P: Into<RouteParams>,
     {
-        self.entries.iter().map(cb).map(Into::into).collect()
+        self.entries.iter().map(cb).collect()
     }
 }
 

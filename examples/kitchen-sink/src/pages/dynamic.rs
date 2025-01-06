@@ -10,9 +10,9 @@ pub struct Params {
     pub page: u128,
 }
 
-impl DynamicRoute for DynamicExample {
-    fn routes(&self, _: &DynamicRouteContext) -> Vec<RouteParams> {
-        (0..1).map(|i| Params { page: i }.into()).collect()
+impl DynamicRoute<Params> for DynamicExample {
+    fn routes(&self, _: &DynamicRouteContext) -> Vec<Params> {
+        (0..1).map(|i| Params { page: i }).collect()
     }
 }
 

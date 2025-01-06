@@ -1,3 +1,4 @@
+use maud::Markup;
 use maudit::page::prelude::*;
 
 use crate::{content::ArticleContent, layout::layout};
@@ -10,8 +11,8 @@ pub struct ArticleParams {
     pub article: String,
 }
 
-impl DynamicRoute for Article {
-    fn routes(&self, ctx: &DynamicRouteContext) -> Vec<RouteParams> {
+impl DynamicRoute<ArticleParams> for Article {
+    fn routes(&self, ctx: &DynamicRouteContext) -> Vec<ArticleParams> {
         let articles = ctx.content.get_source::<ArticleContent>("articles");
 
         articles.into_params(|entry| ArticleParams {
@@ -20,12 +21,12 @@ impl DynamicRoute for Article {
     }
 }
 
-impl Page for Article {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Page<Markup> for Article {
+    fn render(&self, ctx: &mut RouteContext) -> Markup {
         let params = ctx.params::<ArticleParams>();
         let articles = ctx.content.get_source::<ArticleContent>("articles");
         let article = articles.get_entry(&params.article);
 
-        layout((article.render)()).into()
+        layout((article.render)())
     }
 }

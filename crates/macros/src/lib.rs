@@ -37,12 +37,14 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let params = extract_values(&attrs.path.value());
 
     let dynamic_page_impl = match params.is_empty() {
-        false => quote! {},
+        false => quote! {
+            fn routes_internal(&self, ctx: &maudit::page::DynamicRouteContext) -> Vec<maudit::page::RouteParams> {
+                self.routes(ctx).iter().map(Into::into).collect()
+            }
+        },
         true => quote! {
-            impl maudit::page::DynamicRoute for #struct_name {
-                fn routes(&self, _: &maudit::page::DynamicRouteContext) -> Vec<maudit::page::RouteParams> {
-                    Vec::new()
-                }
+            fn routes_internal(&self, _: &maudit::page::DynamicRouteContext) -> Vec<maudit::page::RouteParams> {
+                Vec::new()
             }
         },
     };
@@ -96,7 +98,7 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 let params = params.into();
 
                 // Check that the params refer to a page that exists
-                let all_routes = self::DynamicRoute::routes(self, dynamic_route_context);
+                let all_routes = self.routes_internal(dynamic_route_context);
                 let mut found = false;
 
                 for route in all_routes {
@@ -120,10 +122,13 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
             }
         }
 
+        impl maudit::page::FullPage for #struct_name {
+            fn render_internal(&self, ctx: &mut maudit::page::RouteContext) -> maudit::page::RenderResult {
+                self.render(ctx).into()
+            }
 
-        #dynamic_page_impl
-
-        impl maudit::page::FullPage for #struct_name {}
+            #dynamic_page_impl
+        }
 
         #item_struct
     };

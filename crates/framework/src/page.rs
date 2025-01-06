@@ -5,18 +5,30 @@ use rustc_hash::FxHashMap;
 use std::path::PathBuf;
 
 pub enum RenderResult {
-    Html(String),
     Text(String),
+    Raw(Vec<u8>),
 }
 
 impl From<maud::Markup> for RenderResult {
     fn from(val: maud::Markup) -> Self {
-        RenderResult::Html(val.into_string())
+        RenderResult::Text(val.into_string())
+    }
+}
+
+impl From<String> for RenderResult {
+    fn from(val: String) -> Self {
+        RenderResult::Text(val)
+    }
+}
+
+impl From<Vec<u8>> for RenderResult {
+    fn from(val: Vec<u8>) -> Self {
+        RenderResult::Raw(val)
     }
 }
 
 pub struct RouteContext<'a> {
-    pub params: &'a RouteParams,
+    pub raw_params: &'a RouteParams,
     pub content: &'a ContentSources,
     pub assets: &'a mut PageAssets,
     pub current_url: String,
@@ -27,7 +39,7 @@ impl RouteContext<'_> {
     where
         T: From<RouteParams>,
     {
-        T::from(self.params.clone())
+        T::from(self.raw_params.clone())
     }
 }
 
@@ -35,8 +47,11 @@ pub struct DynamicRouteContext<'a> {
     pub content: &'a ContentSources,
 }
 
-pub trait Page {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult;
+pub trait Page<T = RenderResult>
+where
+    T: Into<RenderResult>,
+{
+    fn render(&self, ctx: &mut RouteContext) -> T;
 }
 
 #[derive(Clone, Default, Debug)]
@@ -48,6 +63,12 @@ impl RouteParams {
         T: Into<RouteParams>,
     {
         params.into_iter().map(|p| p.into()).collect()
+    }
+}
+
+impl From<&RouteParams> for RouteParams {
+    fn from(params: &RouteParams) -> Self {
+        params.clone()
     }
 }
 
@@ -65,10 +86,13 @@ where
     }
 }
 
-pub trait DynamicRoute {
+pub trait DynamicRoute<P = RouteParams>
+where
+    P: Into<RouteParams>,
+{
     // Intentionally does not have a default implementation even though it'd be useful in our macros in order to force
     // the user to implement it explicitly, even if it's just returning an empty Vec.
-    fn routes(&self, context: &DynamicRouteContext) -> Vec<RouteParams>;
+    fn routes(&self, context: &DynamicRouteContext) -> Vec<P>;
 }
 
 pub enum RouteType {
@@ -94,7 +118,10 @@ pub trait InternalPage {
     fn url_untyped(&self, params: &RouteParams) -> String;
 }
 
-pub trait FullPage: Page + InternalPage + DynamicRoute + Sync {}
+pub trait FullPage: InternalPage + Sync {
+    fn render_internal(&self, ctx: &mut RouteContext) -> RenderResult;
+    fn routes_internal(&self, context: &DynamicRouteContext) -> Vec<RouteParams>;
+}
 
 pub mod prelude {
     pub use super::{
