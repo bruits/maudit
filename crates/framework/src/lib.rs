@@ -49,7 +49,7 @@ macro_rules! routes {
 #[macro_export]
 macro_rules! content_sources {
     ($($name:expr => $entries:expr),*) => {
-        maudit::content::ContentSources(vec![$(Box::new(maudit::content::ContentSource::new($name, Box::new(|| $entries)))),*])
+        maudit::content::ContentSources(vec![$(Box::new(maudit::content::ContentSource::new($name, Box::new(move || $entries)))),*])
     };
 }
 
@@ -297,6 +297,7 @@ pub async fn build(
     let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
     let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
 
+    let mut page_count = 0;
     for route in routes {
         match route.route_type() {
             page::RouteType::Static => {
@@ -353,6 +354,8 @@ pub async fn build(
                     file_path: file_path.to_string_lossy().to_string(),
                     params: None,
                 });
+
+                page_count += 1;
             }
             page::RouteType::Dynamic => {
                 let mut dynamic_content = Content::new(&content_sources.0);
@@ -424,6 +427,8 @@ pub async fn build(
                     build_pages_assets.extend(pages_assets.assets);
                     build_pages_scripts.extend(pages_assets.scripts);
                     build_pages_styles.extend(pages_assets.styles);
+
+                    page_count += 1;
                 }
             }
         }
@@ -431,7 +436,7 @@ pub async fn build(
 
     let formatted_elasped_time =
         format_elapsed_time(pages_start.elapsed(), &section_format_options)?;
-    info!(target: "build", "{}", format!("Pages generated in {}", formatted_elasped_time).bold());
+    info!(target: "build", "{}", format!("generated {} pages in {}", page_count,  formatted_elasped_time).bold());
 
     let assets_start = SystemTime::now();
     print_title("generating assets");

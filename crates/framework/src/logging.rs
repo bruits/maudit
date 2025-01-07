@@ -8,7 +8,7 @@ pub struct FormatElapsedTimeOptions<'a> {
     pub(crate) sec_red_threshold: u64,
     pub(crate) millis_yellow_threshold: Option<u128>,
     pub(crate) millis_red_threshold: Option<u128>,
-    pub(crate) additional_fn: Option<&'a dyn Fn(ColoredString) -> ColoredString>,
+    pub(crate) additional_fn: Option<&'a (dyn Fn(ColoredString) -> ColoredString + Sync)>,
 }
 
 impl Default for FormatElapsedTimeOptions<'_> {

@@ -111,7 +111,7 @@ impl PageAssets {
 }
 
 #[allow(private_bounds)] // Users never interact with the internal trait, so it's fine
-pub trait Asset: DynEq + InternalAsset {
+pub trait Asset: DynEq + InternalAsset + Sync + Send {
     fn url(&self) -> Option<String>;
     fn path(&self) -> &PathBuf;
 

@@ -8,6 +8,7 @@ use serde::Deserialize;
 pub enum DocsSection {
     GettingStarted,
     CoreConcepts,
+    Advanced,
 }
 
 impl Render for DocsSection {
@@ -15,6 +16,7 @@ impl Render for DocsSection {
         match self {
             DocsSection::GettingStarted => PreEscaped("Getting Started".to_string()),
             DocsSection::CoreConcepts => PreEscaped("Core Concepts".to_string()),
+            DocsSection::Advanced => PreEscaped("Advanced".to_string()),
         }
     }
 }

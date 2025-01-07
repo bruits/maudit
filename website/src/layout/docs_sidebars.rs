@@ -22,6 +22,7 @@ pub fn left_sidebar(ctx: &mut RouteContext) -> Markup {
         match section {
             DocsSection::GettingStarted => 0,
             DocsSection::CoreConcepts => 1,
+            DocsSection::Advanced => 2,
         }
     });
 

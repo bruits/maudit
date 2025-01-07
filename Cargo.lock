@@ -1529,6 +1529,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "maudit-benchmark"
+version = "0.1.0"
+dependencies = [
+ "maud",
+ "maudit",
+]
+
+[[package]]
 name = "maudit-cli"
 version = "0.1.0"
 dependencies = [

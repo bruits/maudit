@@ -105,7 +105,7 @@ impl Content<'_> {
 
 pub struct ContentEntry<T> {
     pub id: String,
-    render: Box<dyn Fn(&str) -> String>,
+    render: Box<dyn Fn(&str) -> String + Send + Sync>,
     pub raw_content: String,
     pub data: T,
     pub file_path: Option<PathBuf>,
@@ -133,7 +133,8 @@ impl ContentSources {
     }
 }
 
-type ContentSourceInitMethod<T> = Box<dyn Fn() -> (Vec<ContentEntry<T>>, Option<String>)>;
+type ContentSourceInitMethod<T> =
+    Box<dyn Fn() -> (Vec<ContentEntry<T>>, Option<String>) + Send + Sync>;
 
 pub struct ContentSource<T = Untyped> {
     pub name: String,
@@ -174,7 +175,7 @@ impl<T> ContentSource<T> {
     }
 }
 
-pub trait ContentSourceInternal {
+pub trait ContentSourceInternal: Send + Sync {
     fn init(&mut self);
     fn get_name(&self) -> &str;
     fn get_pattern(&self) -> &Option<String>;
@@ -182,7 +183,7 @@ pub trait ContentSourceInternal {
     fn as_any(&self) -> &dyn Any; // Used for type checking at runtime
 }
 
-impl<T: 'static> ContentSourceInternal for ContentSource<T> {
+impl<T: 'static + Sync + Send> ContentSourceInternal for ContentSource<T> {
     fn init(&mut self) {
         let (entries, file_pattern) = (self.init_method)();
         self.entries = entries;
@@ -225,6 +226,24 @@ pub trait MarkdownContent {
 
 pub trait InternalMarkdownContent {
     fn set_headings(&mut self, headings: Vec<MarkdownHeading>);
+}
+
+#[derive(serde::Deserialize)]
+pub struct UntypedMarkdownContent {
+    #[serde(skip)]
+    __internal_headings: Vec<MarkdownHeading>,
+}
+
+impl MarkdownContent for UntypedMarkdownContent {
+    fn get_headings(&self) -> &Vec<MarkdownHeading> {
+        &self.__internal_headings
+    }
+}
+
+impl InternalMarkdownContent for UntypedMarkdownContent {
+    fn set_headings(&mut self, headings: Vec<MarkdownHeading>) {
+        self.__internal_headings = headings;
+    }
 }
 
 pub fn glob_markdown<T>(pattern: &str) -> (Vec<ContentEntry<T>>, Option<String>)
