@@ -40,7 +40,7 @@ impl From<&[u8]> for RenderResult {
 
 pub struct RouteContext<'a> {
     pub raw_params: &'a RouteParams,
-    pub content: &'a mut Content<'a>,
+    pub content: &'a Content<'a>,
     pub assets: &'a mut PageAssets,
     pub current_url: String,
 }
@@ -51,13 +51,6 @@ impl RouteContext<'_> {
         T: From<RouteParams>,
     {
         T::from(self.raw_params.clone())
-    }
-
-    pub(crate) fn accessed_resources(&self) -> (Vec<String>, Vec<String>) {
-        (
-            self.content.get_accessed_sources(),
-            self.assets.get_included_assets(),
-        )
     }
 }
 

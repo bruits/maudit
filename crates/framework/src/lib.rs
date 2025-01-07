@@ -5,7 +5,7 @@ pub mod errors;
 pub mod page;
 pub mod params;
 
-use content::{sha256_digest, Content, ContentSources};
+use content::{Content, ContentSources};
 use errors::BuildError;
 use ipc_channel::ipc::{self, IpcReceiver, IpcSender};
 use maud::{html, Markup};
@@ -13,7 +13,6 @@ use maudit_ipc::{Message, MessageCommand};
 
 // Re-exported dependencies for user convenience
 pub use rustc_hash::FxHashMap;
-use serde::Serialize;
 
 // Internal modules
 mod logging;
@@ -180,18 +179,6 @@ fn setup_ipc_server(
     Ok(initial_build)
 }
 
-#[derive(Debug, Serialize)]
-struct InternalBuildMetadata {
-    // "articles/[slug]": [("content/articles/icon.png", "sha256"), ("content/articles/style.css", "sha256")]
-    pages_assets_dependencies: FxHashMap<String, Vec<(String, String)>>,
-    // "articles": ["/articles/[slug]", "/index"]
-    sources_dependencies: FxHashMap<String, Vec<String>>,
-    // "articles": Some("content/articles/*.md")
-    sources_patterns: FxHashMap<String, Option<String>>,
-    // "articles": [("content/articles/first-post.md", "sha256"), ("content/articles/second-post.md", "sha256")]
-    sources_files: FxHashMap<String, Vec<(String, String)>>,
-}
-
 pub fn coronate(
     routes: Vec<&dyn FullPage>,
     mut content_sources: ContentSources,
@@ -215,13 +202,6 @@ pub async fn build(
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
     let build_start = SystemTime::now();
 
-    let mut internal_build_metadata = InternalBuildMetadata {
-        pages_assets_dependencies: FxHashMap::default(),
-        sources_dependencies: FxHashMap::default(),
-        sources_patterns: FxHashMap::default(),
-        sources_files: FxHashMap::default(),
-    };
-
     // Create a directory for the output
     trace!(target: "build", "Setting up required directories...");
     let dist_dir = PathBuf::from_str(&options.output_dir)?;
@@ -241,16 +221,6 @@ pub async fn build(
         let source_start = SystemTime::now();
         source.init();
 
-        internal_build_metadata
-            .sources_patterns
-            .insert(source.get_name().to_string(), source.get_pattern().clone());
-
-        internal_build_metadata.sources_files.insert(
-            source.get_name().to_string(),
-            source.get_files().into_iter().map(|files| {
-                (files.clone(), sha256_digest(&PathBuf::from(files)).unwrap())
-            }).collect(),
-        );
         let formatted_elasped_time =
             format_elapsed_time(source_start.elapsed(), &FormatElapsedTimeOptions::default())
                 .unwrap();
@@ -319,20 +289,6 @@ pub async fn build(
                 let (file_path, mut file) = create_route_file(*route, ctx.raw_params, &dist_dir)?;
                 let result = route.render_internal(&mut ctx);
 
-                let used = ctx.accessed_resources();
-
-                internal_build_metadata
-                    .sources_dependencies
-                    .insert(route.route_raw(), used.0);
-
-                internal_build_metadata.pages_assets_dependencies.insert(
-                    route.route_raw(),
-                    used.1
-                        .into_iter()
-                        .map(|asset| (asset.clone(), sha256_digest(&PathBuf::from(asset)).unwrap()))
-                        .collect(),
-                );
-
                 finish_route(
                     result,
                     &mut file,
@@ -390,22 +346,6 @@ pub async fn build(
                         create_route_file(*route, ctx.raw_params, &dist_dir)?;
                     let result = route.render_internal(&mut ctx);
 
-                    let used = ctx.accessed_resources();
-
-                    internal_build_metadata
-                        .sources_dependencies
-                        .insert(route.route_raw(), used.0);
-
-                    internal_build_metadata.pages_assets_dependencies.insert(
-                        route.route_raw(),
-                        used.1
-                            .into_iter()
-                            .map(|asset| {
-                                (asset.clone(), sha256_digest(&PathBuf::from(asset)).unwrap())
-                            })
-                            .collect(),
-                    );
-
                     build_metadata.pages.push(PageOutput {
                         route: route.route_raw(),
                         file_path: file_path.to_string_lossy().to_string(),
@@ -438,59 +378,64 @@ pub async fn build(
         format_elapsed_time(pages_start.elapsed(), &section_format_options)?;
     info!(target: "build", "{}", format!("generated {} pages in {}", page_count,  formatted_elasped_time).bold());
 
-    let assets_start = SystemTime::now();
-    print_title("generating assets");
+    if !build_pages_assets.is_empty()
+        || !build_pages_styles.is_empty()
+        || !build_pages_scripts.is_empty()
+    {
+        let assets_start = SystemTime::now();
+        print_title("generating assets");
 
-    build_pages_assets.iter().for_each(|asset| {
-        asset.process(&assets_dir, &tmp_dir);
+        build_pages_assets.iter().for_each(|asset| {
+            asset.process(&assets_dir, &tmp_dir);
 
-        // TODO: Add outputted assets to build_metadata, might need dedicated fs methods for this
-    });
-
-    let css_inputs = build_pages_styles
-        .iter()
-        .map(|style| {
-            let processed_path = style.process(&assets_dir, &tmp_dir);
-
-            InputItem {
-                import: {
-                    if let Some(processed_path) = processed_path {
-                        processed_path
-                    } else {
-                        style.path().to_string_lossy().to_string()
-                    }
-                },
-                ..Default::default()
-            }
-        })
-        .collect::<Vec<InputItem>>();
-
-    let bundler_inputs = build_pages_scripts
-        .iter()
-        .map(|script| InputItem {
-            import: script.path().to_string_lossy().to_string(),
-            ..Default::default()
-        })
-        .chain(css_inputs.into_iter())
-        .collect::<Vec<InputItem>>();
-
-    if !bundler_inputs.is_empty() {
-        let mut bundler = Bundler::new(BundlerOptions {
-            input: Some(bundler_inputs),
-            minify: Some(true),
-            dir: Some(assets_dir.to_string_lossy().to_string()),
-
-            ..Default::default()
+            // TODO: Add outputted assets to build_metadata, might need dedicated fs methods for this
         });
 
-        let _result = bundler.write().await.unwrap();
+        let css_inputs = build_pages_styles
+            .iter()
+            .map(|style| {
+                let processed_path = style.process(&assets_dir, &tmp_dir);
 
-        // TODO: Add outputted chunks to build_metadata
+                InputItem {
+                    import: {
+                        if let Some(processed_path) = processed_path {
+                            processed_path
+                        } else {
+                            style.path().to_string_lossy().to_string()
+                        }
+                    },
+                    ..Default::default()
+                }
+            })
+            .collect::<Vec<InputItem>>();
+
+        let bundler_inputs = build_pages_scripts
+            .iter()
+            .map(|script| InputItem {
+                import: script.path().to_string_lossy().to_string(),
+                ..Default::default()
+            })
+            .chain(css_inputs.into_iter())
+            .collect::<Vec<InputItem>>();
+
+        if !bundler_inputs.is_empty() {
+            let mut bundler = Bundler::new(BundlerOptions {
+                input: Some(bundler_inputs),
+                minify: Some(true),
+                dir: Some(assets_dir.to_string_lossy().to_string()),
+
+                ..Default::default()
+            });
+
+            let _result = bundler.write().await.unwrap();
+
+            // TODO: Add outputted chunks to build_metadata
+        }
+
+        let formatted_elasped_time =
+            format_elapsed_time(assets_start.elapsed(), &section_format_options)?;
+        info!(target: "build", "{}", format!("Assets generated in {}", formatted_elasped_time).bold());
     }
-
-    let formatted_elasped_time =
-        format_elapsed_time(assets_start.elapsed(), &section_format_options)?;
-    info!(target: "build", "{}", format!("Assets generated in {}", formatted_elasped_time).bold());
 
     // Check if static directory exists
     if static_dir.exists() {
@@ -512,11 +457,6 @@ pub async fn build(
         format_elapsed_time(build_start.elapsed(), &section_format_options)?;
     info!(target: "SKIP_FORMAT", "{}", "");
     info!(target: "build", "{}", format!("Build completed in {}", formatted_elasped_time).bold());
-
-    // Write internal build metadata to disk in YAML
-    let internal_build_metadata_path = dist_dir.join("internal_build_metadata.yaml");
-    let internal_build_metadata_file = File::create(&internal_build_metadata_path)?;
-    serde_yml::to_writer(internal_build_metadata_file, &internal_build_metadata)?;
 
     Ok(build_metadata)
 }

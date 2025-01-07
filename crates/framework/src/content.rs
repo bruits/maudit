@@ -3,100 +3,58 @@ use std::{any::Any, path::PathBuf};
 use glob::glob as glob_fs;
 use log::warn;
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 
 use crate::page::RouteParams;
 pub use maudit_macros::markdown_entry;
-use sha2::{Digest, Sha256};
-use std::fs::File;
-use std::io::{BufReader, Read};
-
-pub fn sha256_digest(path: &PathBuf) -> Result<String, std::io::Error> {
-    let input = File::open(path)?;
-    let mut reader = BufReader::new(input);
-
-    let digest = {
-        let mut hasher = Sha256::new();
-        let mut buffer = [0; 1024];
-        loop {
-            let count = reader.read(&mut buffer)?;
-            if count == 0 {
-                break;
-            }
-            hasher.update(&buffer[..count]);
-        }
-        hasher.finalize()
-    };
-    Ok(format!("{:X}", digest))
-}
 
 pub struct Content<'a> {
     sources: &'a Vec<Box<dyn ContentSourceInternal>>,
-    accessed_sources: FxHashSet<String>,
 }
 
 impl Content<'_> {
     pub fn new(sources: &Vec<Box<dyn ContentSourceInternal>>) -> Content {
-        Content {
-            sources,
-            accessed_sources: FxHashSet::default(),
-        }
+        Content { sources }
     }
 
-    pub(crate) fn get_accessed_sources(&self) -> Vec<String> {
-        self.accessed_sources.clone().into_iter().collect()
-    }
-
-    pub fn get_untyped_source(&mut self, name: &str) -> &ContentSource<Untyped> {
+    pub fn get_untyped_source(&self, name: &str) -> &ContentSource<Untyped> {
         self.sources
             .iter()
             .find_map(
                 |source| match source.as_any().downcast_ref::<ContentSource<Untyped>>() {
-                    Some(source) if source.name == name => {
-                        self.accessed_sources.insert(name.to_string());
-                        Some(source)
-                    }
+                    Some(source) if source.name == name => Some(source),
                     _ => None,
                 },
             )
             .unwrap_or_else(|| panic!("Content source with name '{}' not found", name))
     }
 
-    pub fn get_untyped_source_safe(&mut self, name: &str) -> Option<&ContentSource<Untyped>> {
+    pub fn get_untyped_source_safe(&self, name: &str) -> Option<&ContentSource<Untyped>> {
         self.sources.iter().find_map(|source| {
             match source.as_any().downcast_ref::<ContentSource<Untyped>>() {
-                Some(source) if source.name == name => {
-                    self.accessed_sources.insert(name.to_string());
-                    Some(source)
-                }
+                Some(source) if source.name == name => Some(source),
                 _ => None,
             }
         })
     }
 
-    pub fn get_source<T: 'static>(&mut self, name: &str) -> &ContentSource<T> {
+    pub fn get_source<T: 'static>(&self, name: &str) -> &ContentSource<T> {
         self.sources
             .iter()
             .find_map(
                 |source| match source.as_any().downcast_ref::<ContentSource<T>>() {
-                    Some(source) if source.name == name => {
-                        self.accessed_sources.insert(name.to_string());
-                        Some(source)
-                    }
+                    Some(source) if source.name == name => Some(source),
                     _ => None,
                 },
             )
             .unwrap_or_else(|| panic!("Content source with name '{}' not found", name))
     }
 
-    pub fn get_source_safe<T: 'static>(&mut self, name: &str) -> Option<&ContentSource<T>> {
+    pub fn get_source_safe<T: 'static>(&self, name: &str) -> Option<&ContentSource<T>> {
         self.sources.iter().find_map(|source| {
             match source.as_any().downcast_ref::<ContentSource<T>>() {
-                Some(source) if source.name == name => {
-                    self.accessed_sources.insert(name.to_string());
-                    Some(source)
-                }
+                Some(source) if source.name == name => Some(source),
                 _ => None,
             }
         })
@@ -133,13 +91,11 @@ impl ContentSources {
     }
 }
 
-type ContentSourceInitMethod<T> =
-    Box<dyn Fn() -> (Vec<ContentEntry<T>>, Option<String>) + Send + Sync>;
+type ContentSourceInitMethod<T> = Box<dyn Fn() -> Vec<ContentEntry<T>> + Send + Sync>;
 
 pub struct ContentSource<T = Untyped> {
     pub name: String,
     pub entries: Vec<ContentEntry<T>>,
-    file_pattern: Option<String>,
     pub(crate) init_method: ContentSourceInitMethod<T>,
 }
 
@@ -152,7 +108,6 @@ impl<T> ContentSource<T> {
             name: name.into(),
             entries: vec![],
             init_method: entries,
-            file_pattern: None,
         }
     }
 
@@ -178,33 +133,15 @@ impl<T> ContentSource<T> {
 pub trait ContentSourceInternal: Send + Sync {
     fn init(&mut self);
     fn get_name(&self) -> &str;
-    fn get_pattern(&self) -> &Option<String>;
-    fn get_files(&self) -> Vec<String>;
     fn as_any(&self) -> &dyn Any; // Used for type checking at runtime
 }
 
 impl<T: 'static + Sync + Send> ContentSourceInternal for ContentSource<T> {
     fn init(&mut self) {
-        let (entries, file_pattern) = (self.init_method)();
-        self.entries = entries;
-        self.file_pattern = file_pattern;
+        self.entries = (self.init_method)();
     }
     fn get_name(&self) -> &str {
         &self.name
-    }
-    fn get_pattern(&self) -> &Option<String> {
-        &self.file_pattern
-    }
-    fn get_files(&self) -> Vec<String> {
-        self.entries
-            .iter()
-            .filter_map(|entry| {
-                entry
-                    .file_path
-                    .as_ref()
-                    .map(|file_path| file_path.to_string_lossy().to_string())
-            })
-            .collect()
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -246,7 +183,7 @@ impl InternalMarkdownContent for UntypedMarkdownContent {
     }
 }
 
-pub fn glob_markdown<T>(pattern: &str) -> (Vec<ContentEntry<T>>, Option<String>)
+pub fn glob_markdown<T>(pattern: &str) -> Vec<ContentEntry<T>>
 where
     T: DeserializeOwned + MarkdownContent + InternalMarkdownContent,
 {
@@ -337,7 +274,7 @@ where
         });
     }
 
-    (entries, Some(pattern.to_string()))
+    entries
 }
 
 pub fn render_markdown(content: &str) -> String {
