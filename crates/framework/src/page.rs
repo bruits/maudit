@@ -20,9 +20,21 @@ impl From<String> for RenderResult {
     }
 }
 
+impl From<&str> for RenderResult {
+    fn from(val: &str) -> Self {
+        RenderResult::Text(val.to_string())
+    }
+}
+
 impl From<Vec<u8>> for RenderResult {
     fn from(val: Vec<u8>) -> Self {
         RenderResult::Raw(val)
+    }
+}
+
+impl From<&[u8]> for RenderResult {
+    fn from(val: &[u8]) -> Self {
+        RenderResult::Raw(val.to_vec())
     }
 }
 
@@ -39,6 +51,13 @@ impl RouteContext<'_> {
         T: From<RouteParams>,
     {
         T::from(self.raw_params.clone())
+    }
+
+    pub(crate) fn accessed_resources(&self) -> (Vec<String>, Vec<String>) {
+        (
+            self.content.get_accessed_sources(),
+            self.assets.get_included_assets(),
+        )
     }
 }
 

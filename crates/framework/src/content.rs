@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::{any::Any, path::PathBuf};
 
 use glob::glob as glob_fs;
 use log::warn;
@@ -8,40 +8,27 @@ use serde::de::DeserializeOwned;
 
 use crate::page::RouteParams;
 pub use maudit_macros::markdown_entry;
+use sha2::{Digest, Sha256};
+use std::fs::File;
+use std::io::{BufReader, Read};
 
-pub struct ContentEntry<T> {
-    pub id: String,
-    render: Box<dyn Fn(&str) -> String>,
-    pub raw_content: String,
-    pub data: T,
-}
+pub fn sha256_digest(path: &PathBuf) -> Result<String, std::io::Error> {
+    let input = File::open(path)?;
+    let mut reader = BufReader::new(input);
 
-impl<T> ContentEntry<T> {
-    pub fn render(&self) -> String {
-        (self.render)(&self.raw_content)
-    }
-}
-
-pub type Untyped = FxHashMap<String, String>;
-
-pub struct ContentSources(pub Vec<Box<dyn ContentSourceInternal>>);
-
-impl From<Vec<Box<dyn ContentSourceInternal>>> for ContentSources {
-    fn from(content_sources: Vec<Box<dyn ContentSourceInternal>>) -> Self {
-        Self(content_sources)
-    }
-}
-
-impl ContentSources {
-    pub fn new(content_sources: Vec<Box<dyn ContentSourceInternal>>) -> Self {
-        Self(content_sources)
-    }
-}
-
-pub struct ContentSource<T = Untyped> {
-    pub name: String,
-    pub entries: Vec<ContentEntry<T>>,
-    pub(crate) init_method: Box<dyn Fn() -> Vec<ContentEntry<T>>>,
+    let digest = {
+        let mut hasher = Sha256::new();
+        let mut buffer = [0; 1024];
+        loop {
+            let count = reader.read(&mut buffer)?;
+            if count == 0 {
+                break;
+            }
+            hasher.update(&buffer[..count]);
+        }
+        hasher.finalize()
+    };
+    Ok(format!("{:X}", digest))
 }
 
 pub struct Content<'a> {
@@ -57,8 +44,8 @@ impl Content<'_> {
         }
     }
 
-    pub(crate) fn get_accessed_sources(&self) -> &FxHashSet<String> {
-        &self.accessed_sources
+    pub(crate) fn get_accessed_sources(&self) -> Vec<String> {
+        self.accessed_sources.clone().into_iter().collect()
     }
 
     pub fn get_untyped_source(&mut self, name: &str) -> &ContentSource<Untyped> {
@@ -116,8 +103,47 @@ impl Content<'_> {
     }
 }
 
+pub struct ContentEntry<T> {
+    pub id: String,
+    render: Box<dyn Fn(&str) -> String>,
+    pub raw_content: String,
+    pub data: T,
+    pub file_path: Option<PathBuf>,
+}
+
+impl<T> ContentEntry<T> {
+    pub fn render(&self) -> String {
+        (self.render)(&self.raw_content)
+    }
+}
+
+pub type Untyped = FxHashMap<String, String>;
+
+pub struct ContentSources(pub Vec<Box<dyn ContentSourceInternal>>);
+
+impl From<Vec<Box<dyn ContentSourceInternal>>> for ContentSources {
+    fn from(content_sources: Vec<Box<dyn ContentSourceInternal>>) -> Self {
+        Self(content_sources)
+    }
+}
+
+impl ContentSources {
+    pub fn new(content_sources: Vec<Box<dyn ContentSourceInternal>>) -> Self {
+        Self(content_sources)
+    }
+}
+
+type ContentSourceInitMethod<T> = Box<dyn Fn() -> (Vec<ContentEntry<T>>, Option<String>)>;
+
+pub struct ContentSource<T = Untyped> {
+    pub name: String,
+    pub entries: Vec<ContentEntry<T>>,
+    file_pattern: Option<String>,
+    pub(crate) init_method: ContentSourceInitMethod<T>,
+}
+
 impl<T> ContentSource<T> {
-    pub fn new<P>(name: P, entries: Box<dyn Fn() -> Vec<ContentEntry<T>>>) -> Self
+    pub fn new<P>(name: P, entries: ContentSourceInitMethod<T>) -> Self
     where
         P: Into<String>,
     {
@@ -125,6 +151,7 @@ impl<T> ContentSource<T> {
             name: name.into(),
             entries: vec![],
             init_method: entries,
+            file_pattern: None,
         }
     }
 
@@ -150,15 +177,33 @@ impl<T> ContentSource<T> {
 pub trait ContentSourceInternal {
     fn init(&mut self);
     fn get_name(&self) -> &str;
+    fn get_pattern(&self) -> &Option<String>;
+    fn get_files(&self) -> Vec<String>;
     fn as_any(&self) -> &dyn Any; // Used for type checking at runtime
 }
 
 impl<T: 'static> ContentSourceInternal for ContentSource<T> {
     fn init(&mut self) {
-        self.entries = (self.init_method)();
+        let (entries, file_pattern) = (self.init_method)();
+        self.entries = entries;
+        self.file_pattern = file_pattern;
     }
     fn get_name(&self) -> &str {
         &self.name
+    }
+    fn get_pattern(&self) -> &Option<String> {
+        &self.file_pattern
+    }
+    fn get_files(&self) -> Vec<String> {
+        self.entries
+            .iter()
+            .filter_map(|entry| {
+                entry
+                    .file_path
+                    .as_ref()
+                    .map(|file_path| file_path.to_string_lossy().to_string())
+            })
+            .collect()
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -182,7 +227,7 @@ pub trait InternalMarkdownContent {
     fn set_headings(&mut self, headings: Vec<MarkdownHeading>);
 }
 
-pub fn glob_markdown<T>(pattern: &str) -> Vec<ContentEntry<T>>
+pub fn glob_markdown<T>(pattern: &str) -> (Vec<ContentEntry<T>>, Option<String>)
 where
     T: DeserializeOwned + MarkdownContent + InternalMarkdownContent,
 {
@@ -268,11 +313,12 @@ where
             id,
             render: Box::new(render_markdown),
             raw_content: content,
+            file_path: Some(entry),
             data: parsed,
         });
     }
 
-    entries
+    (entries, Some(pattern.to_string()))
 }
 
 pub fn render_markdown(content: &str) -> String {

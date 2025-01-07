@@ -90,6 +90,24 @@ impl PageAssets {
         self.styles.insert(style.clone());
         self.included_styles.push(style);
     }
+
+    pub(crate) fn get_included_assets(&self) -> Vec<String> {
+        let mut included_assets = FxHashSet::default();
+
+        for asset in &self.assets {
+            included_assets.insert(asset.path().to_string_lossy().to_string());
+        }
+
+        for script in &self.included_scripts {
+            included_assets.insert(script.path().to_string_lossy().to_string());
+        }
+
+        for style in &self.included_styles {
+            included_assets.insert(style.path().to_string_lossy().to_string());
+        }
+
+        included_assets.into_iter().collect()
+    }
 }
 
 #[allow(private_bounds)] // Users never interact with the internal trait, so it's fine

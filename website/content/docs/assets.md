@@ -30,7 +30,7 @@ impl Page for Blog {
 }
 ```
 
-Alternatively, if not using Maud, the `url()` method on the image can be used to generate the HTML.
+Alternatively, if not using Maud, the `url()` method on the image can be used to generate any necessary HTML or other output.
 
 ```rust
 fn render(&self, ctx: &mut RouteContext) -> RenderResult {
@@ -97,6 +97,8 @@ fn render(&self, ctx: &mut RouteContext) -> RenderResult {
 ```
 
 To configure Tailwind, add a [`tailwind.config.js` file](https://tailwindcss.com/docs/configuration) to your project's root directory. This file will be automatically detected and used by Maudit.
+
+**Caution:** Tailwind CSS is a JavaScript-based tool, which can introduce significant overhead when used with Maudit. It can quickly become a performance bottleneck, potentially accounting for more than 90% of your project's build time.
 
 ### Scripts
 

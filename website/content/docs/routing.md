@@ -25,6 +25,23 @@ The `Page` trait requires the implementation of a `render` method that returns a
 
 Finally, make sure to [register the page](#registering-routes) in the `coronate` function for it to be built.
 
+### Ergonomic returns
+
+The `Page` trait accepts a generic parameter for the return type of the `render` method. This type must implement `Into<RenderResult>`, enabling more ergonomic returns in certain cases.
+
+```rust
+impl Page<String> for HelloWorld {
+  fn render(&self, ctx: &mut RouteContext) -> String {
+    "Hello, world!".to_string()
+  }
+}
+```
+
+Maudit implements `Into<RenderResult>` for the following types:
+
+- `String`, `Vec<u8>`, `&str`, `&[u8]`
+- `maud::Markup`
+
 ### Dynamic Routes
 
 Maudit supports creating dynamic routes with parameters. Allowing one to create many pages that share the same structure and logic, but with different content. For example, a blog where each post has a unique URL, e.g., `/posts/my-blog-post`.
@@ -76,7 +93,7 @@ Like static routes, dynamic routes must be [registered](#registering-routes) in 
 
 #### Type-safe parameters
 
-Interacting with HashMaps in Rust can be a bit cumbersome, so Maudit provides the ability to use a struct to define your params and easily convert them into `RouteParams` after.
+Interacting with HashMaps in Rust can be a bit cumbersome, so Maudit provides the ability to use a struct to define your params and use it in the `DynamicRoute` trait.
 
 ```rust
 #[derive(Params)]
@@ -84,13 +101,11 @@ pub struct Params {
   pub slug: String,
 }
 
-impl DynamicRoute for Post {
-  fn routes(&self, ctx: &DynamicRouteContext) -> Vec<RouteParams> {
-    let routes = vec![ArticleParams {
+impl<Params> DynamicRoute for Post {
+  fn routes(&self, ctx: &DynamicRouteContext) -> Vec<Params> {
+    vec![Params {
       slug: "hello-world".to_string(),
-    }];
-
-    RouteParams::from_vec(routes)
+    }]
   }
 }
 ```
@@ -120,7 +135,7 @@ Maudit implements conversions from string route parameters for the following typ
 
 ### Endpoints
 
-Maudit supports returning other types of content besides HTML, such as JSON or plain text. To do this, simply add a file extension to the route path and return the content in the `render` method.
+Maudit supports returning other types of content besides HTML, such as JSON, plain text or binary data. To do this, simply add a file extension to the route path and return the content in the `render` method.
 
 ```rust
 use maudit::page::prelude::*;
