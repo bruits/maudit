@@ -4,6 +4,7 @@ resolver = "2"
 
 [workspace.dependencies]
 maudit = { version = "0.1.0", path = "crates/framework" }
+maudit-build-script = { version = "0.1.0", path = "crates/user-build-script" }
 maud = { version = "0.26.0" }
 serde = { version = "1.0.216" }
 

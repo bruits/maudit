@@ -8,3 +8,6 @@ publish = false
 maudit = { workspace = true }
 maud = { workspace = true }
 serde = { workspace = true }
+
+[build-dependencies]
+maudit-build-script = { workspace = true }

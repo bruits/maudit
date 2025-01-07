@@ -29,7 +29,7 @@ use std::{
 };
 
 use colored::{ColoredString, Colorize};
-use log::{info, trace};
+use log::{info, trace, warn};
 use page::{DynamicRouteContext, FullPage, RenderResult, RouteContext, RouteParams};
 use rolldown::{Bundler, BundlerOptions, InputItem};
 use rustc_hash::FxHashSet;
@@ -50,6 +50,13 @@ macro_rules! routes {
 macro_rules! content_sources {
     ($($name:expr => $entries:expr),*) => {
         maudit::content::ContentSources(vec![$(Box::new(maudit::content::ContentSource::new($name, Box::new(move || $entries)))),*])
+    };
+}
+
+#[macro_export]
+macro_rules! build_id {
+    () => {
+        Some(env!("MAUDIT_BUILD_ID"))
     };
 }
 
@@ -91,6 +98,8 @@ pub struct BuildOptions {
     pub output_dir: String,
     pub assets_dir: String,
     pub static_dir: String,
+    pub incremental: bool,
+    pub build_id: Option<&'static str>,
 }
 
 impl Default for BuildOptions {
@@ -99,6 +108,8 @@ impl Default for BuildOptions {
             output_dir: "dist".to_string(),
             assets_dir: "_maudit".to_string(),
             static_dir: "static".to_string(),
+            incremental: false,
+            build_id: None,
         }
     }
 }
@@ -182,6 +193,8 @@ fn setup_ipc_server(
 
 #[derive(Debug, Serialize)]
 struct InternalBuildMetadata {
+    maudit_version: &'static str,
+    build_id: &'static str,
     // "articles/[slug]": [("content/articles/icon.png", "sha256"), ("content/articles/style.css", "sha256")]
     pages_assets_dependencies: FxHashMap<String, Vec<(String, String)>>,
     // "articles": ["/articles/[slug]", "/index"]
@@ -208,6 +221,20 @@ pub fn coronate(
     do_a_build(&routes, &mut content_sources, &options)
 }
 
+fn check_incremental_build_requirements(
+    options: &BuildOptions,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if options.incremental && options.build_id.is_none() {
+        Err(BuildError::IncrementalBuildWithoutBuildId)?;
+    }
+
+    if (!options.incremental) && options.build_id.is_some() {
+        warn!(target: "build", "Incremental build is disabled, but a build ID is set. The build ID will be ignored.");
+    }
+
+    Ok(())
+}
+
 pub async fn build(
     routes: &Vec<&dyn FullPage>,
     content_sources: &mut ContentSources,
@@ -215,7 +242,11 @@ pub async fn build(
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
     let build_start = SystemTime::now();
 
+    check_incremental_build_requirements(options)?;
+
     let mut internal_build_metadata = InternalBuildMetadata {
+        maudit_version: env!("CARGO_PKG_VERSION"),
+        build_id: options.build_id.unwrap_or(""),
         pages_assets_dependencies: FxHashMap::default(),
         sources_dependencies: FxHashMap::default(),
         sources_patterns: FxHashMap::default(),
