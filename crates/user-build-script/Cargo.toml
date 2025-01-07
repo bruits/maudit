@@ -1,6 +1,0 @@
-[package]
-name = "maudit-build-script"
-description = "Dependency for the build script for Maudit projects"
-license = "MIT"
-version = "0.1.0"
-edition = "2021"

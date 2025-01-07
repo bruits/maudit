@@ -27,8 +27,6 @@ pub enum UrlError {
 pub enum BuildError {
     #[error("`{route}` returns `RenderResult::Text`, but includes styles or scripts, which can only be included in HTML. If you meant to return HTML, use `RenderResult::Html` instead. Alternatively, if you meant to add a reference to a script or style without including it directly, use the  `add_script` or `add_style` methods instead.")]
     InvalidRenderResult { route: String },
-    #[error("Incremental builds require a build id to be set. Please set a build ID in your `BuildOptions` struct.")]
-    IncrementalBuildWithoutBuildId,
 }
 
 impl_debug_for_error!(UrlError, BuildError);

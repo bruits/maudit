@@ -1537,10 +1537,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "maudit-build-script"
-version = "0.1.0"
-
-[[package]]
 name = "maudit-cli"
 version = "0.1.0"
 dependencies = [
@@ -1612,7 +1608,6 @@ version = "0.1.0"
 dependencies = [
  "maud",
  "maudit",
- "maudit-build-script",
  "serde",
 ]
 

@@ -1,5 +1,5 @@
 use content::content_sources;
-use maudit::{build_id, coronate, routes, BuildOptions, BuildOutput};
+use maudit::{coronate, routes, BuildOptions, BuildOutput};
 
 mod content;
 mod layout;
@@ -11,10 +11,6 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(
         routes![Index, DocsIndex, DocsPage, ChatRedirect],
         content_sources(),
-        BuildOptions {
-            incremental: true,
-            build_id: build_id!(),
-            ..Default::default()
-        },
+        BuildOptions::default(),
     )
 }
