@@ -518,6 +518,11 @@ fn finish_route(
 ) -> Result<(), Box<dyn std::error::Error>> {
     match render_result {
         RenderResult::Text(html) => {
+            if included_scripts.is_empty() && included_styles.is_empty() {
+                file.write_all(html.as_bytes())?;
+                return Ok(());
+            }
+
             let element_content_handlers = vec![
                 // Add included scripts and styles to the head
                 element!("head", |el| {
