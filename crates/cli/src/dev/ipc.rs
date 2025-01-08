@@ -5,7 +5,7 @@ use maudit_ipc::{Message, MessageCommand};
 
 type Bootstrap = (IpcSender<Message>, IpcReceiver<Message>);
 
-pub fn start_build_process(cwd: String) -> (IpcSender<Message>, IpcReceiver<Message>) {
+pub fn start_build_process(cwd: &str) -> (IpcSender<Message>, IpcReceiver<Message>) {
     let (server0, server_name0) = IpcOneShotServer::<Bootstrap>::new().unwrap();
 
     // TODO: Handle errors

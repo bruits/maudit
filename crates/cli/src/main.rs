@@ -48,7 +48,7 @@ async fn main() {
             let _ = start_preview_web_server(PathBuf::from("dist")).await;
         }
         Commands::Dev {} => {
-            let _ = coordinate_dev_env(".".to_string()).await;
+            let _ = coordinate_dev_env(".").await;
         }
     }
 }

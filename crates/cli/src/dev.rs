@@ -13,7 +13,7 @@ use notify_debouncer_full::{new_debouncer, notify::*};
 use server::WebSocketMessage;
 use tokio::sync::broadcast;
 
-pub async fn coordinate_dev_env(cwd: String) -> io::Result<()> {
+pub async fn coordinate_dev_env(cwd: &str) -> io::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel();
 
     // no specific tickrate, max debounce time 2 seconds

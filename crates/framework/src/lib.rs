@@ -41,7 +41,7 @@ use lol_html::{element, rewrite_str, RewriteStrSettings};
 #[macro_export]
 macro_rules! routes {
     [$($route:path),*] => {
-        vec![$(&$route),*]
+        &[$(&$route),*]
     };
 }
 
@@ -103,7 +103,7 @@ impl Default for BuildOptions {
 }
 
 fn do_a_build(
-    routes: &Vec<&dyn FullPage>,
+    routes: &[&dyn FullPage],
     content_sources: &mut ContentSources,
     options: &BuildOptions,
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
@@ -118,8 +118,8 @@ fn do_a_build(
 }
 
 fn setup_ipc_server(
-    server_name: String,
-    routes: Vec<&dyn FullPage>,
+    server_name: &str,
+    routes: &[&dyn FullPage],
     mut content_sources: ContentSources,
     options: BuildOptions,
 ) -> std::result::Result<BuildOutput, dyn_eq::Box<(dyn std::error::Error + 'static)>> {
@@ -128,7 +128,7 @@ fn setup_ipc_server(
     let (to_parent, from_child): (IpcSender<Message>, IpcReceiver<Message>) =
         ipc::channel().unwrap();
 
-    let bootstrap = IpcSender::connect(server_name).unwrap();
+    let bootstrap = IpcSender::connect(server_name.into()).unwrap();
     bootstrap.send((to_child, from_child)).unwrap();
 
     // Send ready message
@@ -143,7 +143,7 @@ fn setup_ipc_server(
         data: None,
     })?;
 
-    let mut initial_build = do_a_build(&routes, &mut content_sources, &options)?;
+    let mut initial_build = do_a_build(routes, &mut content_sources, &options)?;
 
     // Send initial build finished message
     to_parent.send(Message {
@@ -158,7 +158,7 @@ fn setup_ipc_server(
 
             match data.command {
                 MessageCommand::Build => {
-                    initial_build = do_a_build(&routes, &mut content_sources, &options)?;
+                    initial_build = do_a_build(routes, &mut content_sources, &options)?;
 
                     to_parent.send(Message {
                         command: MessageCommand::BuildFinished,
@@ -180,7 +180,7 @@ fn setup_ipc_server(
 }
 
 pub fn coronate(
-    routes: Vec<&dyn FullPage>,
+    routes: &[&dyn FullPage],
     mut content_sources: ContentSources,
     options: BuildOptions,
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
@@ -189,14 +189,14 @@ pub fn coronate(
     // If `--ipc-server` argument is found, start IPC server
     if let Some(ipc_server_index) = env::args().position(|arg| arg == "--ipc-server") {
         let ipc_server_name = env::args().nth(ipc_server_index + 1).unwrap();
-        return setup_ipc_server(ipc_server_name, routes, content_sources, options);
+        return setup_ipc_server(&ipc_server_name, routes, content_sources, options);
     }
 
-    do_a_build(&routes, &mut content_sources, &options)
+    do_a_build(routes, &mut content_sources, &options)
 }
 
 pub async fn build(
-    routes: &Vec<&dyn FullPage>,
+    routes: &[&dyn FullPage],
     content_sources: &mut ContentSources,
     options: &BuildOptions,
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {

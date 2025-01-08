@@ -10,11 +10,11 @@ use crate::page::RouteParams;
 pub use maudit_macros::markdown_entry;
 
 pub struct Content<'a> {
-    sources: &'a Vec<Box<dyn ContentSourceInternal>>,
+    sources: &'a [Box<dyn ContentSourceInternal>],
 }
 
 impl Content<'_> {
-    pub fn new(sources: &Vec<Box<dyn ContentSourceInternal>>) -> Content {
+    pub fn new(sources: &[Box<dyn ContentSourceInternal>]) -> Content {
         Content { sources }
     }
 
@@ -241,6 +241,7 @@ where
                             id: if let Some(id) = id {
                                 id.to_string()
                             } else {
+                                // TODO: Generate an ID from the title
                                 String::new()
                             },
                             level: level as u8,
