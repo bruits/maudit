@@ -191,18 +191,16 @@ where
 
     for entry in glob_fs(pattern).unwrap() {
         let entry = entry.unwrap();
+
+        if let Some(extension) = entry.extension() {
+            if extension != "md" {
+                warn!("Other file types than Markdown are not supported yet");
+                continue;
+            }
+        }
+
         let id = entry.file_stem().unwrap().to_str().unwrap().to_string();
         let content = std::fs::read_to_string(&entry).unwrap();
-
-        let extension = match entry.extension() {
-            Some(extension) => extension,
-            None => continue,
-        };
-
-        if extension != "md" {
-            warn!("Other file types than Markdown are not supported yet");
-            continue;
-        }
 
         let mut options = Options::empty();
         options.insert(

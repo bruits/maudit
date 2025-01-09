@@ -512,8 +512,8 @@ fn create_route_file(
 fn finish_route(
     render_result: RenderResult,
     file: &mut File,
-    included_styles: &Vec<assets::Style>,
-    included_scripts: &Vec<assets::Script>,
+    included_styles: &[assets::Style],
+    included_scripts: &[assets::Script],
     route: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match render_result {
