@@ -7,11 +7,11 @@ export default {
 	theme: {
 		extend: {
 			colors: {
-				"our-white": "#FFFCF7",
-				"our-black": "#12130F",
-				"faded-black": "#1d1e1b",
-				"darker-white": "#f8f7f2",
-				"brighter-white": "#fefcf9",
+				"our-white": "#fafafa",
+				"our-black": "#262421",
+				"darker-black": "#21201c",
+				"darker-white": "#f5f5f4",
+				"brighter-white": "#ffffff",
 				borders: "#e9e9e7",
 				"brand-red": "#BA1F33",
 				"brighter-brand": "#FA3252",

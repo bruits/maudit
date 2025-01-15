@@ -1,5 +1,6 @@
 use colored::{ColoredString, Colorize};
 use env_logger::{Builder, Env};
+use log::info;
 use std::io::Write;
 use std::time::{Duration, SystemTimeError};
 
@@ -85,4 +86,9 @@ pub fn format_elapsed_time(
     } else {
         Ok(result)
     }
+}
+
+pub fn print_title(title: &str) {
+    info!(target: "SKIP_FORMAT", "{}", "");
+    info!(target: "SKIP_FORMAT", "{}", format!(" {} ", title).on_green().bold());
 }

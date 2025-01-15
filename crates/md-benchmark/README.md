@@ -2,7 +2,7 @@
 
 This crate contains a Maudit website with presets of various amount of markdown files and is used to benchmark the performance of Maudit.
 
-The generated Markdown files were taken from https://github.com/zachleat/bench-framework-markdown, in order to make somewhat fair comparisons with other static site generators.
+The generated Markdown files were taken from https://github.com/zachleat/bench-framework-markdown. Thanks to Zach Leatherman for providing the benchmark data and comparaison points with other static site generators.
 
 ## Running the benchmark
 
@@ -34,4 +34,6 @@ The following results were obtained on 2025-01-07 using a MacBook Pro (13-inch, 
 
 These numbers are not scientific and only serve as a rough estimate of the performance of Maudit. Your mileage may vary.
 
-Note also that those numbers do not include the compilation time of the project, which can be significant for large projects.
+## On compile times
+
+All the numbers in this document only include the **running time** of the benchmark. Maudit operates on the idea that your content and assets change way more often than any parts that would require re-compilation (static templates, pretty much anything in a `*.rs` file) and as such expect that the vast majority of your builds won't require compilation.

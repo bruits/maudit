@@ -6,7 +6,7 @@ use docs_sidebars::{left_sidebar, right_sidebar};
 
 pub use header::header;
 use maudit::content::MarkdownHeading;
-use maudit::generator;
+use maudit::maud::generator;
 use maudit::page::{RenderResult, RouteContext};
 
 pub fn docs_layout(

@@ -25,7 +25,7 @@ pub enum UrlError {
 
 #[derive(Error)]
 pub enum BuildError {
-    #[error("`{route}` returns `RenderResult::Raw`, but includes styles or scripts, which can only be included in HTML. If you meant to return HTML, use `RenderResult::Html` instead. Alternatively, if you meant to add a reference to a script or style without including it directly, use the  `add_script` or `add_style` methods instead.")]
+    #[error("`{route}` returns `RenderResult::Raw`, but includes styles or scripts, which can only be included in HTML. If you meant to return HTML, use `RenderResult::Text` instead. Alternatively, if you meant to add a reference to a script or style without including it directly, use the  `add_script` or `add_style` methods instead.")]
     InvalidRenderResult { route: String },
 }
 

@@ -11,15 +11,16 @@ const LATEST_NEWS: (&str, &str) = ("Maudit v0.1.0 is out", "/");
 
 impl Page for Index {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-        let features = [("Performant", "Maudit can generate a site with thousands of pages in seconds and using minimal resources."),
-            ("Content", "Bring your content to life with Maudit's built-in support for Markdown, syntax highlighting, and more."),
-            ("SEO-optimized", "Maudit ensures your site is SEO-friendly by default and includes built-in support for sitemaps."),
-            ("Powerful routing", "Maudit's routing system is flexible and powerful, allowing you to create complex sites with ease."),
-            ("Ecosystem-ready", "Maudit harnesses <a class=\"underline\" href=\"https://rolldown.rs\">Rolldown</a>, a swift bundler for JavaScript and CSS, enabling the usage of TypeScript and the npm ecosystem."),
+        let features = [
+            ("Performant", "Generate a site with thousands of pages in seconds using minimal resources."),
+            ("Content", "Bring your content to life with built-in support for Markdown, syntax highlighting, and more."),
+            ("SEO-optimized", "Ensure your site is SEO-friendly by default with built-in support for sitemaps."),
+            ("Powerful routing", "Flexible and powerful routing system allows you to create complex sites with ease."),
+            ("Ecosystem-ready", "Maudit utilize <a class=\"underline\" href=\"https://rolldown.rs\">Rolldown</a>, a fast bundler for JavaScript and CSS, enabling the usage of TypeScript and the npm ecosystem."),
             ("Bring your templates", "Use your preferred templating engine to craft your website's pages. If it renders to HTML, Maudit supports it."),
-            ("Type-safe routing", "Maudit can help ensure your links stay correct, even through site refactors."),
-            ("Style your way", "Maudit supports popular CSS frameworks and preprocessors, like Tailwind CSS and Sass.")
-            ].map(|(name, description)| {(name, PreEscaped(description))});
+            ("Type-safe routing", "Ensure your links stay correct, even through site refactors."),
+            ("Style your way", "Supports popular CSS frameworks and preprocessors, like Tailwind CSS and Sass.")
+        ].map(|(name, description)| {(name, PreEscaped(description))});
 
         layout(
             html! {

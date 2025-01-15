@@ -1,6 +1,5 @@
 use dyn_eq::DynEq;
 use log::info;
-use maud::{html, Markup, Render};
 use rustc_hash::FxHashSet;
 use std::hash::Hash;
 use std::path::Path;
@@ -154,14 +153,6 @@ impl Asset for Image {
     }
 }
 
-impl Render for Image {
-    fn render(&self) -> Markup {
-        html! {
-            img src=(self.url().unwrap()) loading="lazy" decoding="async";
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct Script {
@@ -189,14 +180,6 @@ impl Asset for Script {
     fn hash(&self) -> [u8; 8] {
         // TODO: Proper hash
         [0; 8]
-    }
-}
-
-impl Render for Script {
-    fn render(&self) -> Markup {
-        html! {
-            script src=(self.url().unwrap()) r#type="module" {}
-        }
     }
 }
 
@@ -251,13 +234,5 @@ impl Asset for Style {
     fn hash(&self) -> [u8; 8] {
         // TODO: Proper hash
         [0; 8]
-    }
-}
-
-impl Render for Style {
-    fn render(&self) -> Markup {
-        html! {
-            link rel="stylesheet" type="text/css" href=(self.url().unwrap());
-        }
     }
 }
