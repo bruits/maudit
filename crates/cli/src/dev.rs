@@ -16,8 +16,7 @@ use tokio::sync::broadcast;
 pub async fn coordinate_dev_env(cwd: &str) -> io::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel();
 
-    // no specific tickrate, max debounce time 2 seconds
-    let mut debouncer = new_debouncer(Duration::from_secs(1), None, tx).unwrap();
+    let mut debouncer = new_debouncer(Duration::from_millis(250), None, tx).unwrap();
 
     // Add a path to be watched. All files and directories at that path and
     // below will be monitored for changes.

@@ -63,17 +63,13 @@ pub async fn build(
         let source_start = SystemTime::now();
         source.init();
 
-        let formatted_elasped_time =
-            format_elapsed_time(source_start.elapsed(), &FormatElapsedTimeOptions::default())
-                .unwrap();
-        info!(target: "build", "{}", format!("{} initialized in {}", source.get_name(), formatted_elasped_time));
+        info!(target: "build", "{}", format!("{} initialized in {}", source.get_name(), format_elapsed_time(source_start.elapsed(), &FormatElapsedTimeOptions::default()).unwrap()));
     });
 
-    let formatted_elasped_time = format_elapsed_time(
+    info!(target: "build", "{}", format!("Content sources initialized in {}", format_elapsed_time(
         content_sources_start.elapsed(),
         &FormatElapsedTimeOptions::default(),
-    )?;
-    info!(target: "build", "{}", format!("Content sources initialized in {}", formatted_elasped_time).bold());
+    ).unwrap()).bold());
 
     print_title("generating pages");
     let pages_start = SystemTime::now();
@@ -132,9 +128,7 @@ pub async fn build(
                     route.route_raw(),
                 )?;
 
-                let formatted_elasped_time =
-                    format_elapsed_time(route_start.elapsed(), &route_format_options)?;
-                info!(target: "build", "{} -> {} {}", route.route(&RouteParams(FxHashMap::default())), file_path.to_string_lossy().dimmed(), formatted_elasped_time);
+                info!(target: "build", "{} -> {} {}", route.route(&RouteParams(FxHashMap::default())), file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap());
 
                 build_pages_assets.extend(page_assets.assets);
                 build_pages_scripts.extend(page_assets.scripts);
@@ -195,9 +189,7 @@ pub async fn build(
                         route.route_raw(),
                     )?;
 
-                    let formatted_elasped_time =
-                        format_elapsed_time(route_start.elapsed(), &route_format_options)?;
-                    info!(target: "build", "├─ {} {}", file_path.to_string_lossy().dimmed(), formatted_elasped_time);
+                    info!(target: "build", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap());
 
                     build_pages_assets.extend(pages_assets.assets);
                     build_pages_scripts.extend(pages_assets.scripts);
@@ -209,9 +201,7 @@ pub async fn build(
         }
     }
 
-    let formatted_elasped_time =
-        format_elapsed_time(pages_start.elapsed(), &section_format_options)?;
-    info!(target: "build", "{}", format!("generated {} pages in {}", page_count,  formatted_elasped_time).bold());
+    info!(target: "build", "{}", format!("generated {} pages in {}", page_count,  format_elapsed_time(pages_start.elapsed(), &section_format_options).unwrap()).bold());
 
     if !build_pages_assets.is_empty()
         || !build_pages_styles.is_empty()
@@ -267,9 +257,7 @@ pub async fn build(
             // TODO: Add outputted chunks to build_metadata
         }
 
-        let formatted_elasped_time =
-            format_elapsed_time(assets_start.elapsed(), &section_format_options)?;
-        info!(target: "build", "{}", format!("Assets generated in {}", formatted_elasped_time).bold());
+        info!(target: "build", "{}", format!("Assets generated in {}", format_elapsed_time(assets_start.elapsed(), &section_format_options).unwrap()).bold());
     }
 
     // Check if static directory exists
@@ -280,18 +268,14 @@ pub async fn build(
         // Copy the static directory to the dist directory
         copy_recursively(&static_dir, &dist_dir, &mut build_metadata)?;
 
-        let formatted_elasped_time =
-            format_elapsed_time(assets_start.elapsed(), &FormatElapsedTimeOptions::default())?;
-        info!(target: "build", "{}", format!("Assets copied in {}", formatted_elasped_time).bold());
+        info!(target: "build", "{}", format!("Assets copied in {}", format_elapsed_time(assets_start.elapsed(), &FormatElapsedTimeOptions::default()).unwrap()).bold());
     }
 
     // Remove temporary files
     let _ = remove_dir_all(&tmp_dir);
 
-    let formatted_elasped_time =
-        format_elapsed_time(build_start.elapsed(), &section_format_options)?;
     info!(target: "SKIP_FORMAT", "{}", "");
-    info!(target: "build", "{}", format!("Build completed in {}", formatted_elasped_time).bold());
+    info!(target: "build", "{}", format!("Build completed in {}", format_elapsed_time(build_start.elapsed(), &section_format_options).unwrap()).bold());
 
     Ok(build_metadata)
 }
