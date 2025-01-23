@@ -46,59 +46,59 @@ At this time, images are not automatically optimized or resized, but this will b
 
 To import a stylesheet, add it anywhere in your project's directory, and use the `ctx.assets.add_style()` method to add it to a page's assets.
 
-When using Maud, the return value of `ctx.assets.add_style()` can be used directly in the template.
+In [supported templating languages](/docs/templating/), the return value of `ctx.assets.add_style()` can be used directly in the template.
 
 ```rust
 use maudit::page::prelude::*;
-use maud::html;
+use maud::{html, Markup};
 
 #[route("/blog")]
 pub struct Blog;
 
-impl Page for Blog {
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Page<Markup> for Blog {
+  fn render(&self, ctx: &mut RouteContext) -> Markup {
     let style = ctx.assets.add_style("style.css", false);
 
     html! {
       (style) // Generates <link rel="stylesheet" href="STYLE_URL" />
-    }.into()
+    }
   }
 }
 ```
 
-Alternatively, the `include_style()` method can be used to automatically include the stylesheet in the page, without needing to manually add it to the template.
+Alternatively, the `include_style()` method can be used to automatically include the stylesheet in the page, without needing to manually add it to the template. Note that, at this time, pages without a `head` tag won't have the stylesheet included.
 
 ```rust
-fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+fn render(&self, ctx: &mut RouteContext) -> Markup {
   ctx.assets.include_style("style.css", false);
 
   html! {
     div {
-      "Look ma, no explicit link tag!"
+      "Look ma, no link tag!"
     }
-  }.into()
+  }
 }
 ```
 
 #### Tailwind support
 
-Maudit includes built-in support for [Tailwind CSS](https://tailwindcss.com/). To use it, pass `true` as the second argument to `add_style()` or `include_style()`.
+Maudit includes built-in support for [Tailwind CSS](https://tailwindcss.com/). To use it, pass `true` as the second argument to `add_style()` or `include_style()`. In the future, Maudit will automatically detect Tailwind CSS and enable it when needed.
 
 ```rust
-fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+fn render(&self, ctx: &mut RouteContext) -> Markup {
   ctx.assets.add_style("style.css", true);
 
   html! {
     div.bg-red-500 {
       "Wow, such red!"
     }
-  }.into()
+  }
 }
 ```
 
-To configure Tailwind, add a [`tailwind.config.js` file](https://tailwindcss.com/docs/configuration) to your project's root directory. This file will be automatically detected and used by Maudit.
+Tailwind can then be configured normally, through native CSS in Tailwind 4.0, or through a `tailwind.config.js` file in earlier versions.
 
-**Caution:** Tailwind CSS is a JavaScript-based tool, which can introduce significant overhead when used with Maudit. It can quickly become a performance bottleneck, potentially accounting for more than 90% of your project's build time.
+**Caution:** Tailwind CSS is a JavaScript-based tool, which means that Maudit needs to spawn a separate Node.js process to run it. This comes with a significant performance overhead and in most projects using Tailwind, Tailwind will account for more than 99% of the build time, even when using Tailwind 4.0.
 
 ### Scripts
 
@@ -106,25 +106,26 @@ JavaScript and TypeScript files can be added to pages using the `ctx.assets.add_
 
 ```rust
 use maudit::page::prelude::*;
+use maud::{html, Markup};
 
 #[route("/blog")]
 pub struct Blog;
 
-impl Page for Blog {
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Page<Markup> for Blog {
+  fn render(&self, ctx: &mut RouteContext) -> Markup {
     let script = ctx.assets.add_script("script.js");
 
     html! {
       (script) // Generates <script src="SCRIPT_URL" type="module"></script>
-    }.into()
+    }
   }
 }
 ```
 
-As with stylesheets, the `include_script()` method can be used to automatically include the script in the page, which can be useful when using layouts or other shared templates.
+The `include_script()` method can be used to automatically include the script in the page, which can be useful when using layouts or other shared templates.
 
 ```rust
-fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+fn render(&self, ctx: &mut RouteContext) -> Markup {
   ctx.assets.include_script("script.js");
 
   html! {
@@ -135,7 +136,7 @@ fn render(&self, ctx: &mut RouteContext) -> RenderResult {
 }
 ```
 
-When using `include_script()`, the script will be included inside the `head` tag with the `type="module"` attribute. Note that this attribute implicitely means that your script will be deferred after the page has loaded. At this time, pages without a `head` tag won't have the script included.
+When using `include_script()`, the script will be included inside the `head` tag with the `type="module"` attribute. [Note that this attribute implicitely means that your script will be deferred](https://v8.dev/features/modules#defer) after the page has loaded. At this time, pages without a `head` tag won't have the script included.
 
 ### Transformation & Bundling
 

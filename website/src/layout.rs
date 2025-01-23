@@ -18,8 +18,8 @@ pub fn docs_layout(
 
     layout(
         html! {
-            div.container.mx-auto.grid-cols-docs.grid."min-h-[calc(100%-64px)]" {
-                aside.bg-gradient-to-l."from-darker-white"."py-8"."h-full".border-r.border-r-borders {
+            div.container.mx-auto."grid-cols-(--docs-columns)".grid."min-h-[calc(100%-64px)]" {
+                aside.bg-linear-to-l."from-darker-white"."py-8"."h-full".border-r.border-r-borders {
                     (left_sidebar(ctx))
                 }
                 main.w-full.max-w-larger-prose.mx-auto.py-8 {

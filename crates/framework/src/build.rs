@@ -105,6 +105,7 @@ pub async fn build(
                 let route_start = SystemTime::now();
                 let mut page_assets = assets::PageAssets {
                     assets_dir: options.assets_dir.clone().into(),
+                    tailwind_path: options.tailwind_binary_path.clone().into(),
                     ..Default::default()
                 };
 
@@ -160,6 +161,7 @@ pub async fn build(
                 for params in routes {
                     let mut pages_assets = assets::PageAssets {
                         assets_dir: options.assets_dir.clone().into(),
+                        tailwind_path: options.tailwind_binary_path.clone().into(),
                         ..Default::default()
                     };
                     let route_start = SystemTime::now();

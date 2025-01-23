@@ -17,6 +17,7 @@ pub struct PageAssets {
     pub(crate) included_scripts: Vec<Script>,
 
     pub(crate) assets_dir: PathBuf,
+    pub(crate) tailwind_path: PathBuf,
 }
 
 impl PageAssets {
@@ -69,6 +70,7 @@ impl PageAssets {
             path: style_path.into(),
             tailwind,
             assets_dir: self.assets_dir.clone(),
+            tailwind_path: self.tailwind_path.clone(),
         };
 
         self.styles.insert(style.clone());
@@ -84,6 +86,7 @@ impl PageAssets {
             path: style_path.into(),
             tailwind,
             assets_dir: self.assets_dir.clone(),
+            tailwind_path: self.tailwind_path.clone(),
         };
 
         self.styles.insert(style.clone());
@@ -189,6 +192,7 @@ pub struct Style {
     pub path: PathBuf,
     pub(crate) tailwind: bool,
     pub(crate) assets_dir: PathBuf,
+    pub(crate) tailwind_path: PathBuf,
 }
 
 impl InternalAsset for Style {
@@ -215,7 +219,8 @@ impl Asset for Style {
             let tmp_path_str = tmp_path.to_str().unwrap().to_string();
 
             let start_tailwind = SystemTime::now();
-            let tailwind_output = Command::new("tailwindcss") // TODO: Allow custom tailwind binary path
+            let tailwind_output = Command::new(self.tailwind_path.clone())
+                .args(["--input", self.path.to_str().unwrap()])
                 .args(["--output", &tmp_path_str])
                 .arg("--minify") // TODO: Allow disabling minification
                 .output()

@@ -43,7 +43,7 @@ impl Page for Index {
                         }
                     }
                 }
-                div.h-12.bg-gradient-to-b."from-darker-white".border-t.border-t-borders{}
+                div.h-12.bg-linear-to-b."from-darker-white".border-t.border-t-borders{}
 
                 div."px-12"."lg:container".mx-auto.mb-12 {
                     section {

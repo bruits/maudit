@@ -11,6 +11,9 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(
         routes![Index, DocsIndex, DocsPage, ChatRedirect],
         content_sources(),
-        BuildOptions::default(),
+        BuildOptions {
+            tailwind_binary_path: "../node_modules/.bin/tailwindcss".to_string(),
+            ..Default::default()
+        },
     )
 }
