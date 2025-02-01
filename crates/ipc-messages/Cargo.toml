@@ -1,9 +1,0 @@
-[package]
-name = "maudit-ipc"
-description = "IPC messages for the maudit CLI"
-license = "MIT"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-serde.workspace = true
