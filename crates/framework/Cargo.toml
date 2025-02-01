@@ -6,15 +6,12 @@ license = "MIT"
 edition = "2021"
 
 [features]
-default = ["maud", "ipc"]
+default = ["maud"]
 maud = ["dep:maud"]
-ipc = ["maudit-ipc", "ipc-channel"]
 
 [dependencies]
 # Optional
 maud = { workspace = true, optional = true }
-ipc-channel = { version = "0.19.0", optional = true }
-maudit-ipc = { path = "../ipc-messages", version = "0.1", optional = true }
 
 # TODO: Allow making those optional
 rolldown = { git = "https://github.com/rolldown/rolldown", version = "0.1.0", rev = "f9fc700f00b9a4ef3659c70d2be4d7cd61b492c8" }
