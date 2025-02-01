@@ -28,6 +28,10 @@ pub fn init_logging() {
     let logging_env = Env::default().filter_or("RUST_LOG", "info");
     Builder::from_env(logging_env)
         .format(|buf, record| {
+            if std::env::args().any(|arg| arg == "--quiet") {
+                return Ok(());
+            }
+
             if record.target() == "SKIP_FORMAT" {
                 return writeln!(buf, "{}", record.args());
             }
