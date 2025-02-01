@@ -11,7 +11,6 @@ env_logger = "0.11.5"
 chrono = "0.4.39"
 colored = "2.2.0"
 clap = { version = "4.5.23", features = ["derive"] }
-ipc-channel = "0.19.0"
 serde = { workspace = true, features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 axum = { version = "0.8.1", features = ["ws"] }
@@ -25,7 +24,5 @@ http-body-util = "0.1.0"
 tower-http = { version = "0.6.2", features = ["fs", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-maudit-ipc = { path = "../ipc-messages", version = "0.1" }
-notify = "7.0.0"
-crossbeam-channel = "0.5.14"
-notify-debouncer-full = "0.3.1"
+watchexec = "5.0.0"
+watchexec-events = "4.0.0"

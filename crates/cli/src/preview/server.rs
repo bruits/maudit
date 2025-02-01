@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use axum::{handler::HandlerWithoutStateExt, http::StatusCode, Router};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use tower_http::{
     services::ServeDir,
@@ -9,15 +8,6 @@ use tower_http::{
 };
 
 pub async fn start_preview_web_server(dist_dir: PathBuf) {
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                format!("{}=info,tower_http=info", env!("CARGO_CRATE_NAME")).into()
-            }),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-
     async fn handle_404() -> (StatusCode, &'static str) {
         (StatusCode::NOT_FOUND, "Not found")
     }

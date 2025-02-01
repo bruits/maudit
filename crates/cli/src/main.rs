@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 use dev::coordinate_dev_env;
 use preview::start_preview_web_server;
 use std::path::{Path, PathBuf};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -28,11 +29,20 @@ enum Commands {
 async fn main() {
     let cli = Cli::parse();
 
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                format!("{}=info,tower_http=info", env!("CARGO_CRATE_NAME")).into()
+            }),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
         Commands::Build {} => {
-            println!("Building...");
+            todo!();
         }
         Commands::Preview {} => {
             // TODO: Dist path is hardcoded for now. Ideally, Maudit should output some kind of metadata file that can be read by the CLI.

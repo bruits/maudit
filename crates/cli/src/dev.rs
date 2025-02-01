@@ -1,94 +1,76 @@
-use std::{
-    io::{self},
-    path::Path,
-    time::Duration,
-};
+use std::io::{self};
 
-pub(crate) mod ipc;
 pub(crate) mod server;
 
-use event::ModifyKind;
-use maudit_ipc::{Message, MessageCommand};
-use notify_debouncer_full::{new_debouncer, notify::*};
+mod filterer;
+
+use filterer::DevServerFilterer;
 use server::WebSocketMessage;
+use std::sync::Arc;
 use tokio::sync::broadcast;
+use watchexec::{
+    command::{Command, Program},
+    Watchexec,
+};
 
 pub async fn coordinate_dev_env(cwd: &str) -> io::Result<()> {
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (sender_websocket, _) = broadcast::channel::<WebSocketMessage>(100);
 
-    let mut debouncer = new_debouncer(Duration::from_millis(250), None, tx).unwrap();
+    let web_server_thread: tokio::task::JoinHandle<()> =
+        tokio::spawn(server::start_dev_web_server(sender_websocket.clone()));
 
-    // Add a path to be watched. All files and directories at that path and
-    // below will be monitored for changes.
-    debouncer
-        .watcher()
-        .watch(Path::new("./src"), RecursiveMode::Recursive)
-        .unwrap();
+    let wx = Watchexec::new_async(move |mut action| {
+        Box::new({
+            let browser_websocket = sender_websocket.clone();
 
-    debouncer
-        .watcher()
-        .watch(Path::new("./content"), RecursiveMode::Recursive)
-        .unwrap();
+            async move {
+                if action.signals().next().is_some() {
+                    eprintln!("[Quitting...]");
+                    action.quit();
+                } else {
+                    let (_, job) = action.create_job(Arc::new(Command {
+                        program: Program::Exec {
+                            prog: "cargo".into(),
+                            args: vec![
+                                "run".into(),
+                                "--quiet".into(),
+                                "--".into(),
+                                "--quiet".into(),
+                            ],
+                        },
+                        options: Default::default(),
+                    }));
+                    job.start();
+                    let ticket = job.to_wait();
+                    ticket.await;
 
-    let (build_process_writer, build_process_reader) = ipc::start_build_process(cwd);
-
-    let (tx_ws, _) = broadcast::channel::<WebSocketMessage>(100);
-
-    let web_server_thread = tokio::spawn(server::start_dev_web_server(tx_ws.clone()));
-
-    let build_process_thread = std::thread::spawn(move || loop {
-        if let Ok(data) = build_process_reader.recv() {
-            println!("Server received: {:?}", data);
-
-            match data.command {
-                MessageCommand::InitialBuild => {
-                    println!("Doing initial warming build...");
-                }
-                MessageCommand::InitialBuildFinished => {
-                    println!("Done with initial build!");
-                }
-                MessageCommand::BuildFinished => {
-                    println!("Done with build!");
-
-                    // Send a message to the websocket that a build is done
-                    match tx_ws.send(WebSocketMessage {
-                        data: "done".to_string(),
+                    match browser_websocket.send(WebSocketMessage {
+                        data: "done".into(),
                     }) {
                         Ok(_) => {}
                         Err(e) => {
-                            dbg!(&e);
-                            println!("Error sending message to websocket: {:?}", e.0);
+                            eprintln!("Error sending message to browser: {:?}", e);
                         }
                     }
                 }
-                _ => {}
-            }
-        }
-    });
 
-    for result in rx {
-        match result {
-            Ok(events) => events.iter().for_each(|event| match event.event.kind {
-                EventKind::Create(_)
-                | EventKind::Remove(_)
-                | EventKind::Modify(ModifyKind::Data(_) | ModifyKind::Name(_)) => {
-                    build_process_writer
-                        .send(Message {
-                            command: MessageCommand::Build,
-                            data: None,
-                        })
-                        .unwrap();
+                for event in action.events.iter() {
+                    eprintln!("EVENT: {event:?}");
                 }
-                _ => {}
-            }),
-            Err(errors) => errors.iter().for_each(|error| println!("{error:?}")),
-        }
-        println!();
-    }
+
+                action
+            }
+        })
+    })
+    .unwrap();
+
+    wx.config.pathset([cwd]);
+    wx.config.filterer(DevServerFilterer);
+
+    let _ = wx.main().await;
 
     // Wait for the build process to finish
     web_server_thread.await.unwrap();
-    let _ = build_process_thread.join();
 
     Ok(())
 }
