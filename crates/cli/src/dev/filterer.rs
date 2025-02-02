@@ -29,10 +29,6 @@ impl Filterer for DevServerFilterer {
             }
         }
 
-        if result {
-            println!("{:?}", event);
-        }
-
         Ok(result)
     }
 }

@@ -17,6 +17,7 @@ pub fn header(_: &mut RouteContext, bottom_border: bool) -> Markup {
                     nav.text-lg.flex.gap-x-12.relative."top-[2px]" {
                         a href="/docs/" { "Documentation" }
                         a href="/news/" { "News" }
+                        a href="/contribute/" { "Contribute" }
                     }
                 }
 
