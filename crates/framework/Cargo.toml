@@ -1,7 +1,7 @@
 [package]
 name = "maudit"
 description = "Framework for generating static websites."
-version = "0.1.0"
+version = "0.2.0"
 license = "MIT"
 edition = "2021"
 
@@ -14,7 +14,7 @@ maud = ["dep:maud"]
 maud = { workspace = true, optional = true }
 
 # TODO: Allow making those optional
-rolldown = { git = "https://github.com/rolldown/rolldown", version = "0.1.0", rev = "f9fc700f00b9a4ef3659c70d2be4d7cd61b492c8" }
+rolldown = { package = "maudit_rolldown", version = "0.1.0" }
 serde = { workspace = true }
 serde_yml = "0.0.12"
 pulldown-cmark = "0.12.2"
