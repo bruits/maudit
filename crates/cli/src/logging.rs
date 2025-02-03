@@ -25,10 +25,7 @@ pub fn format_elapsed_time(
     elapsed: Result<Duration, SystemTimeError>,
     options: &FormatElapsedTimeOptions,
 ) -> Result<ColoredString, SystemTimeError> {
-    let elapsed = match elapsed {
-        Ok(elapsed) => elapsed,
-        Err(err) => return Err(err),
-    };
+    let elapsed = elapsed?;
 
     let result = match elapsed.as_secs() {
         secs if secs > 60 => {
@@ -43,14 +40,14 @@ pub fn format_elapsed_time(
             millis
                 if options
                     .millis_red_threshold
-                    .map_or(false, |threshold| millis > threshold) =>
+                    .is_some_and(|threshold| millis > threshold) =>
             {
                 format!("{}ms", millis).red()
             }
             millis
                 if options
                     .millis_yellow_threshold
-                    .map_or(false, |threshold| millis > threshold) =>
+                    .is_some_and(|threshold| millis > threshold) =>
             {
                 format!("{}ms", millis).yellow()
             }
