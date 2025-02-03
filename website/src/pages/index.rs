@@ -24,7 +24,7 @@ impl Page for Index {
 
         layout(
             html! {
-                div.w-screen {
+                div.w-full {
                     div."lg:container".mx-auto.hero-background {
                         div.px-6.py-10.mx-6.my-20 {
                             a.bg-our-black.text-our-white.rounded-sm.px-2.py-1.text-sm.mb-2.inline-block."hover:text-white"."hover:cursor-pointer" href=(LATEST_NEWS.1) {
