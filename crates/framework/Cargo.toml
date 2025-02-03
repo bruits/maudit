@@ -21,7 +21,7 @@ pulldown-cmark = "0.12.2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 glob = "0.3.1"
 
-maudit-macros = { path = "../macros", version = "0.1" }
+maudit-macros = { path = "../macros", version = "0.2" }
 log = { version = "0.4", features = ["kv"] }
 env_logger = "0.11.5"
 chrono = "0.4.39"
