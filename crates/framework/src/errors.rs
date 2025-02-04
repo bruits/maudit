@@ -1,3 +1,4 @@
+//! Error types for the framework.
 use std::fmt::{self, Debug, Formatter};
 use thiserror::Error;
 

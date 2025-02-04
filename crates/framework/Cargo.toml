@@ -9,6 +9,10 @@ edition = "2021"
 default = ["maud"]
 maud = ["dep:maud"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 # Optional
 maud = { workspace = true, optional = true }

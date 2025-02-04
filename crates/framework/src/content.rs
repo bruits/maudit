@@ -1,3 +1,6 @@
+//! Core functions and structs to define the content sources of your website.
+//!
+//! Content sources represent the content of your website, such as articles, blog posts, etc. Then, content sources can be passed to [`coronate()`](crate::coronate), through the [`content_sources!`](crate::content_sources) macro, to be loaded. Typically used in [`DynamicRoute`](crate::page::DynamicRoute).
 use std::{any::Any, path::PathBuf};
 
 use glob::glob as glob_fs;
@@ -7,8 +10,128 @@ use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 
 use crate::page::RouteParams;
+
+/// Helps implement a struct as a Markdown content entry.
+///
+/// ## Example
+/// ```rust
+/// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
+/// use maudit::content::{markdown_entry, glob_markdown};
+///
+/// #[markdown_entry]
+/// pub struct ArticleContent {
+///   pub title: String,
+///   pub description: String,
+/// }
+///
+/// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
+///   coronate(
+///     routes![],
+///     content_sources![
+///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
+///     ],
+///     BuildOptions::default(),
+///   )
+/// }
+/// ```
+///
+/// ## Expand
+/// ```rust
+/// #[markdown_entry]
+/// pub struct Article {
+///   pub title: String,
+///   pub content: String,
+/// }
+/// ```
+/// expands to
+/// ```rust
+/// #[derive(serde::Deserialize)]
+/// pub struct Article {
+///   pub title: String,
+///   pub content: String,
+///   #[serde(skip)]
+///   __internal_headings: Vec<maudit::content::MarkdownHeading>
+/// }
+///
+/// impl maudit::content::MarkdownContent for Article {
+///   fn get_headings(&self) -> &Vec<maudit::content::MarkdownHeading> {
+///     &self.__internal_headings
+///   }
+/// }
+///
+/// impl maudit::content::InternalMarkdownContent for Article {
+///   fn set_headings(&mut self, headings: Vec<maudit::content::MarkdownHeading>) {
+///     self.__internal_headings = headings;
+///   }
+/// }
+/// ```
 pub use maudit_macros::markdown_entry;
 
+/// Main struct to access all content sources.
+///
+/// Can only access content sources that have been defined in [`coronate()`](crate::coronate).
+///
+/// ## Example
+/// In `main.rs`:
+/// ```rust
+/// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
+/// use maudit::content::{markdown_entry, glob_markdown};
+///
+/// #[markdown_entry]
+/// pub struct ArticleContent {
+///   pub title: String,
+///   pub description: String,
+/// }
+///
+/// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
+///   coronate(
+///     routes![],
+///     content_sources![
+///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
+///     ],
+///     BuildOptions::default(),
+///   )
+/// }
+/// ```
+///
+/// In a page:
+/// ```rust
+/// use maudit::page::prelude::*;
+/// # use maudit::content::markdown_entry;
+/// #
+/// # #[markdown_entry]
+/// # pub struct ArticleContent {
+/// #    pub title: String,
+/// #    pub description: String,
+/// # }
+///
+/// #[route("/articles/[article]")]
+/// pub struct Article;
+///
+/// #[derive(Params)]
+/// pub struct ArticleParams {
+///     pub article: String,
+/// }
+///
+/// impl DynamicRoute<ArticleParams> for Article {
+///     fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<ArticleParams> {
+///         let articles = ctx.content.get_source::<ArticleContent>("articles");
+///
+///         articles.into_params(|entry| ArticleParams {
+///             article: entry.id.clone(),
+///         })
+///     }
+/// }
+///
+/// impl Page for Article {
+///    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+///      let params = ctx.params::<ArticleParams>();
+///      let articles = ctx.content.get_source::<ArticleContent>("articles");
+///      let article = articles.get_entry(&params.article);
+///      article.render().into()
+///   }
+/// }
+/// ```
 pub struct Content<'a> {
     sources: &'a [Box<dyn ContentSourceInternal>],
 }
@@ -61,6 +184,35 @@ impl Content<'_> {
     }
 }
 
+/// Represents a single entry in a [`ContentSource`].
+///
+/// ## Example
+/// ```rust
+/// use maudit::page::prelude::*;
+/// # use maudit::content::markdown_entry;
+/// #
+/// # #[markdown_entry]
+/// # pub struct ArticleContent {
+/// #    pub title: String,
+/// #    pub description: String,
+/// # }
+///
+/// #[route("/articles/my-article")]
+/// pub struct Article;
+///
+/// #[derive(Params)]
+/// pub struct ArticleParams {
+///     pub article: String,
+/// }
+///
+/// impl Page for Article {
+///    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+///      let articles = ctx.content.get_source::<ArticleContent>("articles");
+///      let article = articles.get_entry("my-article"); // returns a ContentEntry
+///      article.render().into()
+///   }
+/// }
+/// ```
 pub struct ContentEntry<T> {
     pub id: String,
     render: Box<dyn Fn(&str) -> String + Send + Sync>,
@@ -75,8 +227,29 @@ impl<T> ContentEntry<T> {
     }
 }
 
+/// Represents an untyped content source.
 pub type Untyped = FxHashMap<String, String>;
 
+/// Represents a collection of content sources.
+///
+/// Typically used as return value of [`content_sources!`](crate::content_sources).
+///
+/// ## Example
+/// ```rust
+/// use maudit::page::prelude::*;
+/// use maudit::content::{glob_markdown, ContentSources};
+/// use maudit::content_sources;
+/// # use maudit::content::markdown_entry;
+/// #
+/// # #[markdown_entry]
+/// # pub struct ArticleContent {
+/// #    pub title: String,
+/// #    pub description: String,
+/// # }
+///
+/// pub fn content_sources() -> ContentSources {
+///   content_sources!["docs" => glob_markdown::<ArticleContent>("content/docs/*.md")]
+/// }
 pub struct ContentSources(pub Vec<Box<dyn ContentSourceInternal>>);
 
 impl From<Vec<Box<dyn ContentSourceInternal>>> for ContentSources {
@@ -93,6 +266,7 @@ impl ContentSources {
 
 type ContentSourceInitMethod<T> = Box<dyn Fn() -> Vec<ContentEntry<T>> + Send + Sync>;
 
+/// A source of content such as articles, blog posts, etc.
 pub struct ContentSource<T = Untyped> {
     pub name: String,
     pub entries: Vec<ContentEntry<T>>,
@@ -130,6 +304,9 @@ impl<T> ContentSource<T> {
     }
 }
 
+#[doc(hidden)]
+/// Used internally by the framework and should not be implemented by the user.
+/// We expose it because it's implemented for [`ContentSource`], which is public.
 pub trait ContentSourceInternal: Send + Sync {
     fn init(&mut self);
     fn get_name(&self) -> &str;
@@ -148,6 +325,53 @@ impl<T: 'static + Sync + Send> ContentSourceInternal for ContentSource<T> {
     }
 }
 
+/// Represents a Markdown title.
+///
+/// Can be used to generate a table of contents.
+///
+/// ## Example
+/// ```rust
+/// use maudit::page::prelude::*;
+/// use maud::{html, Markup};
+/// # use maudit::content::markdown_entry;
+/// #
+/// # #[markdown_entry]
+/// # pub struct ArticleContent {
+/// #    pub title: String,
+/// #    pub description: String,
+/// # }
+///
+/// #[route("/articles/my-article")]
+/// pub struct Article;
+///
+/// #[derive(Params)]
+/// pub struct ArticleParams {
+///     pub article: String,
+/// }
+///
+/// impl Page<Markup> for Article {
+///   fn render(&self, ctx: &mut RouteContext) -> Markup {
+///     let articles = ctx.content.get_source::<ArticleContent>("articles");
+///     let article = articles.get_entry("my-article");
+///     let headings = article.data.get_headings(); // returns a Vec<MarkdownHeading>
+///     let toc = html! {
+///       ul {
+///         @for heading in headings {
+///           li {
+///             a href=(format!("#{}", heading.id)) { (heading.title) }
+///           }
+///         }
+///       }
+///     };
+///     html! {
+///       main {
+///         h1 { (article.data.title) }
+///         nav { (toc) }
+///       }
+///     }
+///   }
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct MarkdownHeading {
     pub title: String,
@@ -157,14 +381,39 @@ pub struct MarkdownHeading {
     pub attrs: Vec<(String, Option<String>)>,
 }
 
+#[doc(hidden)]
+/// Used internally by the framework and should not be implemented by the user.
+/// We expose it because [`maudit_macros::markdown_entry`] implements it for the user behind the scenes.
 pub trait MarkdownContent {
     fn get_headings(&self) -> &Vec<MarkdownHeading>;
 }
 
+#[doc(hidden)]
+/// Used internally by the framework and should not be implemented by the user.
+/// We expose it because [`maudit_macros::markdown_entry`] implements it for the user behind the scenes.
 pub trait InternalMarkdownContent {
     fn set_headings(&mut self, headings: Vec<MarkdownHeading>);
 }
 
+/// Represents untyped Markdown content.
+///
+/// Assumes that the Markdown content has no frontmatter.
+///
+/// ## Example
+/// ```rust
+/// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
+/// use maudit::content::{glob_markdown, UntypedMarkdownContent};
+///
+/// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
+///   coronate(
+///     routes![],
+///     content_sources![
+///       "articles" => glob_markdown::<UntypedMarkdownContent>("content/spooky/*.md")
+///     ],
+///     BuildOptions::default(),
+///   )
+/// }
+/// ```
 #[derive(serde::Deserialize)]
 pub struct UntypedMarkdownContent {
     #[serde(skip)]
@@ -183,6 +432,31 @@ impl InternalMarkdownContent for UntypedMarkdownContent {
     }
 }
 
+/// Glob for Markdown files and return a vector of [`ContentEntry`]s.
+///
+/// Typically used by [`content_sources!`](crate::content_sources) to define a Markdown content source in [`coronate()`](crate::coronate).
+///
+/// ## Example
+/// ```rust
+/// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
+/// use maudit::content::{markdown_entry, glob_markdown};
+///
+/// #[markdown_entry]
+/// pub struct ArticleContent {
+///   pub title: String,
+///   pub description: String,
+/// }
+///
+/// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
+///   coronate(
+///     routes![],
+///     content_sources![
+///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
+///     ],
+///     BuildOptions::default(),
+///   )
+/// }
+/// ```
 pub fn glob_markdown<T>(pattern: &str) -> Vec<ContentEntry<T>>
 where
     T: DeserializeOwned + MarkdownContent + InternalMarkdownContent,
@@ -276,6 +550,14 @@ where
     entries
 }
 
+/// Render Markdown content to HTML.
+///
+/// ## Example
+/// ```rust
+/// use maudit::content::render_markdown;
+/// let markdown = r#"# Hello, world!"#;
+/// let html = render_markdown(markdown);
+/// ```
 pub fn render_markdown(content: &str) -> String {
     let mut html_output = String::new();
     let mut options = Options::empty();

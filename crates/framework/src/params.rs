@@ -1,8 +1,24 @@
+//! This module provides a trait for parsing path parameters.
 // Adapted from https://github.com/rwf2/Rocket/blob/28891e8072136f4641a33fb8c3f2aafce9d88d5b/core/lib/src/request/from_param.rs
 // See https://github.com/rwf2/Rocket/blob/28891e8072136f4641a33fb8c3f2aafce9d88d5b/LICENSE-MIT for license information
-
 use std::str::FromStr;
 
+/// Convert a path parameter string into a type.
+///
+/// ## Example
+/// ```rust
+/// use maudit::params::FromParam;
+///
+/// struct UserId(String);
+///
+/// impl FromParam for UserId {
+///   type Error = std::io::Empty;
+///
+///   fn from_param(param: &str) -> Result<Self, Self::Error> {
+///     Ok(UserId(param.to_string()))
+///   }
+/// }
+/// ```
 pub trait FromParam: Sized {
     /// The associated error to be returned if parsing/validation fails.
     type Error: std::fmt::Debug;

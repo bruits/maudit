@@ -2,6 +2,7 @@ use std::{process::Termination, time::SystemTime};
 
 use rustc_hash::FxHashMap;
 
+/// Metadata returned by [`coronate()`](crate::coronate) for a single page after a successful build.
 #[derive(Debug)]
 pub struct PageOutput {
     pub route: String,
@@ -9,12 +10,16 @@ pub struct PageOutput {
     pub params: Option<FxHashMap<String, String>>,
 }
 
+/// Metadata returned by [`coronate()`](crate::coronate) for a single static asset after a successful build.
+///
+/// A static asset is a file that is copied to the output directory without any processing.
 #[derive(Debug)]
 pub struct StaticAssetOutput {
     pub file_path: String,
     pub original_path: String,
 }
 
+/// Metadata returned by [`coronate()`](crate::coronate) after a successful build.
 #[derive(Debug)]
 pub struct BuildOutput {
     pub start_time: SystemTime,
