@@ -17,7 +17,7 @@ use watchexec::{
 
 use crate::logging::format_elapsed_time;
 
-pub async fn coordinate_dev_env(cwd: &str) -> io::Result<()> {
+pub async fn start_dev_env(cwd: &str) -> io::Result<()> {
     info!(name: "dev", "Preparing dev environment…");
     let (sender_websocket, _) = broadcast::channel::<WebSocketMessage>(100);
 
