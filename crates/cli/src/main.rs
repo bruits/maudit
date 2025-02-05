@@ -5,18 +5,10 @@ mod preview;
 mod logging;
 
 use clap::{Parser, Subcommand};
-use colored::Colorize;
 use dev::coordinate_dev_env;
 use logging::init_logging;
 use preview::start_preview_web_server;
-use std::fmt::{self};
 use std::path::{Path, PathBuf};
-use tracing::{Event, Subscriber};
-use tracing_subscriber::fmt::format;
-use tracing_subscriber::fmt::{format::FormatFields, FmtContext};
-use tracing_subscriber::registry::LookupSpan;
-use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{fmt::FormatEvent, layer::SubscriberExt};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

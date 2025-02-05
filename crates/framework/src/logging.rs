@@ -42,10 +42,7 @@ pub fn init_logging() {
                 buf,
                 "{} {} {}",
                 chrono::Local::now().format("%H:%M:%S").to_string().dimmed(),
-                format!("[{}]", record.target())
-                    .to_string()
-                    .to_ascii_lowercase()
-                    .bright_yellow(),
+                record.target().to_ascii_lowercase().bold().bright_yellow(),
                 record.args()
             )
         })
