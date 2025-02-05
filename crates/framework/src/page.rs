@@ -1,8 +1,29 @@
+//! Core traits and structs to define the pages of your website.
+//!
+//! Every page must implement the [`Page`] trait, and optionally the [`DynamicRoute`] trait. Then, pages can be passed to [`coronate()`](crate::coronate), through the [`routes!`](crate::routes) macro, to be built.
 use crate::assets::PageAssets;
 use crate::content::Content;
 use rustc_hash::FxHashMap;
 use std::path::PathBuf;
 
+/// Represents the result of a page render, can be either text or raw bytes.
+///
+/// Typically used through the [`Into<RenderResult>`](std::convert::Into) and [`From<RenderResult>`](std::convert::From) implementations for common types.
+/// End users should rarely need to interact with this enum directly.
+///
+/// ## Example
+/// ```rust
+/// use maudit::page::prelude::*;
+///
+/// #[route("/")]
+/// pub struct Index;
+///
+/// impl Page for Index {
+///   fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+///    "<h1>Hello, world!</h1>".into()
+///   }
+/// }
+/// ```
 pub enum RenderResult {
     Text(String),
     Raw(Vec<u8>),
@@ -38,6 +59,39 @@ impl From<&[u8]> for RenderResult {
     }
 }
 
+/// Allows to access various data and assets in a [`Page`] implementation.
+///
+/// ## Example
+/// ```rust
+/// use maudit::page::prelude::*;
+/// use maud::html;
+/// # use maudit::content::markdown_entry;
+/// #
+/// # #[markdown_entry]
+/// # pub struct ArticleContent {
+/// #    pub title: String,
+/// #    pub description: String,
+/// # }
+///
+/// #[route("/")]
+/// pub struct Index;
+///
+/// impl Page for Index {
+///   fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+///     let logo = ctx.assets.add_image("logo.png");
+///     let last_entries = &ctx.content.get_source::<ArticleContent>("articles").entries;
+///     html! {
+///       main {
+///         (logo)
+///         ul {
+///           @for entry in last_entries {
+///             li { (entry.data.title) }
+///           }
+///         }
+///       }
+///     }.into()
+///   }
+/// }
 pub struct RouteContext<'a> {
     pub raw_params: &'a RouteParams,
     pub content: &'a Content<'a>,
@@ -54,10 +108,67 @@ impl RouteContext<'_> {
     }
 }
 
+/// Allows to access the content source in a [`DynamicRoute`] implementation.
+///
+/// ## Example
+/// ```rust
+/// use maudit::page::prelude::*;
+/// # use maudit::content::markdown_entry;
+/// #
+/// # #[markdown_entry]
+/// # pub struct ArticleContent {
+/// #    pub title: String,
+/// #    pub description: String,
+/// # }
+///
+/// #[route("/articles/[article]")]
+/// pub struct Article;
+///
+/// #[derive(Params)]
+/// pub struct ArticleParams {
+///     pub article: String,
+/// }
+///
+/// impl DynamicRoute<ArticleParams> for Article {
+///     fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<ArticleParams> {
+///         let articles = ctx.content.get_source::<ArticleContent>("articles");
+///
+///         articles.into_params(|entry| ArticleParams {
+///             article: entry.id.clone(),
+///         })
+///     }
+/// }
+///
+/// impl Page for Article {
+///    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+///      let params = ctx.params::<ArticleParams>();
+///      let articles = ctx.content.get_source::<ArticleContent>("articles");
+///      let article = articles.get_entry(&params.article);
+///      article.render().into()
+///   }
+/// }
+/// ```
 pub struct DynamicRouteContext<'a> {
     pub content: &'a mut Content<'a>,
 }
 
+/// Must be implemented for every page of your website.
+///
+/// The page struct implementing this trait can be passed to [`coronate()`](crate::coronate), through the [`routes!`](crate::routes) macro, to be built.
+///
+/// ## Example
+/// ```rust
+/// use maudit::page::prelude::*;
+///
+/// #[route("/")]
+/// pub struct Index;
+///
+/// impl Page for Index {
+///    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+///       "<h1>Hello, world!</h1>".into()
+///   }
+/// }
+/// ```
 pub trait Page<T = RenderResult>
 where
     T: Into<RenderResult>,
@@ -65,6 +176,9 @@ where
     fn render(&self, ctx: &mut RouteContext) -> T;
 }
 
+/// Raw representation of a route's parameters.
+///
+/// Can be accessed through [`RouteContext`]'s `raw_params`.
 #[derive(Clone, Default, Debug)]
 pub struct RouteParams(pub FxHashMap<String, String>);
 
@@ -97,6 +211,36 @@ where
     }
 }
 
+/// Must be implemented for every dynamic route of your website.
+///
+/// Dynamic route allows creating many pages that share the same structure and logic, but with different content. Typically used for a [`ContentSource`](crate::content::ContentSource).
+///
+/// ## Example
+/// ```rust
+/// use maudit::page::prelude::*;
+///
+/// #[route("/tags/[id]")]
+/// pub struct Tags;
+///
+/// #[derive(Params)]
+/// struct Params {
+///   id: String,
+/// }
+///
+/// impl DynamicRoute for Tags {
+///    fn routes(&self, context: &mut DynamicRouteContext) -> Vec<RouteParams> {
+///      let tags = vec!["rust", "web", "programming"].iter().map(|tag| Params { id: tag.to_string() }).collect();
+///      RouteParams::from_vec(tags)
+///    }
+/// }
+///
+/// impl Page for Tags {
+///   fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+///     let tag = ctx.params::<Params>().id;
+///     format!("<h1>Tag: {}</h1>", tag).into()
+///   }
+/// }
+/// ```
 pub trait DynamicRoute<P = RouteParams>
 where
     P: Into<RouteParams>,
@@ -106,11 +250,17 @@ where
     fn routes(&self, context: &mut DynamicRouteContext) -> Vec<P>;
 }
 
+#[doc(hidden)]
+/// Used internally by Maudit and should not be implemented by the user.
+/// We expose it because [`maudit_macros::route`] implements it for the user behind the scenes.
 pub enum RouteType {
     Static,
     Dynamic,
 }
 
+#[doc(hidden)]
+/// Used internally by Maudit and should not be implemented by the user.
+/// We expose it because the derive macro implements it for the user behind the scenes.
 pub trait InternalPage {
     fn route_type(&self) -> RouteType;
     fn route_raw(&self) -> String;
@@ -122,16 +272,28 @@ pub trait InternalPage {
     fn url_untyped(&self, params: &RouteParams) -> String;
 }
 
+#[doc(hidden)]
+/// Used internally by Maudit and should not be implemented by the user.
+/// We expose it because [`maudit_macros::route`] implements it for the user behind the scenes.
 pub trait FullPage: InternalPage + Sync {
     fn render_internal(&self, ctx: &mut RouteContext) -> RenderResult;
     fn routes_internal(&self, context: &mut DynamicRouteContext) -> Vec<RouteParams>;
 }
 
 pub mod prelude {
+    //! Re-exports of the most commonly used types and traits for defining pages.
+    //!
+    //! This module is meant to be glob imported in your page files.
+    //!
+    //! ## Example
+    //! ```rust
+    //! use maudit::page::prelude::*;
+    //! ```
     pub use super::{
-        DynamicRoute, DynamicRouteContext, FullPage, InternalPage, Page, RenderResult,
-        RouteContext, RouteParams,
+        DynamicRoute, DynamicRouteContext, Page, RenderResult, RouteContext, RouteParams,
     };
+    #[doc(hidden)]
+    pub use super::{FullPage, InternalPage};
     pub use crate::assets::Asset;
     pub use crate::content::MarkdownContent;
     pub use maudit_macros::{route, Params};

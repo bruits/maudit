@@ -1,6 +1,6 @@
 [package]
 name = "maudit"
-description = "Framework for generating static websites."
+description = "Library for generating static websites."
 version = "0.2.0"
 license = "MIT"
 edition = "2021"
@@ -8,6 +8,10 @@ edition = "2021"
 [features]
 default = ["maud"]
 maud = ["dep:maud"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 # Optional

@@ -29,6 +29,7 @@ impl Render for Image {
     }
 }
 
+/// Can be used to create a generator tag in the output HTML. See [`GENERATOR`](crate::GENERATOR).
 pub fn generator() -> Markup {
     html! {
         meta name="generator" content=(GENERATOR);
