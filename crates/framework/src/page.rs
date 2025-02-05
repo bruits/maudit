@@ -59,7 +59,7 @@ impl From<&[u8]> for RenderResult {
     }
 }
 
-/// Allows to access various data and assets from the current route.
+/// Allows to access various data and assets in a [`Page`] implementation.
 ///
 /// ## Example
 /// ```rust
@@ -108,7 +108,7 @@ impl RouteContext<'_> {
     }
 }
 
-/// Allows to access the content source from a dynamic route.
+/// Allows to access the content source in a [`DynamicRoute`] implementation.
 ///
 /// ## Example
 /// ```rust
@@ -251,7 +251,7 @@ where
 }
 
 #[doc(hidden)]
-/// Used internally by the framework and should not be implemented by the user.
+/// Used internally by Maudit and should not be implemented by the user.
 /// We expose it because [`maudit_macros::route`] implements it for the user behind the scenes.
 pub enum RouteType {
     Static,
@@ -259,7 +259,7 @@ pub enum RouteType {
 }
 
 #[doc(hidden)]
-/// Used internally by the framework and should not be implemented by the user.
+/// Used internally by Maudit and should not be implemented by the user.
 /// We expose it because the derive macro implements it for the user behind the scenes.
 pub trait InternalPage {
     fn route_type(&self) -> RouteType;
@@ -273,7 +273,7 @@ pub trait InternalPage {
 }
 
 #[doc(hidden)]
-/// Used internally by the framework and should not be implemented by the user.
+/// Used internally by Maudit and should not be implemented by the user.
 /// We expose it because [`maudit_macros::route`] implements it for the user behind the scenes.
 pub trait FullPage: InternalPage + Sync {
     fn render_internal(&self, ctx: &mut RouteContext) -> RenderResult;

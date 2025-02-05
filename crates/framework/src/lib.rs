@@ -2,7 +2,7 @@
 #![doc = include_str!("../../../README.md")]
 //!
 //! <div class="warning">
-//! You are currently reading Maudit API reference, which is complete but quite technical. For a more gentle introduction, please refer to our <a href="https://maudit.dev/docs">documentation</a>.
+//! You are currently reading Maudit API reference. For a more gentle introduction, please refer to our <a href="https://maudit.dev/docs">documentation</a>.
 //! </div>
 
 // Modules the end-user will interact directly or indirectly with
@@ -25,7 +25,7 @@ mod templating;
 #[cfg(feature = "maud")]
 #[cfg_attr(docsrs, doc(cfg(feature = "maud")))]
 pub mod maud {
-    //! Allows to use Maud, a macro for writing HTML templates in Rust.
+    //! Allows to use [Maud](https://maud.lambda.xyz), a macro for writing HTML templates in Rust.
     //!
     //! Maudit supports Maud by default, but you can use your own templating engine.
     //!

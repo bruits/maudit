@@ -232,7 +232,7 @@ pub type Untyped = FxHashMap<String, String>;
 
 /// Represents a collection of content sources.
 ///
-/// Typically used as return value of [`content_sources!`](crate::content_sources).
+/// Mostly seen as the return type of [`content_sources!`](crate::content_sources).
 ///
 /// ## Example
 /// ```rust
@@ -305,7 +305,7 @@ impl<T> ContentSource<T> {
 }
 
 #[doc(hidden)]
-/// Used internally by the framework and should not be implemented by the user.
+/// Used internally by Maudit and should not be implemented by the user.
 /// We expose it because it's implemented for [`ContentSource`], which is public.
 pub trait ContentSourceInternal: Send + Sync {
     fn init(&mut self);
@@ -325,7 +325,7 @@ impl<T: 'static + Sync + Send> ContentSourceInternal for ContentSource<T> {
     }
 }
 
-/// Represents a Markdown title.
+/// Represents a Markdown heading.
 ///
 /// Can be used to generate a table of contents.
 ///
@@ -382,14 +382,14 @@ pub struct MarkdownHeading {
 }
 
 #[doc(hidden)]
-/// Used internally by the framework and should not be implemented by the user.
+/// Used internally by Maudit and should not be implemented by the user.
 /// We expose it because [`maudit_macros::markdown_entry`] implements it for the user behind the scenes.
 pub trait MarkdownContent {
     fn get_headings(&self) -> &Vec<MarkdownHeading>;
 }
 
 #[doc(hidden)]
-/// Used internally by the framework and should not be implemented by the user.
+/// Used internally by Maudit and should not be implemented by the user.
 /// We expose it because [`maudit_macros::markdown_entry`] implements it for the user behind the scenes.
 pub trait InternalMarkdownContent {
     fn set_headings(&mut self, headings: Vec<MarkdownHeading>);

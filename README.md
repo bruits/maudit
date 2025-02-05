@@ -2,7 +2,7 @@
 
 > A dire coronation, a situation where nobility, power, or status becomes inextricably tied to disastrous circumstances.
 
-A framework for generating static websites with Rust.
+A library for generating static websites with Rust.
 
 ## Quick links
 

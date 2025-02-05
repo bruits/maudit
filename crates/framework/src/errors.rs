@@ -1,4 +1,4 @@
-//! Error types for the framework.
+//! Error types for Maudit.
 use std::fmt::{self, Debug, Formatter};
 use thiserror::Error;
 
