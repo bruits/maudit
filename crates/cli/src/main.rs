@@ -5,6 +5,7 @@ mod preview;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use dev::coordinate_dev_env;
+use logging::init_logging;
 use preview::start_preview_web_server;
 use std::fmt::{self};
 use std::path::{Path, PathBuf};
@@ -33,72 +34,10 @@ enum Commands {
     Preview,
 }
 
-struct MyFormatter;
-
-impl<S, N> FormatEvent<S, N> for MyFormatter
-where
-    S: Subscriber + for<'a> LookupSpan<'a>,
-    N: for<'a> FormatFields<'a> + 'static,
-{
-    fn format_event(
-        &self,
-        ctx: &FmtContext<'_, S, N>,
-        mut writer: format::Writer<'_>,
-        event: &Event<'_>,
-    ) -> fmt::Result {
-        if std::env::args().any(|arg| arg == "--quiet") {
-            return Ok(());
-        }
-
-        if event.metadata().name() == "SKIP_FORMAT" {
-            ctx.field_format().format_fields(writer.by_ref(), event)?;
-            return writeln!(writer);
-        }
-
-        // TODO: Add different formatting for warn, error, etc.
-
-        let timestamp = chrono::Local::now().format("%H:%M:%S").to_string().dimmed();
-        let event_name = event.metadata().name();
-
-        write!(
-            writer,
-            "{}{} ",
-            timestamp,
-            if event_name.is_empty() {
-                String::new()
-            } else {
-                format!(
-                    " {}",
-                    event_name.to_ascii_lowercase().bold().bright_yellow()
-                )
-            }
-        )?;
-
-        // Write fields on the event
-        ctx.field_format().format_fields(writer.by_ref(), event)?;
-
-        if *event.metadata().level() == tracing::Level::ERROR {
-            // Write the writer to a string so we can colorize it
-        }
-
-        writeln!(writer)
-    }
-}
-
 #[tokio::main]
 async fn main() {
+    init_logging();
     let cli = Cli::parse();
-
-    let tracing_formatter = tracing_subscriber::fmt::layer().event_format(MyFormatter);
-
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                format!("{}=info,tower_http=info", env!("CARGO_CRATE_NAME")).into()
-            }),
-        )
-        .with(tracing_formatter)
-        .init();
 
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd

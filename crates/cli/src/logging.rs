@@ -1,5 +1,15 @@
 use colored::{ColoredString, Colorize};
-use std::time::{Duration, SystemTimeError};
+use std::{
+    fmt,
+    time::{Duration, SystemTimeError},
+};
+use tracing::{Event, Subscriber};
+use tracing_subscriber::{
+    fmt::{format, FmtContext, FormatEvent, FormatFields},
+    layer::SubscriberExt,
+    registry::LookupSpan,
+    util::SubscriberInitExt,
+};
 
 pub struct FormatElapsedTimeOptions<'a> {
     pub(crate) sec_yellow_threshold: u64,
@@ -61,4 +71,69 @@ pub fn format_elapsed_time(
     } else {
         Ok(result)
     }
+}
+
+pub struct EventLoggerFormatter;
+
+impl<S, N> FormatEvent<S, N> for EventLoggerFormatter
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+    N: for<'a> FormatFields<'a> + 'static,
+{
+    fn format_event(
+        &self,
+        ctx: &FmtContext<'_, S, N>,
+        mut writer: format::Writer<'_>,
+        event: &Event<'_>,
+    ) -> fmt::Result {
+        if std::env::args().any(|arg| arg == "--quiet") {
+            return Ok(());
+        }
+
+        if event.metadata().name() == "SKIP_FORMAT" {
+            ctx.field_format().format_fields(writer.by_ref(), event)?;
+            return writeln!(writer);
+        }
+
+        // TODO: Add different formatting for warn, error, etc.
+
+        let timestamp = chrono::Local::now().format("%H:%M:%S").to_string().dimmed();
+        let event_name = event.metadata().name();
+
+        write!(
+            writer,
+            "{}{} ",
+            timestamp,
+            if event_name.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    " {}",
+                    event_name.to_ascii_lowercase().bold().bright_yellow()
+                )
+            }
+        )?;
+
+        // Write fields on the event
+        ctx.field_format().format_fields(writer.by_ref(), event)?;
+
+        if *event.metadata().level() == tracing::Level::ERROR {
+            // Write the writer to a string so we can colorize it
+        }
+
+        writeln!(writer)
+    }
+}
+
+pub fn init_logging() {
+    let tracing_formatter = tracing_subscriber::fmt::layer().event_format(EventLoggerFormatter);
+
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                format!("{}=info,tower_http=info", env!("CARGO_CRATE_NAME")).into()
+            }),
+        )
+        .with(tracing_formatter)
+        .init();
 }
