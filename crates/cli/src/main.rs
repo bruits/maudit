@@ -1,20 +1,14 @@
+mod build;
 mod dev;
-mod logging;
 mod preview;
 
+mod logging;
+
 use clap::{Parser, Subcommand};
-use colored::Colorize;
 use dev::coordinate_dev_env;
 use logging::init_logging;
 use preview::start_preview_web_server;
-use std::fmt::{self};
 use std::path::{Path, PathBuf};
-use tracing::{Event, Subscriber};
-use tracing_subscriber::fmt::format;
-use tracing_subscriber::fmt::{format::FormatFields, FmtContext};
-use tracing_subscriber::registry::LookupSpan;
-use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{fmt::FormatEvent, layer::SubscriberExt};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -43,7 +37,7 @@ async fn main() {
     // matches just as you would the top level cmd
     match &cli.command {
         Commands::Build {} => {
-            todo!();
+            build::start_build();
         }
         Commands::Preview {} => {
             // TODO: Dist path is hardcoded for now. Ideally, Maudit should output some kind of metadata file that can be read by the CLI.
