@@ -1,6 +1,8 @@
+mod build;
 mod dev;
-mod logging;
 mod preview;
+
+mod logging;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
@@ -43,7 +45,7 @@ async fn main() {
     // matches just as you would the top level cmd
     match &cli.command {
         Commands::Build {} => {
-            todo!();
+            build::start_build();
         }
         Commands::Preview {} => {
             // TODO: Dist path is hardcoded for now. Ideally, Maudit should output some kind of metadata file that can be read by the CLI.
