@@ -1,4 +1,6 @@
-pub const ADJECTIVE: [&str; 35] = [
+use rand::seq::IndexedRandom;
+
+const ADJECTIVE: [&str; 35] = [
     "valiant",
     "gallant",
     "stalwart",
@@ -35,7 +37,7 @@ pub const ADJECTIVE: [&str; 35] = [
     "ardent",
     "jovial",
 ];
-pub const TITLE: [&str; 35] = [
+const TITLE: [&str; 35] = [
     "duke",
     "duchess",
     "marquess",
@@ -72,7 +74,7 @@ pub const TITLE: [&str; 35] = [
     "troll",
     "wyvern",
 ];
-pub const NAME: [&str; 37] = [
+const NAME: [&str; 37] = [
     "amelia",
     "eleanor",
     "gwendolyn",
@@ -111,3 +113,13 @@ pub const NAME: [&str; 37] = [
     "giles",
     "aurelien",
 ];
+
+pub fn generate_directory_name() -> String {
+    let mut rng = rand::rng();
+
+    let title = TITLE.choose(&mut rng).unwrap();
+    let name = NAME.choose(&mut rng).unwrap();
+    let adjective = ADJECTIVE.choose(&mut rng).unwrap();
+
+    format!("{}-{}-{}", adjective, title, name)
+}

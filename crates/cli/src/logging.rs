@@ -1,6 +1,7 @@
 use colored::{ColoredString, Colorize};
 use std::{
     fmt,
+    io::Write,
     time::{Duration, SystemTimeError},
 };
 use tracing::{Event, Subscriber};

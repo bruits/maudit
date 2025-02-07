@@ -1705,7 +1705,31 @@ dependencies = [
  "log",
  "lol_html",
  "maud",
- "maudit-macros",
+ "maudit-macros 0.2.0",
+ "maudit_rolldown",
+ "pulldown-cmark",
+ "rustc-hash",
+ "serde",
+ "serde_yml",
+ "thiserror 2.0.11",
+ "tokio",
+]
+
+[[package]]
+name = "maudit"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a43d06acbe0b824e6c4d0f66a326db3b632650fd8b5478eea258fd559774935"
+dependencies = [
+ "chrono",
+ "colored",
+ "dyn-eq",
+ "env_logger",
+ "glob",
+ "log",
+ "lol_html",
+ "maud",
+ "maudit-macros 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "maudit_rolldown",
  "pulldown-cmark",
  "rustc-hash",
@@ -1720,7 +1744,7 @@ name = "maudit-benchmark"
 version = "0.1.0"
 dependencies = [
  "maud",
- "maudit",
+ "maudit 0.2.0",
 ]
 
 [[package]]
@@ -1739,6 +1763,7 @@ dependencies = [
  "log",
  "rand 0.9.0",
  "serde",
+ "spinach",
  "tokio",
  "tokio-tungstenite",
  "tower-http",
@@ -1753,7 +1778,7 @@ name = "maudit-example-basics"
 version = "0.1.0"
 dependencies = [
  "maud",
- "maudit",
+ "maudit 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1761,7 +1786,7 @@ name = "maudit-example-blog"
 version = "0.1.0"
 dependencies = [
  "maud",
- "maudit",
+ "maudit 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
 ]
 
@@ -1770,7 +1795,7 @@ name = "maudit-example-kitchen-sink"
 version = "0.1.0"
 dependencies = [
  "maud",
- "maudit",
+ "maudit 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1782,11 +1807,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "maudit-macros"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e4e05a151d3aa99a22dce5679fd04b25a21cf0440938b431a199d36f3e705bc"
+dependencies = [
+ "quote",
+ "syn 2.0.98",
+]
+
+[[package]]
 name = "maudit-website"
 version = "0.1.0"
 dependencies = [
  "maud",
- "maudit",
+ "maudit 0.2.0",
  "serde",
 ]
 
@@ -3611,6 +3646,12 @@ dependencies = [
  "libc",
  "windows-sys 0.52.0",
 ]
+
+[[package]]
+name = "spinach"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bb127edbed8b91951c7a35237d0c4ba5f01338bb11ecc2a75e5a93365b24302"
 
 [[package]]
 name = "stable_deref_trait"
