@@ -37,6 +37,8 @@ use crate::page::RouteParams;
 ///
 /// ## Expand
 /// ```rust
+/// use maudit::content::{markdown_entry};
+///
 /// #[markdown_entry]
 /// pub struct Article {
 ///   pub title: String,

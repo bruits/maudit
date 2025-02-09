@@ -21,6 +21,11 @@ pub struct PageAssets {
 }
 
 impl PageAssets {
+    /// Add an image to the page assets, causing the file to be created in the output directory.
+    ///
+    /// The image will not automatically be included in the page, but can be included through the `.url()` method on the returned `Image` object.
+    ///
+    /// Subsequent calls to this function using the same path will return the same image, as such, the value returned by this function can be cloned and used multiple times without issue.
     pub fn add_image<P>(&mut self, image_path: P) -> Image
     where
         P: Into<PathBuf>,
@@ -35,6 +40,12 @@ impl PageAssets {
         *image
     }
 
+    /// Add a script to the page assets, causing the file to be created in the output directory.
+    ///
+    /// The script will not automatically be included in the page, but can be included through the `.url()` method on the returned `Script` object.
+    /// Alternatively, a script can be included automatically using the [PageAssets::include_script] method instead.
+    ///
+    /// Subsequent calls to this function using the same path will return the same script, as such, the value returned by this function can be cloned and used multiple times without issue.
     pub fn add_script<P>(&mut self, script_path: P) -> Script
     where
         P: Into<PathBuf>,
@@ -49,6 +60,11 @@ impl PageAssets {
         script
     }
 
+    /// Include a script in the page
+    ///
+    /// This method will automatically include the script in the `<head>` of the page, if it exists. If the page does not include a `<head>` tag, at this time this method will silently fail.
+    ///
+    /// Subsequent calls to this function using the same path will result in the same script being included multiple times.
     pub fn include_script<P>(&mut self, script_path: P)
     where
         P: Into<PathBuf>,
@@ -62,6 +78,11 @@ impl PageAssets {
         self.included_scripts.push(script);
     }
 
+    /// Add a style to the page assets, causing the file to be created in the output directory.
+    ///
+    /// The style will not automatically be included in the page, but can be included through the `.url()` method on the returned `Style` object.
+    ///
+    /// Subsequent calls to this function using the same path will return the same style, as such, the value returned by this function can be cloned and used multiple times without issue.
     pub fn add_style<P>(&mut self, style_path: P, tailwind: bool) -> Style
     where
         P: Into<PathBuf>,
@@ -78,6 +99,11 @@ impl PageAssets {
         style
     }
 
+    /// Include a style in the page
+    ///
+    /// This method will automatically include the style in the `<head>` of the page, if it exists. If the page does not include a `<head>` tag, at this time this method will silently fail.
+    ///
+    /// Subsequent calls to this function using the same path will result in the same style being included multiple times.
     pub fn include_style<P>(&mut self, style_path: P, tailwind: bool)
     where
         P: Into<PathBuf>,
@@ -239,5 +265,93 @@ impl Asset for Style {
     fn hash(&self) -> [u8; 8] {
         // TODO: Proper hash
         [0; 8]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add_style() {
+        let mut page_assets = PageAssets {
+            assets_dir: PathBuf::from("assets"),
+            tailwind_path: PathBuf::from("tailwind"),
+            ..Default::default()
+        };
+
+        page_assets.add_style("style.css", false);
+
+        assert!(page_assets.styles.len() == 1);
+    }
+
+    #[test]
+    fn test_include_style() {
+        let mut page_assets = PageAssets {
+            assets_dir: PathBuf::from("assets"),
+            tailwind_path: PathBuf::from("tailwind"),
+            ..Default::default()
+        };
+
+        page_assets.include_style("style.css", false);
+
+        assert!(page_assets.styles.len() == 1);
+        assert!(page_assets.included_styles.len() == 1);
+    }
+
+    #[test]
+    fn test_add_script() {
+        let mut page_assets = PageAssets {
+            assets_dir: PathBuf::from("assets"),
+            tailwind_path: PathBuf::from("tailwind"),
+            ..Default::default()
+        };
+
+        page_assets.add_script("script.js");
+        assert!(page_assets.scripts.len() == 1);
+    }
+
+    #[test]
+    fn test_include_script() {
+        let mut page_assets = PageAssets {
+            assets_dir: PathBuf::from("assets"),
+            tailwind_path: PathBuf::from("tailwind"),
+            ..Default::default()
+        };
+
+        page_assets.include_script("script.js");
+
+        assert!(page_assets.scripts.len() == 1);
+        assert!(page_assets.included_scripts.len() == 1);
+    }
+
+    #[test]
+    fn test_add_image() {
+        let mut page_assets = PageAssets {
+            assets_dir: PathBuf::from("assets"),
+            tailwind_path: PathBuf::from("tailwind"),
+            ..Default::default()
+        };
+
+        page_assets.add_image("image.png");
+        assert!(page_assets.assets.len() == 1);
+    }
+
+    #[test]
+    fn test_asset_has_leading_slash() {
+        let mut page_assets = PageAssets {
+            assets_dir: PathBuf::from("assets"),
+            tailwind_path: PathBuf::from("tailwind"),
+            ..Default::default()
+        };
+
+        let image = page_assets.add_image("image.png");
+        assert_eq!(image.url().unwrap().chars().next(), Some('/'));
+
+        let script = page_assets.add_script("script.js");
+        assert_eq!(script.url().unwrap().chars().next(), Some('/'));
+
+        let style = page_assets.add_style("style.css", false);
+        assert_eq!(style.url().unwrap().chars().next(), Some('/'));
     }
 }

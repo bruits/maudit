@@ -65,8 +65,27 @@ use page::FullPage;
 /// ```rust
 /// use maudit::{
 ///   content_sources, coronate, routes, BuildOptions, BuildOutput,
-/// }
-/// use crate::pages::{Index, Article};
+/// };
+///
+/// # mod pages {
+/// #   use maudit::page::prelude::*;
+/// #
+/// #   #[route("/")]
+/// #   pub struct Index;
+/// #   impl Page<String> for Index {
+/// #      fn render(&self, _ctx: &mut RouteContext) -> String {
+/// #          "Hello, world!".to_string()
+/// #      }
+/// #   }
+/// #   #[route("/article")]
+/// #   pub struct Article;
+/// #
+/// #   impl Page<String> for Article {
+/// #      fn render(&self, _ctx: &mut RouteContext) -> String {
+/// #          "Hello, world!".to_string()
+/// #      }
+/// #   }
+/// # }
 ///
 /// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
 ///     coronate(
@@ -75,18 +94,6 @@ use page::FullPage;
 ///         BuildOptions::default(),
 ///     )
 /// }
-/// ```
-///
-/// ## Expand
-/// ```rust
-/// routes![pages::Index, pages::Article]
-/// ```
-/// expands to
-/// ```rust
-/// &[
-///   &pages::Index,
-///   &pages::Article,
-/// ]
 /// ```
 ///
 macro_rules! routes {
@@ -101,8 +108,14 @@ macro_rules! routes {
 /// ```rust
 /// use maudit::{
 ///  content_sources, coronate, routes, BuildOptions, BuildOutput,
+/// };
+/// use maudit::content::{glob_markdown, markdown_entry};
+///
+/// #[markdown_entry]
+/// pub struct ArticleContent {
+///   pub title: String,
+///   pub description: String,
 /// }
-/// use crate::content::ArticleContent;
 ///
 /// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
 ///    coronate(
@@ -117,15 +130,30 @@ macro_rules! routes {
 ///
 /// ## Expand
 /// ```rust
+/// # use maudit::{content_sources};
+/// # use maudit::content::{glob_markdown, markdown_entry};
+/// # #[markdown_entry]
+/// # pub struct ArticleContent {
+/// #   pub title: String,
+/// #   pub description: String,
+/// # }
+///
 /// content_sources![
 ///    "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
-/// ]
+/// ];
 /// ```
 /// expands to
 /// ```rust
+/// # use maudit::content::{glob_markdown, markdown_entry};
+/// # #[markdown_entry]
+/// # pub struct ArticleContent {
+/// #   pub title: String,
+/// #   pub description: String,
+/// # }
+///
 /// maudit::content::ContentSources(vec![
 ///    Box::new(maudit::content::ContentSource::new("articles", Box::new(move || glob_markdown::<ArticleContent>("content/articles/*.md"))))
-/// ])
+/// ]);
 #[macro_export]
 macro_rules! content_sources {
     ($($name:expr => $entries:expr),*) => {
@@ -144,7 +172,7 @@ pub const GENERATOR: &str = concat!("Maudit v", env!("CARGO_PKG_VERSION"));
 /// ```rust
 /// use maudit::{
 ///  content_sources, coronate, routes, BuildOptions, BuildOutput,
-/// }
+/// };
 ///
 /// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
 ///   coronate(
