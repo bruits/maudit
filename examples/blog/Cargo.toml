@@ -5,6 +5,6 @@ edition = "2021"
 publish = false
 
 [dependencies]
-maudit = { workspace = true }
-maud = { workspace = true }
-serde = { workspace = true }
+maudit = "0.2.0"
+maud = "0.26.0"
+serde = { version = "1.0.216" }

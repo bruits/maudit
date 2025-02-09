@@ -1,11 +1,12 @@
 mod build;
 mod dev;
+mod init;
 mod preview;
 
 mod logging;
 
 use clap::{Parser, Subcommand};
-use dev::coordinate_dev_env;
+use dev::start_dev_env;
 use logging::init_logging;
 use preview::start_preview_web_server;
 use std::path::{Path, PathBuf};
@@ -20,6 +21,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Initialize a new Maudit project
+    Init {
+        #[clap(long, short)]
+        dry_run: bool,
+    },
     /// Build the project
     Build,
     /// Run the project in development mode
@@ -36,6 +42,9 @@ async fn main() {
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
+        Commands::Init { dry_run } => {
+            init::start_new_project(dry_run);
+        }
         Commands::Build {} => {
             build::start_build();
         }
@@ -53,7 +62,7 @@ async fn main() {
             let _ = start_preview_web_server(PathBuf::from("dist")).await;
         }
         Commands::Dev {} => {
-            let _ = coordinate_dev_env(".").await;
+            let _ = start_dev_env(".").await;
         }
     }
 }
