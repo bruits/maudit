@@ -30,8 +30,20 @@ impl PageAssets {
     where
         P: Into<PathBuf>,
     {
+        let image_path = image_path.into();
+
+        // Check if the image already exists in the assets, if so, return it
+        if let Some(image) = self.assets.iter().find_map(|asset| {
+            asset
+                .as_any()
+                .downcast_ref::<Image>()
+                .filter(|image| image.path == image_path)
+        }) {
+            return image.clone();
+        }
+
         let image = Box::new(Image {
-            path: image_path.into(),
+            path: image_path,
             assets_dir: self.assets_dir.clone(),
         });
 
