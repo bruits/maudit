@@ -1,15 +1,27 @@
-use maudit::{content::ContentSources, coronate, page::FullPage};
+use archetypes::blog::BlogEntryContent;
+use maudit::{
+    content::{glob_markdown, ContentSource, ContentSources},
+    coronate,
+    page::FullPage,
+};
 
 pub use maudit::{content_sources, routes, BuildOptions, BuildOutput};
 
-// Import archetype types and constructor.
 mod archetypes;
-use archetypes::{build_archetype, Archetype};
 
 // Expose the layout module.
 pub mod layouts {
     mod layout;
     pub use layout::layout;
+}
+
+/// Oubli provides Archetypes to help you quickly scaffold common types of content, like blogs or documentation.
+#[derive(Debug, Clone)]
+pub enum Archetype {
+    /// Represents a markdown blog archetype.
+    Blog,
+    /// Represents a markdown documentation archetype.
+    MarkdownDoc,
 }
 
 /// 🪶 Oubli entrypoint. Starts the build process and generates the output files.
@@ -49,9 +61,25 @@ pub fn forget(
     // Process each archetype by generating its routes and content sources,
     // then combine them with the user-custom ones.
     for (name, arch, glob) in archetypes {
-        let (arch_routes, arch_source) = build_archetype(name, *arch, glob);
-        combined_routes.extend(arch_routes);
-        content_sources.0.push(Box::new(arch_source));
+        match arch {
+            Archetype::Blog => {
+                let content_source = ContentSource::new(
+                    *name,
+                    Box::new({
+                        let glob = glob.to_string();
+                        move || glob_markdown::<BlogEntryContent>(&glob)
+                    }),
+                );
+
+                content_sources.0.push(Box::new(content_source));
+
+                combined_routes.push(&archetypes::blog::BlogIndex);
+                combined_routes.push(&archetypes::blog::BlogEntry);
+            }
+            Archetype::MarkdownDoc => {
+                todo!();
+            }
+        }
     }
 
     coronate(&combined_routes, content_sources, options)

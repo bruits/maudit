@@ -5,8 +5,6 @@ use maud::{html, Markup};
 use maudit::content::markdown_entry;
 use maudit::page::prelude::*;
 
-use super::NimporteQuoi;
-
 #[route("/blog")]
 pub struct BlogIndex;
 
@@ -38,8 +36,6 @@ pub struct BlogEntryContent {
     pub title: String,
     pub description: String,
 }
-
-impl NimporteQuoi for BlogEntryContent {}
 
 #[route("/blog/[entry]")]
 pub struct BlogEntry;

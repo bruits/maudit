@@ -10,5 +10,5 @@ mod pages {
 pub use pages::Index;
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
-    forget(routes![Index], vec![].into(), BuildOptions::default())
+    forget(&[], routes![Index], vec![].into(), BuildOptions::default())
 }
