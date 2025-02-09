@@ -409,7 +409,7 @@ pub trait InternalMarkdownContent {
 ///   )
 /// }
 /// ```
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Debug, Clone)]
 pub struct UntypedMarkdownContent {
     #[serde(skip)]
     __internal_headings: Vec<MarkdownHeading>,
