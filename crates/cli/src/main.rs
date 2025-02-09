@@ -22,7 +22,10 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Initialize a new Maudit project
-    Init,
+    Init {
+        #[clap(long, short)]
+        dry_run: bool,
+    },
     /// Build the project
     Build,
     /// Run the project in development mode
@@ -39,8 +42,8 @@ async fn main() {
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
-        Commands::Init => {
-            init::start_new_project();
+        Commands::Init { dry_run } => {
+            init::start_new_project(dry_run);
         }
         Commands::Build {} => {
             build::start_build();

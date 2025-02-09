@@ -1,4 +1,4 @@
-use rand::seq::IndexedRandom;
+use rand::{rngs::ThreadRng, seq::IndexedRandom};
 
 const ADJECTIVE: [&str; 35] = [
     "valiant",
@@ -114,12 +114,10 @@ const NAME: [&str; 37] = [
     "aurelien",
 ];
 
-pub fn generate_directory_name() -> String {
-    let mut rng = rand::rng();
-
-    let title = TITLE.choose(&mut rng).unwrap();
-    let name = NAME.choose(&mut rng).unwrap();
-    let adjective = ADJECTIVE.choose(&mut rng).unwrap();
+pub fn generate_directory_name(rng: &mut ThreadRng) -> String {
+    let title = TITLE.choose(rng).unwrap();
+    let name = NAME.choose(rng).unwrap();
+    let adjective = ADJECTIVE.choose(rng).unwrap();
 
     format!("{}-{}-{}", adjective, title, name)
 }
