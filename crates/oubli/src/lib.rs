@@ -1,19 +1,22 @@
-use archetypes::blog::BlogEntryContent;
 use maudit::{
-    content::{glob_markdown, ContentSource, ContentSources},
+    content::{ContentSource, ContentSourceInternal, ContentSources},
     coronate,
     page::FullPage,
 };
 
+// Re-expose Maudit's public API.
 pub use maudit::{content_sources, routes, BuildOptions, BuildOutput};
-
-mod archetypes;
-
+// Expose the archetypes module.
+pub mod archetypes {
+    pub mod blog;
+}
 // Expose the layout module.
 pub mod layouts {
     mod layout;
     pub use layout::layout;
 }
+// Expose public components.
+pub mod components {}
 
 /// Oubli provides Archetypes to help you quickly scaffold common types of content, like blogs or documentation.
 #[derive(Debug, Clone)]
@@ -22,6 +25,62 @@ pub enum Archetype {
     Blog,
     /// Represents a markdown documentation archetype.
     MarkdownDoc,
+}
+
+#[macro_export]
+macro_rules! archetypes {
+    ($(($name:ident, $arch:expr, $glob:expr)),* $(,)?) => {{
+        let mut vec = Vec::new();
+        $(
+            let tuple = match $arch {
+            oubli::Archetype::Blog => {
+                // Generate the content source
+                let content_source = maudit::content::ContentSource::new(
+                    stringify!($name),
+                    Box::new({
+                        let glob = $glob.to_string();
+                        move || maudit::content::glob_markdown::<oubli::archetypes::blog::BlogEntryContent>(&glob)
+                    }),
+                );
+                // Generate the pages
+                mod $name {
+                    use maudit::page::prelude::*;
+                    use oubli::archetypes::blog::*;
+
+                    #[route("blog")]
+                    pub struct Index;
+
+                    impl Page for Index {
+                        fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+                            blog_index_content::<Entry>(ctx, stringify!($name)).into()
+                        }
+                    }
+
+                    #[route("blog/[entry]")]
+                    pub struct Entry;
+
+                    impl DynamicRoute<BlogEntryParams> for Entry {
+                        fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<BlogEntryParams> {
+                            blog_entry_routes(ctx, stringify!($name))
+                        }
+                    }
+
+                    impl Page for Entry {
+                        fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+                            blog_entry_render(ctx, stringify!($name)).into()
+                        }
+                    }
+                }
+                (stringify!($name), &[&$name::Index as &dyn maudit::page::FullPage, &$name::Entry as &dyn maudit::page::FullPage], Box::new(content_source) as Box<dyn maudit::content::ContentSourceInternal>)
+            }
+            Archetype::MarkdownDoc => {
+                todo!();
+            }
+        };
+        vec.push(tuple);
+    )*
+    vec
+}};
 }
 
 /// 🪶 Oubli entrypoint. Starts the build process and generates the output files.
@@ -49,38 +108,25 @@ pub enum Archetype {
 ///   )
 /// }
 /// ```
+#[allow(clippy::type_complexity)]
 pub fn forget(
-    archetypes: &[(&str, Archetype, &str)],
+    archetypes: Vec<(&str, &[&dyn FullPage], Box<dyn ContentSourceInternal>)>,
     routes: &[&dyn FullPage],
     mut content_sources: ContentSources,
     options: BuildOptions,
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
-    // Start with user-custom routes.
-    let mut combined_routes: Vec<&dyn FullPage> = routes.to_vec();
+    // Let's merge the routes and content sources from the archetypes to the user-provided ones.
+    let mut combined_routes = routes.to_vec();
+    let mut content_sources_archetypes = vec![];
 
-    // Process each archetype by generating its routes and content sources,
-    // then combine them with the user-custom ones.
-    for (name, arch, glob) in archetypes {
-        match arch {
-            Archetype::Blog => {
-                let content_source = ContentSource::new(
-                    *name,
-                    Box::new({
-                        let glob = glob.to_string();
-                        move || glob_markdown::<BlogEntryContent>(&glob)
-                    }),
-                );
-
-                content_sources.0.push(Box::new(content_source));
-
-                combined_routes.push(&archetypes::blog::BlogIndex);
-                combined_routes.push(&archetypes::blog::BlogEntry);
-            }
-            Archetype::MarkdownDoc => {
-                todo!();
-            }
-        }
+    for (_name, pages, content_source) in archetypes {
+        content_sources_archetypes.push(content_source);
+        combined_routes.extend(pages.iter());
     }
 
+    let mut combined_content_sources = ContentSources::new(content_sources_archetypes);
+    combined_content_sources.0.append(&mut content_sources.0);
+
+    // At the end of the day, we are just a Maudit wrapper.
     coronate(&combined_routes, content_sources, options)
 }
