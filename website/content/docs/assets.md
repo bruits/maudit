@@ -55,7 +55,7 @@ use maud::{html, Markup};
 #[route("/blog")]
 pub struct Blog;
 
-impl Page<Markup> for Blog {
+impl Page<RouteParams, Markup> for Blog {
   fn render(&self, ctx: &mut RouteContext) -> Markup {
     let style = ctx.assets.add_style("style.css", false);
 
@@ -111,7 +111,7 @@ use maud::{html, Markup};
 #[route("/blog")]
 pub struct Blog;
 
-impl Page<Markup> for Blog {
+impl Page<RouteParams, Markup> for Blog {
   fn render(&self, ctx: &mut RouteContext) -> Markup {
     let script = ctx.assets.add_script("script.js");
 
