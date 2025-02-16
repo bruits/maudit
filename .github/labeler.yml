@@ -1,0 +1,35 @@
+# See https://github.com/actions/labeler
+website:
+  - changed-files:
+      - any-glob-to-any-file: website/**
+
+examples:
+  - changed-files:
+      - any-glob-to-any-file: examples/**
+
+"crt:maudit":
+  - changed-files:
+      - any-glob-to-any-file: crates/framework/**
+
+"crt:cli":
+  - changed-files:
+      - any-glob-to-any-file: crates/cli/**
+
+"crt:macros":
+  - changed-files:
+      - any-glob-to-any-file: crates/macros/**
+
+"crt:benchmarks":
+  - changed-files:
+      - any-glob-to-any-file: crates/md-benchmarks/**
+
+devops:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/**
+          - .vscode/**
+          - .zed/**
+          - .editorconfig
+          - .gitignore
+          - justfile
+          - pnpm-workspace.yaml
