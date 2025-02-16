@@ -14,12 +14,10 @@ impl Page for Index {
         let features = [
             ("Performant", "Generate a site with thousands of pages in seconds using minimal resources."),
             ("Content", "Bring your content to life with built-in support for Markdown, syntax highlighting, and more."),
-            ("SEO-optimized", "Ensure your site is SEO-friendly by default with built-in support for sitemaps."),
+            ("Style your way", "Supports popular CSS frameworks and preprocessors, like Tailwind CSS and Sass."),
             ("Powerful routing", "Flexible and powerful routing system allows you to create complex sites with ease."),
             ("Ecosystem-ready", "Maudit utilize <a class=\"underline\" href=\"https://rolldown.rs\">Rolldown</a>, a fast bundler for JavaScript and CSS, enabling the usage of TypeScript and the npm ecosystem."),
             ("Bring your templates", "Use your preferred templating engine to craft your website's pages. If it renders to HTML, Maudit supports it."),
-            ("Type-safe routing", "Ensure your links stay correct, even through site refactors."),
-            ("Style your way", "Supports popular CSS frameworks and preprocessors, like Tailwind CSS and Sass.")
         ].map(|(name, description)| {(name, PreEscaped(description))});
 
         layout(
@@ -55,7 +53,6 @@ impl Page for Index {
                                     p { (description) }
                                 }
                             }
-                            span.opacity-75.italic.block.mt-1 { "And a lot more!" }
                         }
                     }
                 }

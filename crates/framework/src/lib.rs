@@ -12,6 +12,8 @@ pub mod errors;
 pub mod page;
 pub mod params;
 
+mod route;
+
 // Exports for end-users
 pub use build::metadata::{BuildOutput, PageOutput, StaticAssetOutput};
 pub use build::options::BuildOptions;
@@ -97,7 +99,7 @@ use page::FullPage;
 /// ```
 ///
 macro_rules! routes {
-    [$($route:path),*] => {
+    [$($route:expr),*] => {
         &[$(&$route),*]
     };
 }

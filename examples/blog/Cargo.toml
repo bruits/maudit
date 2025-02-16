@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
+[package.metadata.maudit]
+intended_version = "0.2.0"
+
 [dependencies]
-maudit = "0.2.0"
+maudit = { workspace = true }
 maud = "0.26.0"
 serde = { version = "1.0.216" }
