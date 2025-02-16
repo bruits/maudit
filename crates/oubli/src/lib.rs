@@ -1,5 +1,5 @@
 use maudit::{
-    content::{ContentSource, ContentSourceInternal, ContentSources},
+    content::{ContentSourceInternal, ContentSources},
     coronate,
     page::FullPage,
 };
@@ -18,7 +18,7 @@ pub mod layouts {
 // Expose public components.
 pub mod components {}
 
-/// Oubli provides Archetypes to help you quickly scaffold common types of content, like blogs or documentation.
+/// Help you quickly scaffold common types of content, like blogs or documentation.
 #[derive(Debug, Clone)]
 pub enum Archetype {
     /// Represents a markdown blog archetype.
@@ -33,54 +33,110 @@ macro_rules! archetypes {
         let mut vec = Vec::new();
         $(
             let tuple = match $arch {
-            oubli::Archetype::Blog => {
-                // Generate the content source
-                let content_source = maudit::content::ContentSource::new(
-                    stringify!($name),
-                    Box::new({
-                        let glob = $glob.to_string();
-                        move || maudit::content::glob_markdown::<oubli::archetypes::blog::BlogEntryContent>(&glob)
-                    }),
-                );
-                // Generate the pages
-                mod $name {
-                    use maudit::page::prelude::*;
-                    use oubli::archetypes::blog::*;
+                oubli::Archetype::Blog => {
+                    // Generate the content source
+                    let content_source = maudit::content::ContentSource::new(
+                        stringify!($name),
+                        Box::new({
+                            let glob = $glob.to_string();
+                            move || maudit::content::glob_markdown::<oubli::archetypes::blog::BlogEntryContent>(&glob)
+                        }),
+                    );
+                    // Generate the pages
+                    mod $name {
+                        use maudit::page::prelude::*;
+                        use oubli::archetypes::blog::*;
 
-                    #[route("blog")]
-                    pub struct Index;
+                        pub struct Index;
+                        impl maudit::page::InternalPage for Index {
+                            fn route_type(&self) -> maudit::page::RouteType {
+                                maudit::page::RouteType::Static
+                            }
+                            fn route_raw(&self) -> String {
+                                stringify!($name).to_string()
+                            }
+                            fn route(&self, _params: &maudit::page::RouteParams) -> String {
+                                format!("{}", stringify!($name))
+                            }
+                            fn file_path(&self, _params: &maudit::page::RouteParams) -> std::path::PathBuf {
+                                std::path::PathBuf::from(format!("{}/index.html", stringify!($name)))
+                            }
+                            fn url_unsafe<P: Into<maudit::page::RouteParams>>(_params: P) -> String {
+                                format!("{}", stringify!($name))
+                            }
+                            fn url_untyped(&self, _params: &maudit::page::RouteParams) -> String {
+                                format!("{}", stringify!($name))
+                            }
+                        }
+                        impl maudit::page::FullPage for Index {
+                            fn render_internal(&self, ctx: &mut maudit::page::RouteContext) -> maudit::page::RenderResult {
+                                self.render(ctx).into()
+                            }
+                            fn routes_internal(&self, _ctx: &mut maudit::page::DynamicRouteContext) -> Vec<maudit::page::RouteParams> {
+                                Vec::new()
+                            }
+                        }
+                        impl Page for Index {
+                            fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+                                blog_index_content::<Entry>(ctx, stringify!($name)).into()
+                            }
+                        }
 
-                    impl Page for Index {
-                        fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-                            blog_index_content::<Entry>(ctx, stringify!($name)).into()
+                        pub struct Entry;
+                        impl maudit::page::InternalPage for Entry {
+                            fn route_type(&self) -> maudit::page::RouteType {
+                                maudit::page::RouteType::Dynamic
+                            }
+                            fn route_raw(&self) -> String {
+                                format!("{}/[entry]", stringify!($name))
+                            }
+                            fn route(&self, params: &maudit::page::RouteParams) -> String {
+                                let entry = params.0.get("entry").expect("required param 'entry'").to_string();
+                                format!("{}/{}", stringify!($name), entry)
+                            }
+                            fn file_path(&self, params: &maudit::page::RouteParams) -> std::path::PathBuf {
+                                let entry = params.0.get("entry").expect("required param 'entry'").to_string();
+                                std::path::PathBuf::from(format!("{}/{}/index.html", stringify!($name), entry))
+                            }
+                            fn url_unsafe<P: Into<maudit::page::RouteParams>>(params: P) -> String {
+                                let params = params.into();
+                                let entry = params.0.get("entry").expect("required param 'entry'").to_string();
+                                format!("{}/{}", stringify!($name), entry)
+                            }
+                            fn url_untyped(&self, params: &maudit::page::RouteParams) -> String {
+                                let entry = params.0.get("entry").expect("required param 'entry'").to_string();
+                                format!("{}/{}", stringify!($name), entry)
+                            }
+                        }
+                        impl maudit::page::FullPage for Entry {
+                            fn render_internal(&self, ctx: &mut maudit::page::RouteContext) -> maudit::page::RenderResult {
+                                self.render(ctx).into()
+                            }
+                            fn routes_internal(&self, ctx: &mut maudit::page::DynamicRouteContext) -> Vec<maudit::page::RouteParams> {
+                                self.routes(ctx).iter().map(Into::into).collect()
+                            }
+                        }
+                        impl DynamicRoute<BlogEntryParams> for Entry {
+                            fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<BlogEntryParams> {
+                                blog_entry_routes(ctx, stringify!($name))
+                            }
+                        }
+                        impl Page for Entry {
+                            fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+                                blog_entry_render(ctx, stringify!($name)).into()
+                            }
                         }
                     }
-
-                    #[route("blog/[entry]")]
-                    pub struct Entry;
-
-                    impl DynamicRoute<BlogEntryParams> for Entry {
-                        fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<BlogEntryParams> {
-                            blog_entry_routes(ctx, stringify!($name))
-                        }
-                    }
-
-                    impl Page for Entry {
-                        fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-                            blog_entry_render(ctx, stringify!($name)).into()
-                        }
-                    }
+                    (stringify!($name), vec![&$name::Index as &dyn maudit::page::FullPage, &$name::Entry as &dyn maudit::page::FullPage], Box::new(content_source) as Box<dyn maudit::content::ContentSourceInternal>)
+                },
+                oubli::Archetype::MarkdownDoc => {
+                    todo!();
                 }
-                (stringify!($name), &[&$name::Index as &dyn maudit::page::FullPage, &$name::Entry as &dyn maudit::page::FullPage], Box::new(content_source) as Box<dyn maudit::content::ContentSourceInternal>)
-            }
-            Archetype::MarkdownDoc => {
-                todo!();
-            }
-        };
-        vec.push(tuple);
-    )*
-    vec
-}};
+            };
+            vec.push(tuple);
+        )*
+        vec
+    }};
 }
 
 /// 🪶 Oubli entrypoint. Starts the build process and generates the output files.
@@ -110,7 +166,7 @@ macro_rules! archetypes {
 /// ```
 #[allow(clippy::type_complexity)]
 pub fn forget(
-    archetypes: Vec<(&str, &[&dyn FullPage], Box<dyn ContentSourceInternal>)>,
+    archetypes: Vec<(&str, Vec<&dyn FullPage>, Box<dyn ContentSourceInternal>)>,
     routes: &[&dyn FullPage],
     mut content_sources: ContentSources,
     options: BuildOptions,
@@ -128,5 +184,5 @@ pub fn forget(
     combined_content_sources.0.append(&mut content_sources.0);
 
     // At the end of the day, we are just a Maudit wrapper.
-    coronate(&combined_routes, content_sources, options)
+    coronate(&combined_routes, combined_content_sources, options)
 }

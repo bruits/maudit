@@ -62,6 +62,7 @@ pub async fn build(
     info!(target: "build", "Output directory: {}", dist_dir.to_string_lossy());
 
     let content_sources_start = SystemTime::now();
+    println!("{}", content_sources.0.len());
     print_title("initializing content sources");
     content_sources.0.iter_mut().for_each(|source| {
         let source_start = SystemTime::now();
