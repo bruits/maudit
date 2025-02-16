@@ -6,7 +6,7 @@ section: "core-concepts"
 
 ### Static Routes
 
-Maudit uses a simple and intuitive API to define routes and pages. To create a new page, define a struct that implements the `Page` trait, adding the `#[route]` attribute to the struct definition with the path of the route as an argument. The path can be any Rust expression, as long as it returns a String.
+To create a new page in your Maudit project, create a struct and implement the `Page` trait for it, adding the `#[route]` attribute to the struct definition with the path of the route as an argument. The path can be any Rust expression, as long as it returns a `String`.
 
 ```rust
 use maudit::page::prelude::*;
@@ -27,10 +27,10 @@ Finally, make sure to [register the page](#registering-routes) in the `coronate`
 
 ### Ergonomic returns
 
-The `Page` trait accepts a generic parameter for the return type of the `render` method. This type must implement `Into<RenderResult>`, enabling more ergonomic returns in certain cases.
+The `Page` trait accepts a generic parameter in second position for the return type of the `render` method. This type must implement `Into<RenderResult>`, enabling more ergonomic returns in certain cases.
 
 ```rust
-impl Page<String> for HelloWorld {
+impl Page<RouteParams, String> for HelloWorld {
   fn render(&self, ctx: &mut RouteContext) -> String {
     "Hello, world!".to_string()
   }
