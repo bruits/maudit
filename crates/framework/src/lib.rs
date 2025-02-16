@@ -39,7 +39,7 @@ pub mod maud {
     //! #[route("/")]
     //! pub struct Index;
     //!
-    //! impl Page<Markup> for Index {
+    //! impl Page<RouteParams, Markup> for Index {
     //!   fn render(&self, ctx: &mut RouteContext) -> Markup {
     //!     html! {
     //!       h1 { "Hello, world!" }
@@ -74,7 +74,7 @@ use page::FullPage;
 /// #
 /// #   #[route("/")]
 /// #   pub struct Index;
-/// #   impl Page<String> for Index {
+/// #   impl Page<RouteParams, String> for Index {
 /// #      fn render(&self, _ctx: &mut RouteContext) -> String {
 /// #          "Hello, world!".to_string()
 /// #      }
@@ -82,7 +82,7 @@ use page::FullPage;
 /// #   #[route("/article")]
 /// #   pub struct Article;
 /// #
-/// #   impl Page<String> for Article {
+/// #   impl Page<RouteParams, String> for Article {
 /// #      fn render(&self, _ctx: &mut RouteContext) -> String {
 /// #          "Hello, world!".to_string()
 /// #      }

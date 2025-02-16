@@ -344,12 +344,7 @@ impl<T: 'static + Sync + Send> ContentSourceInternal for ContentSource<T> {
 /// #[route("/articles/my-article")]
 /// pub struct Article;
 ///
-/// #[derive(Params)]
-/// pub struct ArticleParams {
-///     pub article: String,
-/// }
-///
-/// impl Page<Markup> for Article {
+/// impl Page<RouteParams, Markup> for Article {
 ///   fn render(&self, ctx: &mut RouteContext) -> Markup {
 ///     let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///     let article = articles.get_entry("my-article");

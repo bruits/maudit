@@ -129,7 +129,7 @@ impl RouteContext<'_> {
 ///     pub article: String,
 /// }
 ///
-/// impl Page for Article {
+/// impl Page<ArticleParams> for Article {
 ///    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
 ///      let params = ctx.params::<ArticleParams>();
 ///      let articles = ctx.content.get_source::<ArticleContent>("articles");
