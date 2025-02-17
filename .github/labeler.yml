@@ -32,4 +32,3 @@ devops:
           - .editorconfig
           - .gitignore
           - justfile
-          - pnpm-workspace.yaml
