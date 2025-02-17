@@ -12,7 +12,7 @@ body:
     id: bug-version
     attributes:
       label: Version
-      description: Provide Maudit and core dependencies versions.
+      description: Provide the version of Maudit and any relevant dependencies you are using
   - type: textarea
     id: bug-description
     attributes:
