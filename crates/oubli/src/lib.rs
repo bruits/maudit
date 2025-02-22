@@ -87,21 +87,18 @@ macro_rules! archetypes {
 ///
 /// ## Example
 /// ```rust
-/// use oubli::{Archetype, build_archetype, content_sources, forget, routes, BuildOptions, BuildOutput};
+/// use oubli::{Archetype, archetypes, content_sources, forget, routes, BuildOptions, BuildOutput};
 ///
 /// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
-///   // Define archetypes and their glob patterns
-///   let archetypes = &[
-///     ("news", Archetype::Blog, "content/blog/**/*.md"),
-///     ("docs", Archetype::MarkdownDoc, "content/docs/**/*.md"),
-///     ("reference"), Archetype::OpenAPI, "content/reference/**/*.yaml"),
-///   ];
-///   forget(
-///     archetypes,
-///     routes![],
-///     content_sources![],
-///     BuildOptions::default(),
-///   )
+///     forget(
+///         // Define archetypes and their glob patterns using the provided macro.
+///         archetypes![
+///             (news, Archetype::Blog, "content/blog/**/*.md")
+///         ],
+///         routes![],
+///         content_sources![],
+///         BuildOptions::default(),
+///     )
 /// }
 /// ```
 #[allow(clippy::type_complexity)]
