@@ -1,6 +1,4 @@
-use std::vec;
-
-use maudit::content::{ContentEntry, ContentSource};
+use maudit::content::ContentEntry;
 use maudit::page::prelude::*;
 
 use maudit::{
@@ -43,7 +41,7 @@ pub enum Archetype {
 ///     forget(
 ///         // Define archetypes and their glob patterns using the provided macro.
 ///         archetypes![
-///             (news, Archetype::Blog, "content/blog/**/*.md")
+///             ("News", news, Archetype::Blog, "content/blog/**/*.md")
 ///         ],
 ///         routes![],
 ///         content_sources![],
@@ -52,45 +50,45 @@ pub enum Archetype {
 /// }
 /// ```
 macro_rules! archetypes {
-    ($(($name:ident, $arch:expr, $glob:expr)),* $(,)?) => {{
+    ($(($name:literal, $ident:ident, $arch:expr, $glob:expr)),* $(,)?) => {{
         let mut vec = Vec::new();
         $(
             let tuple = match $arch {
                 oubli::Archetype::Blog => {
                     // Generate the content source
                     let content_source = maudit::content::ContentSource::new(
-                        stringify!($name),
+                        stringify!($ident),
                         Box::new({
                             let glob = $glob.to_string();
                             move || maudit::content::glob_markdown::<oubli::archetypes::blog::BlogEntryContent>(&glob)
                         }),
                     );
                     // Generate the pages
-                    mod $name {
+                    mod $ident {
                         use maudit::page::prelude::*;
                         use oubli::archetypes::blog::*;
 
-                        #[route(stringify!($name))]
+                        #[route(stringify!($ident))]
                         pub struct Index;
                         impl Page for Index {
                             fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-                                blog_index_content::<Entry>(Entry, ctx, stringify!($name)).into()
+                                blog_index_content::<Entry>(Entry, ctx, $name, stringify!($ident)).into()
                             }
                         }
 
-                        #[route(concat!(stringify!($name), "/[entry]"))]
+                        #[route(concat!(stringify!($ident), "/[entry]"))]
                         pub struct Entry;
                         impl Page<BlogEntryParams> for Entry {
                             fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-                                blog_entry_render(ctx, stringify!($name)).into()
+                                blog_entry_render(ctx, $name, stringify!($ident)).into()
                             }
 
                             fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<BlogEntryParams> {
-                                blog_entry_routes(ctx, stringify!($name))
+                                blog_entry_routes(ctx, stringify!($ident))
                             }
                         }
                     }
-                    (stringify!($name), vec![&$name::Index as &dyn maudit::page::FullPage, &$name::Entry as &dyn maudit::page::FullPage], Box::new(content_source) as Box<dyn maudit::content::ContentSourceInternal>)
+                    ($name, stringify!($ident), vec![&$ident::Index as &dyn maudit::page::FullPage, &$ident::Entry as &dyn maudit::page::FullPage], Box::new(content_source) as Box<dyn maudit::content::ContentSourceInternal>)
                 },
                 oubli::Archetype::MarkdownDoc => {
                     todo!();
@@ -116,7 +114,7 @@ macro_rules! archetypes {
 ///     forget(
 ///         // Define archetypes and their glob patterns using the provided macro.
 ///         archetypes![
-///             (news, Archetype::Blog, "content/blog/**/*.md")
+///             ("News", news, Archetype::Blog, "content/blog/**/*.md")
 ///         ],
 ///         routes![],
 ///         content_sources![],
@@ -126,7 +124,12 @@ macro_rules! archetypes {
 /// ```
 #[allow(clippy::type_complexity)]
 pub fn forget(
-    archetypes: Vec<(&str, Vec<&dyn FullPage>, Box<dyn ContentSourceInternal>)>,
+    archetypes: Vec<(
+        &str,
+        &str,
+        Vec<&dyn FullPage>,
+        Box<dyn ContentSourceInternal>,
+    )>,
     routes: &[&dyn FullPage],
     mut content_sources: ContentSources,
     options: BuildOptions,
@@ -135,9 +138,11 @@ pub fn forget(
     let mut combined_routes = routes.to_vec();
     let mut content_sources_archetypes = Vec::new();
 
-    content_sources.0.push(generate_data_store(&archetypes));
+    content_sources
+        .0
+        .push(generate_archetype_store(&archetypes));
 
-    for (_name, pages, content_source) in archetypes {
+    for (_name, _ident, pages, content_source) in archetypes {
         content_sources_archetypes.push(content_source);
         combined_routes.extend(pages);
     }
@@ -149,24 +154,24 @@ pub fn forget(
 }
 
 /// # Generates a content source with every provided archetype.
-fn generate_data_store(
-    archetypes: &Vec<(&str, Vec<&dyn FullPage>, Box<dyn ContentSourceInternal>)>,
-) -> Box<dyn ContentSourceInternal> {
-    let names: Vec<String> = archetypes
+fn generate_archetype_store(archetypes: &Vec<ArchetypeTuple>) -> Box<dyn ContentSourceInternal> {
+    let names: Vec<(String, String)> = archetypes
         .iter()
-        .map(|(name, _, _)| name.to_string())
+        .map(|(name, ident, _, _)| (name.to_string(), ident.to_string()))
         .collect();
 
-    let data_source = maudit::content::ContentSource::new(
-        "data_store",
+    let archetype_store = maudit::content::ContentSource::new(
+        "archetype_store",
         Box::new(move || {
             let mut entries = Vec::new();
-            for name in names.iter() {
+            for (name, ident) in names.iter() {
                 entries.push(ContentEntry {
-                    id: name.to_string(),
+                    id: ident.to_string(),
                     render: None,
                     raw_content: None,
-                    data: DataStoreEntry {},
+                    data: ArchetypeStoreEntry {
+                        title: name.to_string(),
+                    },
                     file_path: None,
                 });
             }
@@ -174,8 +179,19 @@ fn generate_data_store(
         }),
     );
 
-    Box::new(data_source)
+    Box::new(archetype_store)
 }
 
+/// Represents each archetype provided by the user.
 #[derive(Params)]
-pub struct DataStoreEntry {}
+pub struct ArchetypeStoreEntry {
+    pub title: String,
+}
+
+/// # Internal representation of an archetype tuple. (macro expansion)
+type ArchetypeTuple<'a> = (
+    &'a str,
+    &'a str,
+    Vec<&'a dyn FullPage>,
+    Box<dyn ContentSourceInternal>,
+);

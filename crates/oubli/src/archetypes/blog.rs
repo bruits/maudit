@@ -9,8 +9,9 @@ pub fn blog_index_content<T: FullPage>(
     route: impl FullPage,
     ctx: &mut RouteContext,
     name: &str,
+    ident: &str,
 ) -> Markup {
-    let blog_entries = ctx.content.get_source::<BlogEntryContent>(name);
+    let blog_entries = ctx.content.get_source::<BlogEntryContent>(ident);
 
     let markup = html! {
         main {
@@ -24,7 +25,7 @@ pub fn blog_index_content<T: FullPage>(
     }
     .into_string();
 
-    layout(markup)
+    layout(name.to_string(), markup)
 }
 
 #[markdown_entry]
@@ -47,13 +48,13 @@ pub fn blog_entry_routes(ctx: &mut DynamicRouteContext, name: &str) -> Vec<BlogE
     })
 }
 
-pub fn blog_entry_render(ctx: &mut RouteContext, name: &str) -> Markup {
+pub fn blog_entry_render(ctx: &mut RouteContext, name: &str, ident: &str) -> Markup {
     let params = ctx.params::<BlogEntryParams>();
-    let blog_entries = ctx.content.get_source::<BlogEntryContent>(name);
+    let blog_entries = ctx.content.get_source::<BlogEntryContent>(ident);
     let blog_entry = blog_entries.get_entry(&params.entry);
 
     let headings = blog_entry.data.get_headings();
     println!("{:?}", headings);
 
-    layout(blog_entry.render())
+    layout(name.to_string(), blog_entry.render())
 }

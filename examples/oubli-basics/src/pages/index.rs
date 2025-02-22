@@ -9,15 +9,15 @@ impl Page for Index {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let logo = ctx.assets.add_image("images/logo.svg");
 
-        let data_store = ctx
+        let archetype_store = ctx
             .content
-            .get_source::<oubli::DataStoreEntry>("data_store");
+            .get_source::<oubli::ArchetypeStoreEntry>("archetype_store");
 
         layout(html! {
             (logo)
             h1 { "Hello World" }
-            @for entry in &data_store.entries {
-                a href=(entry.id) { (entry.id) }
+            @for archetype in &archetype_store.entries {
+                a href=(archetype.id) { (archetype.data.title) }
             }
         })
         .into()
