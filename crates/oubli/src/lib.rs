@@ -1,3 +1,6 @@
+use std::vec;
+
+use maudit::content::{ContentEntry, ContentSource};
 use maudit::page::prelude::*;
 
 use maudit::{
@@ -130,44 +133,48 @@ pub fn forget(
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
     // Let's merge the routes and content sources from the archetypes to the user-provided ones.
     let mut combined_routes = routes.to_vec();
-    let mut content_sources_archetypes = vec![];
-    let mut data_store = generate_data_store(archetypes);
-    let mut combined_content_sources = ContentSources::new(content_sources_archetypes);
+    let mut content_sources_archetypes = Vec::new();
+
+    content_sources.0.push(generate_data_store(&archetypes));
 
     for (_name, pages, content_source) in archetypes {
         content_sources_archetypes.push(content_source);
-        combined_routes.extend(pages.iter());
+        combined_routes.extend(pages);
     }
 
-    combined_content_sources.0.append(&mut content_sources.0);
-    combined_content_sources.0.append(&mut data_store);
+    content_sources.0.extend(content_sources_archetypes);
 
     // At the end of the day, we are just a Maudit wrapper.
-    coronate(&combined_routes, combined_content_sources, options)
+    coronate(&combined_routes, content_sources, options)
 }
 
 /// # Generates a content source with every provided archetype.
 fn generate_data_store(
-    archetypes: Vec<(&str, Vec<&dyn FullPage>, Box<dyn ContentSourceInternal>)>,
-) -> Vec<Box<dyn ContentSourceInternal>> {
+    archetypes: &Vec<(&str, Vec<&dyn FullPage>, Box<dyn ContentSourceInternal>)>,
+) -> Box<dyn ContentSourceInternal> {
+    let names: Vec<String> = archetypes
+        .iter()
+        .map(|(name, _, _)| name.to_string())
+        .collect();
+
     let data_source = maudit::content::ContentSource::new(
         "data_store",
-        Box::new({
+        Box::new(move || {
             let mut entries = Vec::new();
-            for (name, _pages, _content_source) in archetypes {
-                let entry = maudit::content::ContentEntry {
+            for name in names.iter() {
+                entries.push(ContentEntry {
                     id: name.to_string(),
                     render: None,
                     raw_content: None,
-                    data: maudit::content::Untyped::default(),
+                    data: DataStoreEntry {},
                     file_path: None,
-                };
-                entries.push(entry);
+                });
             }
             entries
         }),
     );
-    vec![Box::new(data_source) as Box<dyn maudit::content::ContentSourceInternal>]
+
+    Box::new(data_source)
 }
 
 #[derive(Params)]
