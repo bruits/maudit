@@ -1,7 +1,9 @@
+use maudit::page::prelude::*;
+
 use maudit::{
     content::{ContentSourceInternal, ContentSources},
     coronate,
-    page::FullPage,
+    page::{prelude::Params, FullPage},
 };
 
 // Re-expose Maudit's public API.
@@ -28,6 +30,24 @@ pub enum Archetype {
 }
 
 #[macro_export]
+/// Helps to define every archetype that should be build by [`forget()`].
+///
+/// ## Example
+/// ```rust
+/// use oubli::{Archetype, archetypes, content_sources, forget, routes, BuildOptions, BuildOutput};
+///
+/// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
+///     forget(
+///         // Define archetypes and their glob patterns using the provided macro.
+///         archetypes![
+///             (news, Archetype::Blog, "content/blog/**/*.md")
+///         ],
+///         routes![],
+///         content_sources![],
+///         BuildOptions::default(),
+///     )
+/// }
+/// ```
 macro_rules! archetypes {
     ($(($name:ident, $arch:expr, $glob:expr)),* $(,)?) => {{
         let mut vec = Vec::new();
@@ -111,15 +131,44 @@ pub fn forget(
     // Let's merge the routes and content sources from the archetypes to the user-provided ones.
     let mut combined_routes = routes.to_vec();
     let mut content_sources_archetypes = vec![];
+    let mut data_store = generate_data_store(archetypes);
+    let mut combined_content_sources = ContentSources::new(content_sources_archetypes);
 
     for (_name, pages, content_source) in archetypes {
         content_sources_archetypes.push(content_source);
         combined_routes.extend(pages.iter());
     }
 
-    let mut combined_content_sources = ContentSources::new(content_sources_archetypes);
     combined_content_sources.0.append(&mut content_sources.0);
+    combined_content_sources.0.append(&mut data_store);
 
     // At the end of the day, we are just a Maudit wrapper.
     coronate(&combined_routes, combined_content_sources, options)
 }
+
+/// # Generates a content source with every provided archetype.
+fn generate_data_store(
+    archetypes: Vec<(&str, Vec<&dyn FullPage>, Box<dyn ContentSourceInternal>)>,
+) -> Vec<Box<dyn ContentSourceInternal>> {
+    let data_source = maudit::content::ContentSource::new(
+        "data_store",
+        Box::new({
+            let mut entries = Vec::new();
+            for (name, _pages, _content_source) in archetypes {
+                let entry = maudit::content::ContentEntry {
+                    id: name.to_string(),
+                    render: None,
+                    raw_content: None,
+                    data: maudit::content::Untyped::default(),
+                    file_path: None,
+                };
+                entries.push(entry);
+            }
+            entries
+        }),
+    );
+    vec![Box::new(data_source) as Box<dyn maudit::content::ContentSourceInternal>]
+}
+
+#[derive(Params)]
+struct DataStoreEntry {}

@@ -215,7 +215,7 @@ impl Content<'_> {
 /// ```
 pub struct ContentEntry<T> {
     pub id: String,
-    render: OptionalContentRenderFn,
+    pub render: OptionalContentRenderFn,
     pub raw_content: Option<String>,
     pub data: T,
     pub file_path: Option<PathBuf>,
