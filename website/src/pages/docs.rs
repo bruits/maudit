@@ -44,7 +44,7 @@ struct DocsPageParams {
     slug: String,
 }
 
-impl DynamicRoute<DocsPageParams> for DocsPage {
+impl Page<DocsPageParams> for DocsPage {
     fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<DocsPageParams> {
         let content = ctx.content.get_source::<DocsContent>("docs");
 
@@ -52,9 +52,7 @@ impl DynamicRoute<DocsPageParams> for DocsPage {
             slug: entry.id.clone(),
         })
     }
-}
 
-impl Page for DocsPage {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let slug = ctx.params::<DocsPageParams>().slug.clone();
         let entry = ctx

@@ -1,6 +1,6 @@
 //! Core functions and structs to define the content sources of your website.
 //!
-//! Content sources represent the content of your website, such as articles, blog posts, etc. Then, content sources can be passed to [`coronate()`](crate::coronate), through the [`content_sources!`](crate::content_sources) macro, to be loaded. Typically used in [`DynamicRoute`](crate::page::DynamicRoute).
+//! Content sources represent the content of your website, such as articles, blog posts, etc. Then, content sources can be passed to [`coronate()`](crate::coronate), through the [`content_sources!`](crate::content_sources) macro, to be loaded.
 use std::{any::Any, path::PathBuf};
 
 use glob::glob as glob_fs;
@@ -115,22 +115,20 @@ pub use maudit_macros::markdown_entry;
 ///     pub article: String,
 /// }
 ///
-/// impl DynamicRoute<ArticleParams> for Article {
-///     fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<ArticleParams> {
-///         let articles = ctx.content.get_source::<ArticleContent>("articles");
-///
-///         articles.into_params(|entry| ArticleParams {
-///             article: entry.id.clone(),
-///         })
-///     }
-/// }
-///
-/// impl Page for Article {
+/// impl Page<ArticleParams> for Article {
 ///    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
 ///      let params = ctx.params::<ArticleParams>();
 ///      let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///      let article = articles.get_entry(&params.article);
 ///      article.render().into()
+///   }
+///
+///   fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<ArticleParams> {
+///     let articles = ctx.content.get_source::<ArticleContent>("articles");
+///
+///     articles.into_params(|entry| ArticleParams {
+///       article: entry.id.clone(),
+///     })
 ///   }
 /// }
 /// ```
@@ -346,12 +344,7 @@ impl<T: 'static + Sync + Send> ContentSourceInternal for ContentSource<T> {
 /// #[route("/articles/my-article")]
 /// pub struct Article;
 ///
-/// #[derive(Params)]
-/// pub struct ArticleParams {
-///     pub article: String,
-/// }
-///
-/// impl Page<Markup> for Article {
+/// impl Page<RouteParams, Markup> for Article {
 ///   fn render(&self, ctx: &mut RouteContext) -> Markup {
 ///     let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///     let article = articles.get_entry("my-article");

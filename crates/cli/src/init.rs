@@ -275,6 +275,13 @@ fn download_and_unpack_template(template: &str, project_path: &Path) -> Result<(
 
     cargo_toml["package"]["name"] = toml_edit::value(project_name);
 
+    let maudit_intended_version = &cargo_toml["package"]["metadata"]["maudit"]["intended_version"];
+
+    // If the template is using the workspace version, remove the `workspace = true` property
+    if let toml_edit::Item::Value(v) = maudit_intended_version {
+        cargo_toml["dependencies"]["maudit"] = toml_edit::value(v);
+    }
+
     std::fs::write(&cargo_toml_path, cargo_toml.to_string()).unwrap();
 
     Ok(())

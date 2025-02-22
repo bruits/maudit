@@ -6,7 +6,7 @@ section: "core-concepts"
 
 ### Static Routes
 
-Maudit uses a simple and intuitive API to define routes and pages. To create a new page, define a struct that implements the `Page` trait, adding the `#[route]` attribute to the struct definition with the path of the route as an argument.
+To create a new page in your Maudit project, create a struct and implement the `Page` trait for it, adding the `#[route]` attribute to the struct definition with the path of the route as an argument. The path can be any Rust expression, as long as it returns a `String`.
 
 ```rust
 use maudit::page::prelude::*;
@@ -27,10 +27,10 @@ Finally, make sure to [register the page](#registering-routes) in the `coronate`
 
 ### Ergonomic returns
 
-The `Page` trait accepts a generic parameter for the return type of the `render` method. This type must implement `Into<RenderResult>`, enabling more ergonomic returns in certain cases.
+The `Page` trait accepts a generic parameter in second position for the return type of the `render` method. This type must implement `Into<RenderResult>`, enabling more ergonomic returns in certain cases.
 
 ```rust
-impl Page<String> for HelloWorld {
+impl Page<RouteParams, String> for HelloWorld {
   fn render(&self, ctx: &mut RouteContext) -> String {
     "Hello, world!".to_string()
   }
@@ -63,7 +63,7 @@ impl Page for Post {
 }
 ```
 
-In addition to the `Page` trait, dynamic routes must implement the `DynamicRoute` trait for their struct. This trait requires a `routes` function that returns a list of all the possible values for each parameter in the route's path.
+In addition to the `render` method, dynamic routes must implement a `routes` method for Page. The `routes` method returns a list of all the possible values for each parameter in the route's path, so that Maudit can generate all the necessary pages.
 
 ```rust
 use maudit::{page::prelude::*, FxHashMap};
@@ -71,18 +71,16 @@ use maudit::{page::prelude::*, FxHashMap};
 #[route("/posts/[slug]")]
 pub struct Post;
 
-impl DynamicRoute for Post {
+impl Page for Post {
+  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+    RenderResult::Text(format!("Hello, {}!", ctx.params.get("slug").unwrap()))
+  }
+
   fn routes(&self, ctx: &DynamicRouteContext) -> Vec<RouteParams> {
     let mut routes = FxHashMap::default();
     routes.insert("slug".to_string(), "hello-world".to_string());
 
     vec![RouteParams(routes)]
-  }
-}
-
-impl Page for Post {
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
-    RenderResult::Text(format!("Hello, {}!", ctx.params.get("slug").unwrap()))
   }
 }
 ```
@@ -93,7 +91,7 @@ Like static routes, dynamic routes must be [registered](#registering-routes) in 
 
 #### Type-safe parameters
 
-Interacting with HashMaps in Rust can be a bit cumbersome, so Maudit provides the ability to use a struct to define your params and use it in the `DynamicRoute` trait.
+Interacting with HashMaps in Rust can be a bit cumbersome, so Maudit provides the ability to use a struct to define your params. This struct must derive the `Params` trait.
 
 ```rust
 #[derive(Params)]
@@ -101,16 +99,18 @@ pub struct Params {
   pub slug: String,
 }
 
-impl<Params> DynamicRoute for Post {
+impl Page<Params> for Post {
   fn routes(&self, ctx: &DynamicRouteContext) -> Vec<Params> {
     vec![Params {
       slug: "hello-world".to_string(),
     }]
   }
+
+  // ...
 }
 ```
 
-This struct can also be used when implementing the `Page` trait, making it possible to access the parameters in a type-safe way.
+This struct can also be used inside `render`, making it possible to access the parameters in a type-safe way.
 
 ```rust
 #[derive(Params)]
@@ -118,7 +118,9 @@ pub struct Params {
   pub slug: String,
 }
 
-impl Page for Post {
+impl Page<Params> for Post {
+  // ...
+
   fn render(&self, ctx: &mut RouteContext) -> RenderResult {
     let params = ctx.params::<Params>();
 
@@ -163,15 +165,13 @@ pub struct Params {
   pub slug: String,
 }
 
-impl DynamicRoute for PostJson {
+impl Page<Params> for PostJson {
   fn routes(&self, ctx: &DynamicRouteContext) -> Vec<RouteParams> {
     let routes = vec![Params { slug: "hello-world".to_string() }];
 
     RouteParams::from_vec(routes)
   }
-}
 
-impl Page for PostJson {
   fn render(&self, ctx: &mut RouteContext) -> RenderResult {
     let params = ctx.params::<Params>();
 

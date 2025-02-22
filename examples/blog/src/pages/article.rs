@@ -11,7 +11,7 @@ pub struct ArticleParams {
     pub article: String,
 }
 
-impl DynamicRoute<ArticleParams> for Article {
+impl Page<ArticleParams, Markup> for Article {
     fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<ArticleParams> {
         let articles = ctx.content.get_source::<ArticleContent>("articles");
 
@@ -19,9 +19,7 @@ impl DynamicRoute<ArticleParams> for Article {
             article: entry.id.clone(),
         })
     }
-}
 
-impl Page<Markup> for Article {
     fn render(&self, ctx: &mut RouteContext) -> Markup {
         let params = ctx.params::<ArticleParams>();
         let articles = ctx.content.get_source::<ArticleContent>("articles");

@@ -12,6 +12,10 @@ use crate::{
     errors::BuildError,
     logging::print_title,
     page::{DynamicRouteContext, FullPage, RenderResult, RouteContext, RouteParams, RouteType},
+    route::{
+        extract_params_from_raw_route, get_route_file_path, get_route_type_from_route_params,
+        get_route_url, ParameterDef,
+    },
     BuildOptions, BuildOutput,
 };
 use colored::{ColoredString, Colorize};
@@ -100,7 +104,9 @@ pub async fn build(
 
     let mut page_count = 0;
     for route in routes {
-        match route.route_type() {
+        let params_def = extract_params_from_raw_route(&route.route_raw());
+        let route_type = get_route_type_from_route_params(&params_def);
+        match route_type {
             RouteType::Static => {
                 let route_start = SystemTime::now();
                 let mut page_assets = assets::PageAssets {
@@ -110,15 +116,17 @@ pub async fn build(
                 };
 
                 let params = RouteParams(FxHashMap::default());
+
                 let mut content = Content::new(&content_sources.0);
                 let mut ctx = RouteContext {
                     raw_params: &params,
                     content: &mut content,
                     assets: &mut page_assets,
-                    current_url: route.url_untyped(&params),
+                    current_url: String::new(), // TODO
                 };
 
-                let (file_path, mut file) = create_route_file(*route, ctx.raw_params, &dist_dir)?;
+                let (file_path, mut file) =
+                    create_route_file(*route, &params_def, ctx.raw_params, &dist_dir)?;
                 let result = route.render_internal(&mut ctx);
 
                 finish_route(
@@ -129,7 +137,7 @@ pub async fn build(
                     route.route_raw(),
                 )?;
 
-                info!(target: "build", "{} -> {} {}", route.route(&RouteParams(FxHashMap::default())), file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap());
+                info!(target: "build", "{} -> {} {}", get_route_url(&route.route_raw(), &params_def, &params), file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap());
 
                 build_pages_assets.extend(page_assets.assets);
                 build_pages_scripts.extend(page_assets.scripts);
@@ -152,7 +160,7 @@ pub async fn build(
                 let routes = route.routes_internal(&mut dynamic_route_context);
 
                 if routes.is_empty() {
-                    info!(target: "build", "{} is a dynamic route, but its implementation of DynamicRoute::routes returned no routes. No pages will be generated for this route.", route.route_raw().to_string().bold());
+                    info!(target: "build", "{} is a dynamic route, but its implementation of Page::routes returned an empty Vec. No pages will be generated for this route.", route.route_raw().to_string().bold());
                     continue;
                 } else {
                     info!(target: "build", "{}", route.route_raw().to_string().bold());
@@ -170,11 +178,12 @@ pub async fn build(
                         raw_params: &params,
                         content: &mut content,
                         assets: &mut pages_assets,
-                        current_url: route.url_untyped(&params),
+                        current_url: String::new(), // TODO
                     };
 
                     let (file_path, mut file) =
-                        create_route_file(*route, ctx.raw_params, &dist_dir)?;
+                        create_route_file(*route, &params_def, ctx.raw_params, &dist_dir)?;
+
                     let result = route.render_internal(&mut ctx);
 
                     build_metadata.add_page(
@@ -315,10 +324,16 @@ fn copy_recursively(
 
 fn create_route_file(
     route: &dyn FullPage,
+    params_def: &Vec<ParameterDef>,
     params: &RouteParams,
     dist_dir: &Path,
 ) -> Result<(PathBuf, File), Box<dyn std::error::Error>> {
-    let file_path = dist_dir.join(route.file_path(params));
+    let file_path = dist_dir.join(get_route_file_path(
+        &route.route_raw(),
+        params_def,
+        params,
+        route.is_endpoint(),
+    ));
 
     // Create the parent directories if it doesn't exist
     if let Some(parent_dir) = file_path.parent() {

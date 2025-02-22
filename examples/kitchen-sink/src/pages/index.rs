@@ -13,7 +13,7 @@ impl Page for Index {
         let script = ctx.assets.add_script("data/some_other_script.js");
         let style = ctx.assets.add_style("data/tailwind.css", true);
 
-        let link_to_first_dynamic = DynamicExample::url_unsafe(&DynamicExampleParams { page: 1 });
+        let link_to_first_dynamic = get_page_url(DynamicExample, &DynamicExampleParams { page: 1 });
 
         html! {
             head {
