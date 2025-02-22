@@ -5,20 +5,22 @@ use maud::{html, Markup};
 use maudit::content::markdown_entry;
 use maudit::page::prelude::*;
 
-pub fn blog_index_content<T: FullPage>(ctx: &mut RouteContext, name: &str) -> Markup {
+pub fn blog_index_content<T: FullPage>(
+    route: impl FullPage,
+    ctx: &mut RouteContext,
+    name: &str,
+) -> Markup {
     let blog_entries = ctx.content.get_source::<BlogEntryContent>(name);
 
     let markup = html! {
-      ul {
-        @for entry in &blog_entries.entries {
-          li {
-            a href=(T::url_unsafe(BlogEntryParams { entry: entry.id.clone() })) {
-                h2 { (entry.data.title) }
+        main {
+            @for entry in &blog_entries.entries {
+                a href=(get_page_url(&route, BlogEntryParams { entry: entry.id.clone() })) {
+                    h2 { (entry.data.title) }
+                    p { (entry.data.description) }
+                }
             }
-            p { (entry.data.description) }
-          }
         }
-      }
     }
     .into_string();
 
