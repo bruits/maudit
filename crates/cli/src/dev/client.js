@@ -12,7 +12,7 @@ const debounceReload = (time) => {
 };
 const pageReload = debounceReload(50);
 
-const socket = new WebSocket("ws://localhost:3000/ws");
+const socket = new WebSocket("ws://{SERVER_ADDRESS}/ws");
 
 socket.addEventListener("open", (event) => {
 	console.log("Connected to server");

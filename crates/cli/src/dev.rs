@@ -51,6 +51,7 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> io::Result<()> {
                 if action.signals().next().is_some() {
                     action.quit();
                 } else {
+                    info!(name: "build", "Detected changes. Rebuilding…");
                     let (_, job) = action.create_job(Arc::new(Command {
                         program: Program::Exec {
                             prog: "cargo".into(),

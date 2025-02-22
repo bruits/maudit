@@ -52,10 +52,28 @@ pub async fn start_dev_web_server(
     let service = handle_404.into_service();
     let serve_dir = ServeDir::new("dist").not_found_service(service);
 
+    // run it with hyper, if --host 0.0.0.0 otherwise localhost
+    let addr = if host {
+        IpAddr::from([0, 0, 0, 0])
+    } else {
+        IpAddr::from([127, 0, 0, 1])
+    };
+    let port = find_open_port(&addr, 1864).await;
+    let socket = TcpSocket::new_v4().unwrap();
+
+    let socket_addr = SocketAddr::new(addr, port);
+    socket.bind(socket_addr).unwrap();
+
+    let listener = socket.listen(1024).unwrap();
+
+    debug!("listening on {}", listener.local_addr().unwrap());
+
     let router = Router::new()
         .route("/ws", get(ws_handler))
         .fallback_service(serve_dir)
-        .layer(middleware::from_fn(add_dev_client_script))
+        .layer(middleware::from_fn(move |req, next| {
+            add_dev_client_script(req, next, socket_addr, host)
+        }))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::default().include_headers(true)),
@@ -66,21 +84,6 @@ pub async fn start_dev_web_server(
                 .on_response(CustomOnResponse),
         )
         .with_state(AppState { tx });
-
-    // run it with hyper, if --host 0.0.0.0 otherwise localhost
-    let addr = if host {
-        IpAddr::from([0, 0, 0, 0])
-    } else {
-        IpAddr::from([127, 0, 0, 1])
-    };
-    let port = find_open_port(&addr, 1864).await;
-    let socket = TcpSocket::new_v4().unwrap();
-
-    socket.bind(SocketAddr::new(addr, port)).unwrap();
-
-    let listener = socket.listen(1024).unwrap();
-
-    debug!("listening on {}", listener.local_addr().unwrap());
 
     log_server_start(start_time, host, listener.local_addr().unwrap());
 
@@ -162,7 +165,12 @@ impl OnResponse<Body> for CustomOnResponse {
     }
 }
 
-async fn add_dev_client_script(req: Request, next: Next) -> Response {
+async fn add_dev_client_script(
+    req: Request,
+    next: Next,
+    socket_addr: SocketAddr,
+    host: bool,
+) -> Response {
     let uri = req.uri().clone();
     let mut res: axum::http::Response<Body> = next.run(req).await;
 
@@ -176,7 +184,19 @@ async fn add_dev_client_script(req: Request, next: Next) -> Response {
 
         let mut body = String::from_utf8_lossy(&bytes).into_owned();
 
-        body.push_str(&format!("<script>{}</script>", include_str!("./client.js")));
+        let script_content = include_str!("./client.js").replace(
+            "{SERVER_ADDRESS}",
+            &format!(
+                "{}:{}",
+                if !host {
+                    socket_addr.ip().to_string()
+                } else {
+                    local_ip().unwrap().to_string()
+                },
+                &socket_addr.port().to_string()
+            ),
+        );
+        body.push_str(&format!("<script>{script_content}</script>"));
 
         // Copy the headers from the original response
         let mut res = Response::new(body.into());
