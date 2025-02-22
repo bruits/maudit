@@ -19,6 +19,18 @@ pub struct FormatElapsedTimeOptions<'a> {
     pub(crate) additional_fn: Option<&'a (dyn Fn(ColoredString) -> ColoredString + Sync)>,
 }
 
+impl FormatElapsedTimeOptions<'_> {
+    pub fn default_dev() -> Self {
+        Self {
+            sec_yellow_threshold: 1,
+            sec_red_threshold: 5,
+            millis_yellow_threshold: None,
+            millis_red_threshold: None,
+            additional_fn: None,
+        }
+    }
+}
+
 impl Default for FormatElapsedTimeOptions<'_> {
     fn default() -> Self {
         Self {

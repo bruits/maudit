@@ -15,14 +15,33 @@ use watchexec::{
     Watchexec,
 };
 
-use crate::logging::format_elapsed_time;
+use crate::logging::{format_elapsed_time, FormatElapsedTimeOptions};
 
 pub async fn start_dev_env(cwd: &str, host: bool) -> io::Result<()> {
+    let start_time = std::time::Instant::now();
     info!(name: "dev", "Preparing dev environment…");
+
+    // Do initial sync build
+    info!(name: "build", "Doing initial build…");
+    let command = std::process::Command::new("cargo")
+        .args(["run", "--quiet", "--", "--quiet"])
+        .output()
+        .unwrap();
+    let duration = start_time.elapsed();
+    let formatted_elasped_time =
+        format_elapsed_time(Ok(duration), &FormatElapsedTimeOptions::default_dev()).unwrap();
+
+    if command.status.success() {
+        info!(name: "build", "Initial build finished {}", formatted_elasped_time);
+    } else {
+        error!(name: "build", "Initial build failed with errors {}", formatted_elasped_time);
+    }
+
     let (sender_websocket, _) = broadcast::channel::<WebSocketMessage>(100);
 
-    let web_server_thread: tokio::task::JoinHandle<()> =
-        tokio::spawn(server::start_dev_web_server(sender_websocket.clone(), host));
+    let web_server_thread: tokio::task::JoinHandle<()> = tokio::spawn(
+        server::start_dev_web_server(start_time, sender_websocket.clone(), host),
+    );
 
     let wx = Watchexec::new_async(move |mut action| {
         Box::new({
@@ -30,7 +49,6 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> io::Result<()> {
 
             async move {
                 if action.signals().next().is_some() {
-                    eprintln!("[Quitting...]");
                     action.quit();
                 } else {
                     let (_, job) = action.create_job(Arc::new(Command {
@@ -67,7 +85,7 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> io::Result<()> {
 
                         let duration = *finished - *started;
                         let formatted_elasped_time =
-                            format_elapsed_time(Ok(duration), &Default::default()).unwrap();
+                            format_elapsed_time(Ok(duration), &FormatElapsedTimeOptions::default_dev()).unwrap();
 
                         match status {
                             watchexec_events::ProcessEnd::ExitError(_) => {

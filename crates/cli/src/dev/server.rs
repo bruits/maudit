@@ -12,10 +12,13 @@ use axum::{
     Router,
 };
 use colored::Colorize;
-use tokio::{signal, sync::broadcast};
+use tokio::{net::TcpSocket, signal, sync::broadcast};
 use tracing::{debug, info, Level, Span};
 
-use std::{net::SocketAddr, time::Duration};
+use std::{
+    net::{IpAddr, SocketAddr},
+    time::Duration,
+};
 use tower_http::{
     services::ServeDir,
     trace::{DefaultMakeSpan, OnResponse, TraceLayer},
@@ -37,8 +40,11 @@ struct AppState {
     tx: broadcast::Sender<WebSocketMessage>,
 }
 
-pub async fn start_dev_web_server(tx: broadcast::Sender<WebSocketMessage>, host: bool) {
-    let start_time = std::time::Instant::now();
+pub async fn start_dev_web_server(
+    start_time: std::time::Instant,
+    tx: broadcast::Sender<WebSocketMessage>,
+    host: bool,
+) {
     async fn handle_404() -> (StatusCode, &'static str) {
         (StatusCode::NOT_FOUND, "Not found")
     }
@@ -62,10 +68,17 @@ pub async fn start_dev_web_server(tx: broadcast::Sender<WebSocketMessage>, host:
         .with_state(AppState { tx });
 
     // run it with hyper, if --host 0.0.0.0 otherwise localhost
-    let addr = if host { "0.0.0.0" } else { "localhost" };
-    let listener = tokio::net::TcpListener::bind(format!("{}:{}", addr, 0))
-        .await
-        .unwrap();
+    let addr = if host {
+        IpAddr::from([0, 0, 0, 0])
+    } else {
+        IpAddr::from([127, 0, 0, 1])
+    };
+    let port = find_open_port(&addr, 1864).await;
+    let socket = TcpSocket::new_v4().unwrap();
+
+    socket.bind(SocketAddr::new(addr, port)).unwrap();
+
+    let listener = socket.listen(1024).unwrap();
 
     debug!("listening on {}", listener.local_addr().unwrap());
 
@@ -82,7 +95,11 @@ pub async fn start_dev_web_server(tx: broadcast::Sender<WebSocketMessage>, host:
 
 fn log_server_start(start_time: std::time::Instant, host: bool, addr: SocketAddr) {
     info!(name: "SKIP_FORMAT", "");
-    let elasped_time = format_elapsed_time(Ok(start_time.elapsed()), &Default::default()).unwrap();
+    let elasped_time = format_elapsed_time(
+        Ok(start_time.elapsed()),
+        &FormatElapsedTimeOptions::default_dev(),
+    )
+    .unwrap();
     info!(name: "SKIP_FORMAT", "{} {}", "Maudit 👑".bold().bright_red(), format!("{} {}", "server started in".dimmed(), elasped_time));
     info!(name: "SKIP_FORMAT", "");
 
@@ -237,5 +254,24 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = ctrl_c => {},
         _ = terminate => {},
+    }
+}
+
+async fn find_open_port(address: &IpAddr, starting_port: u16) -> u16 {
+    let mut port = starting_port;
+
+    loop {
+        let socket = TcpSocket::new_v4().unwrap();
+        let socket_addr = SocketAddr::new(*address, port);
+        match socket.bind(socket_addr) {
+            Ok(_) => {
+                debug!(name: "dev", "Found open port: {}", port);
+                return port;
+            }
+            Err(_) => {
+                debug!(name: "dev", "Port {} is already in use or failed to bind, trying next one", port);
+                port += 1;
+            }
+        }
     }
 }
