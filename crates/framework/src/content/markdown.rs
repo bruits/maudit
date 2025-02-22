@@ -53,7 +53,6 @@ pub struct MarkdownHeading {
     pub id: String,
     pub level: u8,
     pub classes: Vec<String>,
-    pub attrs: Vec<(String, Option<String>)>,
 }
 
 #[derive(Debug)]
@@ -63,6 +62,18 @@ struct InternalHeadingEvent {
     id: Option<String>,
     level: u32,
     classes: Vec<String>,
+}
+
+impl InternalHeadingEvent {
+    fn new(start: usize, level: u32, id: Option<String>, classes: &[String]) -> Self {
+        Self {
+            start,
+            end: 0,
+            id,
+            level,
+            classes: classes.to_vec(),
+        }
+    }
 }
 
 #[doc(hidden)]
@@ -169,9 +180,7 @@ where
         let mut frontmatter = String::new();
         let mut in_frontmatter = false;
 
-        let mut headings: Vec<MarkdownHeading> = vec![];
-        let mut last_heading: Option<MarkdownHeading> = Option::None;
-
+        let mut content_events = Vec::new();
         for (event, _) in Parser::new_ext(&content, options).into_offset_iter() {
             match event {
                 Event::Start(Tag::MetadataBlock(_)) => in_frontmatter = true,
@@ -179,46 +188,31 @@ where
                 Event::Text(ref text) => {
                     if in_frontmatter {
                         frontmatter.push_str(text);
-                    }
-
-                    // TODO: Take the entire content, not just the text
-                    if let Some(ref mut heading) = last_heading {
-                        heading.title.push_str(text);
+                    } else {
+                        content_events.push(event);
                     }
                 }
-                Event::Start(Tag::Heading {
-                    level,
-                    id,
-                    classes,
-                    attrs,
-                }) => {
-                    if !in_frontmatter {
-                        last_heading = Some(MarkdownHeading {
-                            title: String::new(),
-                            id: if let Some(id) = id {
-                                id.to_string()
-                            } else {
-                                slugger.slugify(&content)
-                            },
-                            level: level as u8,
-                            classes: classes.iter().map(|c| c.to_string()).collect(),
-                            attrs: attrs
-                                .iter()
-                                .map(|(k, v)| (k.to_string(), v.as_ref().map(|v| v.to_string())))
-                                .collect(),
-                        });
-                    }
-                }
-                Event::End(TagEnd::Heading(_)) => {
-                    if let Some(heading) = last_heading.take() {
-                        headings.push(heading);
-                    }
-                }
-                _ => {}
+                _ => content_events.push(event),
             }
         }
 
+        // TODO: Prettier errors for serialization errors (e.g. missing fields)
         let mut parsed = serde_yml::from_str::<T>(&frontmatter).unwrap();
+
+        let headings_internal = find_headings(&content_events);
+
+        let mut headings = vec![];
+        for heading in headings_internal {
+            let heading_content = get_text_from_events(&content_events[heading.start..heading.end]);
+            let slug: String = slugger.slugify(&heading_content);
+
+            headings.push(MarkdownHeading {
+                title: heading_content,
+                id: heading.id.unwrap_or(slug),
+                level: heading.level as u8,
+                classes: heading.classes,
+            });
+        }
 
         parsed.set_headings(headings);
 
@@ -234,6 +228,50 @@ where
     entries
 }
 
+fn get_text_from_events(parser_slice: &[Event]) -> String {
+    let mut title = String::new();
+
+    for event in parser_slice.iter() {
+        match event {
+            Event::Text(text) | Event::Code(text) => title += text,
+            _ => continue,
+        }
+    }
+
+    title
+}
+
+fn find_headings(events: &[Event]) -> Vec<InternalHeadingEvent> {
+    let mut heading_refs = vec![];
+
+    for (i, event) in events.iter().enumerate() {
+        match event {
+            Event::Start(Tag::Heading {
+                level, id, classes, ..
+            }) => {
+                heading_refs.push(InternalHeadingEvent::new(
+                    i,
+                    *level as u32,
+                    id.clone().map(String::from),
+                    &classes
+                        .iter()
+                        .map(|c| c.to_string())
+                        .collect::<Vec<String>>(),
+                ));
+            }
+            Event::End(TagEnd::Heading { .. }) => {
+                heading_refs
+                    .last_mut()
+                    .expect("Heading end before start?")
+                    .end = i;
+            }
+            _ => (),
+        }
+    }
+
+    heading_refs
+}
+
 /// Render Markdown content to HTML.
 ///
 /// ## Example
@@ -243,6 +281,7 @@ where
 /// let html = render_markdown(markdown);
 /// ```
 pub fn render_markdown(content: &str) -> String {
+    let mut slugger = slugger::Slugger::new();
     let mut html_output = String::new();
     let mut options = Options::empty();
     options.insert(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS);
@@ -266,6 +305,23 @@ pub fn render_markdown(content: &str) -> String {
                 events.push(event);
             }
         }
+    }
+
+    let headings = find_headings(&events);
+
+    for heading in &headings {
+        let heading_content = get_text_from_events(&events[heading.start..heading.end]);
+        let slug: String = slugger.slugify(&heading_content);
+
+        events[heading.start] = Event::Html(
+            format!(
+                "<h{} id=\"{}\" class=\"{}\">",
+                heading.level,
+                heading.id.clone().unwrap_or(slug),
+                heading.classes.join(" ")
+            )
+            .into(),
+        );
     }
 
     pulldown_cmark::html::push_html(&mut html_output, events.into_iter());
