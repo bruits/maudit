@@ -18,7 +18,7 @@ impl Page for Index {
           ul {
             @for entry in &articles.entries {
               li {
-                a href=(get_page_url(Article, ArticleParams { article: entry.id.clone() })) {
+                a href=(get_page_url(&Article, ArticleParams { article: entry.id.clone() })) {
                     h2 { (entry.data.title) }
                 }
                 p { (entry.data.description) }

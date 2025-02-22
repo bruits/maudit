@@ -240,9 +240,12 @@ pub trait FullPage: InternalPage + Sync {
     fn routes_internal(&self, context: &mut DynamicRouteContext) -> Vec<RouteParams>;
 }
 
-pub fn get_page_url<T: Into<RouteParams>>(route: impl FullPage, params: T) -> String {
+pub fn get_page_url<T: Into<RouteParams>>(route: &impl FullPage, params: T) -> String {
     let params_defs = extract_params_from_raw_route(&route.route_raw());
-    get_route_url(&route.route_raw(), &params_defs, &params.into())
+    format!(
+        "/{}",
+        get_route_url(&route.route_raw(), &params_defs, &params.into())
+    )
 }
 
 pub mod prelude {

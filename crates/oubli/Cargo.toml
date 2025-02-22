@@ -1,0 +1,11 @@
+[package]
+name = "oubli"
+description = "Library for generating documentation websites with Maudit."
+version = "0.1.0"
+license = "MIT"
+edition = "2021"
+
+[dependencies]
+maudit = { path = "../framework", version = "0.2" }
+maud = { workspace = true }
+serde = { workspace = true }
