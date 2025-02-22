@@ -215,15 +215,17 @@ impl Content<'_> {
 /// ```
 pub struct ContentEntry<T> {
     pub id: String,
-    render: Box<dyn Fn(&str) -> String + Send + Sync>,
-    pub raw_content: String,
+    render: OptionalContentRenderFn,
+    pub raw_content: Option<String>,
     pub data: T,
     pub file_path: Option<PathBuf>,
 }
 
+type OptionalContentRenderFn = Option<Box<dyn Fn(&str) -> String + Send + Sync>>;
+
 impl<T> ContentEntry<T> {
     pub fn render(&self) -> String {
-        (self.render)(&self.raw_content)
+        (self.render.as_ref().unwrap())(self.raw_content.as_ref().unwrap())
     }
 }
 
@@ -535,8 +537,8 @@ where
 
         entries.push(ContentEntry {
             id,
-            render: Box::new(render_markdown),
-            raw_content: content,
+            render: Some(Box::new(render_markdown)),
+            raw_content: Some(content),
             file_path: Some(entry),
             data: parsed,
         });
