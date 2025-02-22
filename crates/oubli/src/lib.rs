@@ -178,4 +178,4 @@ fn generate_data_store(
 }
 
 #[derive(Params)]
-struct DataStoreEntry {}
+pub struct DataStoreEntry {}
