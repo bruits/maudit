@@ -17,12 +17,12 @@ use watchexec::{
 
 use crate::logging::format_elapsed_time;
 
-pub async fn start_dev_env(cwd: &str) -> io::Result<()> {
+pub async fn start_dev_env(cwd: &str, host: bool) -> io::Result<()> {
     info!(name: "dev", "Preparing dev environment…");
     let (sender_websocket, _) = broadcast::channel::<WebSocketMessage>(100);
 
     let web_server_thread: tokio::task::JoinHandle<()> =
-        tokio::spawn(server::start_dev_web_server(sender_websocket.clone()));
+        tokio::spawn(server::start_dev_web_server(sender_websocket.clone(), host));
 
     let wx = Watchexec::new_async(move |mut action| {
         Box::new({

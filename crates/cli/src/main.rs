@@ -29,7 +29,10 @@ enum Commands {
     /// Build the project
     Build,
     /// Run the project in development mode
-    Dev,
+    Dev {
+        #[clap(long)]
+        host: bool,
+    },
     /// Preview the project
     Preview,
 }
@@ -61,8 +64,8 @@ async fn main() {
 
             let _ = start_preview_web_server(PathBuf::from("dist")).await;
         }
-        Commands::Dev {} => {
-            let _ = start_dev_env(".").await;
+        Commands::Dev { host } => {
+            let _ = start_dev_env(".", *host).await;
         }
     }
 }

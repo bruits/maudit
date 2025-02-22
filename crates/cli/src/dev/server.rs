@@ -25,6 +25,7 @@ use axum::extract::connect_info::ConnectInfo;
 use futures::{stream::StreamExt, SinkExt};
 
 use crate::logging::{format_elapsed_time, FormatElapsedTimeOptions};
+use local_ip_address::local_ip;
 
 #[derive(Clone, Debug)]
 pub struct WebSocketMessage {
@@ -36,7 +37,7 @@ struct AppState {
     tx: broadcast::Sender<WebSocketMessage>,
 }
 
-pub async fn start_dev_web_server(tx: broadcast::Sender<WebSocketMessage>) {
+pub async fn start_dev_web_server(tx: broadcast::Sender<WebSocketMessage>, host: bool) {
     let start_time = std::time::Instant::now();
     async fn handle_404() -> (StatusCode, &'static str) {
         (StatusCode::NOT_FOUND, "Not found")
@@ -61,19 +62,14 @@ pub async fn start_dev_web_server(tx: broadcast::Sender<WebSocketMessage>) {
         .with_state(AppState { tx });
 
     // run it with hyper, if --host 0.0.0.0 otherwise localhost
-    let addr = if std::env::args().any(|arg| arg == "--host") {
-        "0.0.0.0"
-    } else {
-        "localhost"
-    };
-    let port = 3000;
-    let listener = tokio::net::TcpListener::bind(format!("{}:{}", addr, port))
+    let addr = if host { "0.0.0.0" } else { "localhost" };
+    let listener = tokio::net::TcpListener::bind(format!("{}:{}", addr, 0))
         .await
         .unwrap();
 
     debug!("listening on {}", listener.local_addr().unwrap());
 
-    log_server_start(start_time);
+    log_server_start(start_time, host, listener.local_addr().unwrap());
 
     axum::serve(
         listener,
@@ -84,20 +80,27 @@ pub async fn start_dev_web_server(tx: broadcast::Sender<WebSocketMessage>) {
     .unwrap();
 }
 
-fn log_server_start(start_time: std::time::Instant) {
+fn log_server_start(start_time: std::time::Instant, host: bool, addr: SocketAddr) {
     info!(name: "SKIP_FORMAT", "");
     let elasped_time = format_elapsed_time(Ok(start_time.elapsed()), &Default::default()).unwrap();
     info!(name: "SKIP_FORMAT", "{} {}", "Maudit 👑".bold().bright_red(), format!("{} {}", "server started in".dimmed(), elasped_time));
     info!(name: "SKIP_FORMAT", "");
 
-    let url = "\x1b]8;;http://localhost:3000\x1b\\http://localhost:3000\x1b]8;;\x1b\\"
-        .bold()
-        .underline()
-        .bright_blue();
-    let network_url = "\x1b]8;;http://192.168.0.1:3000\x1b\\http://192.168.0.1:3000\x1b]8;;\x1b\\"
-        .bold()
-        .underline()
-        .bright_magenta();
+    let port = addr.port();
+    let url =
+        format!("\x1b]8;;http://localhost:{port}\x1b\\http://localhost:{port}\x1b]8;;\x1b\\",)
+            .bold()
+            .underline()
+            .bright_blue();
+    let network_url = if host {
+        let local_ip = local_ip().unwrap();
+        format!("\x1b]8;;http://{local_ip}:{port}\x1b\\http://{local_ip}:{port}\x1b]8;;\x1b\\")
+            .bold()
+            .underline()
+            .bright_magenta()
+    } else {
+        "Use --host to expose the server to your network".dimmed()
+    };
     info!(name: "SKIP_FORMAT", "🮔  {}    {}", "Local".bold(), url);
     info!(name: "SKIP_FORMAT", "🮔  {}  {}", "Network".bold(), network_url);
     info!(name: "SKIP_FORMAT", "");
