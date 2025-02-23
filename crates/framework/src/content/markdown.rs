@@ -2,6 +2,11 @@ use glob::glob as glob_fs;
 use log::warn;
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use serde::de::DeserializeOwned;
+use syntect::{
+    highlighting::ThemeSet,
+    html::{highlighted_html_for_file, highlighted_html_for_string},
+    parsing::SyntaxSet,
+};
 
 use super::{slugger, ContentEntry};
 
@@ -286,6 +291,8 @@ pub fn render_markdown(content: &str) -> String {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS);
 
+    let mut last_code_block: bool = false;
+    let mut code_block_content = String::new();
     let mut in_frontmatter = false;
     let mut events = Vec::new();
     for (event, _) in Parser::new_ext(content, options).into_offset_iter() {
@@ -296,10 +303,32 @@ pub fn render_markdown(content: &str) -> String {
             Event::End(TagEnd::MetadataBlock(_)) => {
                 in_frontmatter = false;
             }
-            Event::Text(_) => {
+            Event::Text(ref text) => {
                 if !in_frontmatter {
-                    events.push(event);
+                    if last_code_block {
+                        code_block_content.push_str(text);
+                    } else {
+                        events.push(event);
+                    }
                 }
+            }
+            Event::Start(Tag::CodeBlock(ref kind)) => {
+                last_code_block = true;
+            }
+            Event::End(TagEnd::CodeBlock) => {
+                last_code_block = false;
+
+                let ss = SyntaxSet::load_defaults_newlines();
+                let ts = ThemeSet::load_defaults();
+                let highlighted: Result<String, syntect::Error> = highlighted_html_for_string(
+                    &code_block_content,
+                    &ss,
+                    ss.find_syntax_by_token("rs").unwrap(),
+                    ts.themes.get("base16-ocean.dark").unwrap(),
+                );
+
+                code_block_content.clear();
+                events.push(Event::Html(highlighted.unwrap().into()));
             }
             _ => {
                 events.push(event);
