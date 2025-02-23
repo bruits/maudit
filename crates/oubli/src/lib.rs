@@ -142,7 +142,7 @@ pub fn forget(
         .0
         .push(generate_archetype_store(&archetypes));
 
-    for (_name, _ident, pages, content_source) in archetypes {
+    for (_name, _stringified_ident, pages, content_source) in archetypes {
         content_sources_archetypes.push(content_source);
         combined_routes.extend(pages);
     }
@@ -157,16 +157,16 @@ pub fn forget(
 fn generate_archetype_store(archetypes: &Vec<ArchetypeTuple>) -> Box<dyn ContentSourceInternal> {
     let names: Vec<(String, String)> = archetypes
         .iter()
-        .map(|(name, ident, _, _)| (name.to_string(), ident.to_string()))
+        .map(|(name, stringified_ident, _, _)| (name.to_string(), stringified_ident.to_string()))
         .collect();
 
     let archetype_store = maudit::content::ContentSource::new(
         "archetype_store",
         Box::new(move || {
             let mut entries = Vec::new();
-            for (name, ident) in names.iter() {
+            for (name, stringified_ident) in names.iter() {
                 entries.push(ContentEntry::new(
-                    ident.to_string(),
+                    stringified_ident.to_string(),
                     None,
                     None,
                     ArchetypeStoreEntry {
