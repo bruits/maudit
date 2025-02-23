@@ -1,6 +1,6 @@
 use maud::{html, Markup, PreEscaped};
 
-pub fn layout(title: String, content: String) -> Markup {
+pub fn layout(title: &str, content: String) -> Markup {
     html! {
         html {
             head {

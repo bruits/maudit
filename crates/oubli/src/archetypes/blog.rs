@@ -27,7 +27,7 @@ pub fn blog_index_content<T: FullPage>(
     }
     .into_string();
 
-    layout(name.to_string(), markup)
+    layout(name, markup)
 }
 
 #[markdown_entry]
@@ -60,5 +60,5 @@ pub fn blog_entry_render(ctx: &mut RouteContext, name: &str, stringified_ident: 
     let headings = blog_entry.data.get_headings();
     println!("{:?}", headings);
 
-    layout(name.to_string(), blog_entry.render())
+    layout(name, blog_entry.render())
 }
