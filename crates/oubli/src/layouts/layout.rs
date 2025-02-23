@@ -1,15 +1,15 @@
 use maud::{html, Markup, PreEscaped};
 
-pub fn layout(content: String) -> Markup {
+pub fn layout(title: &str, content: String) -> Markup {
     html! {
         html {
             head {
                 meta charset="utf-8";
-                title { "My Blog" }
+                title { (title) }
             }
             body {
                 header {
-                    h1 { "My Blog" }
+                    h1 { (title) }
                 }
                 main {
                     (PreEscaped(content))
