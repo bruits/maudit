@@ -4,11 +4,12 @@ use std::{
 };
 
 use colored::Colorize;
+use flate2::read::GzDecoder;
 use inquire::{validator::Validation, Confirm, Select, Text};
 use rand::seq::IndexedRandom;
 use spinach::{Color, Spinner};
 use toml_edit::DocumentMut;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 mod names;
 mod render_config;
@@ -228,61 +229,66 @@ pub fn start_new_project(dry_run: &bool) {
     info!(name: "SKIP_FORMAT", "   Need a hand? Find us at {}.", "https://maudit.org/chat".bold().bright_magenta().underline());
 }
 
-fn download_and_unpack_template(template: &str, project_path: &Path) -> Result<(), String> {
+fn download_and_unpack_template(
+    template: &str,
+    project_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
     let tarball = ureq::get(REPO_TAR_URL)
         .call()
         .map_err(|e| format!("Failed to download template: {}", e))?;
 
     if !tarball.status().is_success() {
-        return Err("Failed to download template".to_string());
+        return Err("Failed to download template".into());
     }
 
-    let (_, body) = tarball.into_parts();
-    let archive = body.into_reader();
+    let (_, mut body) = tarball.into_parts();
+
+    let archive = GzDecoder::new(body.as_reader());
 
     // Uncomment to test with a local tarball
     //let archive = std::fs::File::open("project.tar").unwrap();
 
     let mut archive = tar::Archive::new(archive);
 
-    for file in archive.entries().unwrap() {
-        let mut file = file.unwrap();
-        let path = file.path().unwrap();
+    let example_path = format!("examples/{}", template);
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?.to_string_lossy().to_string();
 
-        if path.starts_with(format!("examples/{}", template)) {
-            let path = path.strip_prefix(format!("examples/{}", template)).unwrap();
-            let path = project_path.join(path);
-
-            file.unpack(path).unwrap();
+        if let Some(index) = path.find(&example_path).map(|i| i + example_path.len() + 1) {
+            let dest_path = project_path.join(&path[index..]);
+            entry.unpack(dest_path)?;
         }
     }
 
     // Edit the Cargo.toml file
     let cargo_toml_path = project_path.join("Cargo.toml");
+    match std::fs::read_to_string(&cargo_toml_path) {
+        Ok(content) => {
+            let mut cargo_toml = content.parse::<DocumentMut>().expect("invalid doc");
 
-    let cargo_toml_content = std::fs::read_to_string(&cargo_toml_path).unwrap();
-    let mut cargo_toml = cargo_toml_content
-        .parse::<DocumentMut>()
-        .expect("invalid doc");
+            if let Some(project_name) = project_path.file_name().and_then(|name| name.to_str()) {
+                cargo_toml["package"]["name"] = toml_edit::value(project_name);
 
-    let project_name = project_path
-        .components()
-        .last()
-        .unwrap()
-        .as_os_str()
-        .to_str()
-        .unwrap();
+                if let toml_edit::Item::Value(v) =
+                    &cargo_toml["package"]["metadata"]["maudit"]["intended_version"]
+                {
+                    cargo_toml["dependencies"]["maudit"] = toml_edit::value(v.clone());
+                }
 
-    cargo_toml["package"]["name"] = toml_edit::value(project_name);
+                cargo_toml["package"]["metadata"] = toml_edit::Item::None;
 
-    let maudit_intended_version = &cargo_toml["package"]["metadata"]["maudit"]["intended_version"];
-
-    // If the template is using the workspace version, remove the `workspace = true` property
-    if let toml_edit::Item::Value(v) = maudit_intended_version {
-        cargo_toml["dependencies"]["maudit"] = toml_edit::value(v);
+                if let Err(e) = std::fs::write(&cargo_toml_path, cargo_toml.to_string()) {
+                    error!("Failed to write Cargo.toml file: {}", e);
+                }
+            } else {
+                error!("Failed to determine project name from path");
+            }
+        }
+        Err(e) => {
+            error!("Failed to read Cargo.toml file: {}", e);
+        }
     }
-
-    std::fs::write(&cargo_toml_path, cargo_toml.to_string()).unwrap();
 
     Ok(())
 }

@@ -1770,6 +1770,7 @@ dependencies = [
  "clap",
  "colored",
  "env_logger",
+ "flate2",
  "futures",
  "futures-util",
  "http-body-util",
