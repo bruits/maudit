@@ -31,11 +31,17 @@ pub fn docs_layout(
             }
         },
         true,
+        false,
         ctx,
     )
 }
 
-pub fn layout(main: Markup, bottom_border: bool, ctx: &mut RouteContext) -> RenderResult {
+pub fn layout(
+    main: Markup,
+    bottom_border: bool,
+    licenses: bool,
+    ctx: &mut RouteContext,
+) -> RenderResult {
     ctx.assets.include_style("assets/prin.css", true);
 
     html! {
@@ -58,8 +64,11 @@ pub fn layout(main: Markup, bottom_border: bool, ctx: &mut RouteContext) -> Rend
                                 a.text-md.font-bold href="https://bruits.org" {
                                     "Copyright © 2025 Bruits."
                                 }
-                                br;
-                                a.text-sm href="https://www.netlify.com" { "Site powered by Netlify" }
+                                @if licenses {
+                                    br;
+                                    a.text-sm href="https://www.netlify.com" { "Site powered by Netlify" }
+                                    p.text-sm {"Wax seal icon by " a href="https://game-icons.net/" { "Game-icons.net" } " under " a href="https://creativecommons.org/licenses/by/3.0/" { "CC BY 3.0" } }
+                                }
                             }
                             div { (PreEscaped(include_str!("../assets/logo.svg")))}
                             div.flex.gap-x-6.grow.justify-end."basis-[0]".items-center {
