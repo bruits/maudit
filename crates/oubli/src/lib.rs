@@ -50,7 +50,7 @@ pub enum Archetype {
 /// }
 /// ```
 macro_rules! archetypes {
-    ($(($name:literal, $ident:ident, $arch:expr, $glob:expr)),* $(,)?) => {{
+    ($(($name:expr, $ident:ident, $arch:expr, $glob:expr)),* $(,)?) => {{
         let mut vec = Vec::new();
         $(
             let tuple = match $arch {
