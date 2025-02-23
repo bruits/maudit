@@ -1,4 +1,4 @@
-use maud::{html, Markup, DOCTYPE};
+use maud::{html, Markup, PreEscaped, DOCTYPE};
 mod docs_sidebars;
 mod header;
 
@@ -53,8 +53,26 @@ pub fn layout(main: Markup, bottom_border: bool, ctx: &mut RouteContext) -> Rend
                     (header(ctx, bottom_border))
                     (main)
                     footer.bg-our-black.text-white {
-                        div.container.mx-auto.py-8 {
-                            p.text-center.text-sm.italic { "Maudit" }
+                        div.container.mx-auto.py-8.flex.justify-between.items-center {
+                            div.grow."basis-[0]" {
+                                a.text-md.font-bold href="https://bruits.org" {
+                                    "Copyright © 2025 Bruits."
+                                }
+                                br;
+                                a.text-sm href="https://www.netlify.com" { "Site powered by Netlify" }
+                            }
+                            div { (PreEscaped(include_str!("../assets/logo.svg")))}
+                            div.flex.gap-x-6.grow.justify-end."basis-[0]".items-center {
+                                a href="https://bsky.app/profile/bruits.org" {
+                                    (PreEscaped(include_str!("../assets/bsky.svg")))
+                                }
+                                a href="/chat/" {
+                                    (PreEscaped(include_str!("../assets/discord.svg")))
+                                }
+                                a href="https://github.com/bruits/maudit" {
+                                    (PreEscaped(include_str!("../assets/github.svg")))
+                                }
+                            }
                         }
                     }
                 }

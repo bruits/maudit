@@ -21,11 +21,11 @@ pub fn header(_: &mut RouteContext, bottom_border: bool) -> Markup {
                     }
                 }
 
-                div.flex.gap-x-3 {
+                div.flex.gap-x-6 {
                     a href="/chat/" {
                         (PreEscaped(include_str!("../../assets/discord.svg")))
                     }
-                    a href="https://github.com/Princesseuh/maudit" {
+                    a href="https://github.com/bruits/maudit" {
                         (PreEscaped(include_str!("../../assets/github.svg")))
                     }
                 }
