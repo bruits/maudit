@@ -14,7 +14,7 @@ Supporting certain features in your less used output mode might add technical co
 
 **Maudit is about making static websites**. It has no higher goals than that. It won't try to become a server-side rendering framework, a hybrid framework, or anything else. This focus allows us to make the best static website generator we can.
 
-## Your website changes less often than its content
+### Your website changes less often than its content
 
 Many parts of Maudit projects are written in Rust, a compiled language, thus requiring recompilation for changes. This overhead is justified by the assumption that structural changes are less frequent than content updates. For example, in a blog, new articles are more common than layout changes.
 
