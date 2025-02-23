@@ -18,7 +18,7 @@ use render_config::get_render_config;
 
 use crate::logging::format_elapsed_time;
 
-const REPO_TAR_URL: &str = "https://api.github.com/repos/web-lsp/maudit/tarball/main";
+const REPO_TAR_URL: &str = "https://api.github.com/repos/bruits/maudit/tarball/main";
 
 const INTROS: [&str; 6] = [
     "Let the coronation begin.",
