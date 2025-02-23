@@ -165,15 +165,15 @@ fn generate_archetype_store(archetypes: &Vec<ArchetypeTuple>) -> Box<dyn Content
         Box::new(move || {
             let mut entries = Vec::new();
             for (name, ident) in names.iter() {
-                entries.push(ContentEntry {
-                    id: ident.to_string(),
-                    render: None,
-                    raw_content: None,
-                    data: ArchetypeStoreEntry {
+                entries.push(ContentEntry::new(
+                    ident.to_string(),
+                    None,
+                    None,
+                    ArchetypeStoreEntry {
                         title: name.to_string(),
                     },
-                    file_path: None,
-                });
+                    None,
+                ));
             }
             entries
         }),

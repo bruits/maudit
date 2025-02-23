@@ -215,7 +215,7 @@ impl Content<'_> {
 /// ```
 pub struct ContentEntry<T> {
     pub id: String,
-    pub render: OptionalContentRenderFn,
+    render: OptionalContentRenderFn,
     pub raw_content: Option<String>,
     pub data: T,
     pub file_path: Option<PathBuf>,
@@ -224,6 +224,22 @@ pub struct ContentEntry<T> {
 type OptionalContentRenderFn = Option<Box<dyn Fn(&str) -> String + Send + Sync>>;
 
 impl<T> ContentEntry<T> {
+    pub fn new(
+        id: String,
+        render: OptionalContentRenderFn,
+        raw_content: Option<String>,
+        data: T,
+        file_path: Option<PathBuf>,
+    ) -> Self {
+        Self {
+            id,
+            render,
+            raw_content,
+            data,
+            file_path,
+        }
+    }
+
     pub fn render(&self) -> String {
         (self.render.as_ref().unwrap())(self.raw_content.as_ref().unwrap())
     }
