@@ -36,11 +36,11 @@ pub fn start_new_project(dry_run: &bool) {
 
     inquire::set_global_render_config(get_render_config());
 
-    // Run cargo info maudit in a tmp directory to avoid catching a local version
     let cargo_search = std::process::Command::new("cargo")
         .arg("search")
         .arg("maudit")
         .args(["--limit", "1"])
+        .current_dir(std::env::temp_dir()) // `cargo search` sometimes can fail in certain directories, so we use a temp dir
         .output()
         .expect("Failed to run cargo info maudit");
 
@@ -88,6 +88,11 @@ pub fn start_new_project(dry_run: &bool) {
         })
         .with_validators(&[
             Box::new(|s: &str| {
+                // Don't check if the directory already exists if the user wants to use the current directory
+                if s == "." {
+                    return Ok(Validation::Valid);
+                }
+
                 if std::path::Path::new(&s).exists() {
                     Ok(Validation::Invalid(
                         "A directory with this name already exists".into(),
@@ -221,8 +226,25 @@ pub fn start_new_project(dry_run: &bool) {
     info!(name: "SKIP_FORMAT", "👑 {} {}! Next steps:", "Project created".bold(), "successfully".green().to_string().bold());
     println!();
 
-    info!(name: "SKIP_FORMAT", "1. Run {} to enter your project's directory.", format!("cd {}", project_path.display()).bold().bright_blue().underline());
-    info!(name: "SKIP_FORMAT", "2. Run {} to start the development server, {} to stop it.", "maudit dev".bold().bright_blue().underline(), "CTRL+C".bright_blue());
+    let enter_directory = if project_path != PathBuf::from(".") {
+        format!(
+            "1. Run {} to enter your project's directory.\n2. ",
+            format!("cd {}", project_path.display())
+                .bold()
+                .bright_blue()
+                .underline()
+        )
+    } else {
+        "   ".to_string()
+    };
+
+    info!(
+        name: "SKIP_FORMAT",
+        "{}Run {} to start the development server, {} to stop it.",
+        enter_directory,
+        "maudit dev".bold().bright_blue().underline(),
+        "CTRL+C".bright_blue()
+    );
     println!();
 
     info!(name: "SKIP_FORMAT", "   Visit {} for more information on using Maudit.", "https://maudit.org/docs".bold().bright_magenta().underline());
@@ -267,6 +289,9 @@ fn download_and_unpack_template(
         Ok(content) => {
             let mut cargo_toml = content.parse::<DocumentMut>().expect("invalid doc");
 
+            let project_path = project_path
+                .canonicalize()
+                .expect("Failed to canonicalize project path");
             if let Some(project_name) = project_path.file_name().and_then(|name| name.to_str()) {
                 cargo_toml["package"]["name"] = toml_edit::value(project_name);
 
@@ -343,8 +368,7 @@ fn init_git_repo(project_path: &PathBuf, dry_run: &bool) -> Result<(), String> {
 
 fn has_invalid_filepath_chars(s: &str) -> bool {
     s.chars().any(|c| {
-        c == '/'
-            || c == '\\'
+        c == '\\'
             || c == ':'
             || c == '*'
             || c == '?'
