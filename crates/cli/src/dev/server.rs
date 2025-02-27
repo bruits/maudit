@@ -196,6 +196,8 @@ async fn add_dev_client_script(
                 &socket_addr.port().to_string()
             ),
         );
+
+        // TODO: Handle HTML documents with no tags, e.g. `"Hello, world"`. Appending a raw script tag will cause it to show up as text.
         body.push_str(&format!("<script>{script_content}</script>"));
 
         // Copy the headers from the original response

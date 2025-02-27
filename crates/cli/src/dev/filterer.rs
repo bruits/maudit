@@ -17,7 +17,13 @@ impl Filterer for DevServerFilterer {
 
         for tag in &event.tags {
             if let Tag::Path { path, file_type: _ } = tag {
+                // TODO: Customizable dist path
                 if path.ancestors().any(|p| p.ends_with("dist")) {
+                    result = false;
+                    break;
+                }
+
+                if path.ancestors().any(|p| p.ends_with("target")) {
                     result = false;
                     break;
                 }
