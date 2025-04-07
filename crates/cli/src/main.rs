@@ -48,10 +48,10 @@ async fn main() {
         Commands::Init { dry_run } => {
             init::start_new_project(dry_run);
         }
-        Commands::Build {} => {
+        Commands::Build => {
             build::start_build();
         }
-        Commands::Preview {} => {
+        Commands::Preview => {
             // TODO: Dist path is hardcoded for now. Ideally, Maudit should output some kind of metadata file that can be read by the CLI.
             // (and then we could error on that instead of the dist path, ha)
             let dist_path = Path::new("dist");

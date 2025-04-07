@@ -8,7 +8,7 @@ At the core of a Maudit project is the `coronate` function. This function starts
 
 In a `main.rs` file, import the `coronate` function and call it to build your project. Here is an example of a simple Maudit project:
 
-```rust
+```rs
 use maudit::{coronate, routes, BuildOptions, BuildOutput};
 use pages::Index;
 
@@ -23,7 +23,7 @@ All kinds of routes must be passed to the `coronate` function in order for them 
 
 The first argument to the `coronate` function is a `Vec` of all the routes that should be built. For the sake of ergonomics, the `routes!` macro can be used to create this list.
 
-```rust
+```rs
 use pages::Index;
 
 coronate(

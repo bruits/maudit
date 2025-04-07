@@ -12,7 +12,7 @@ To import an image, add it anywhere in your project's directory, and use the `ct
 
 Like other assets, images can be used directly in Maud templates.
 
-```rust
+```rs
 use maudit::page::prelude::*;
 use maud::html;
 
@@ -32,7 +32,7 @@ impl Page for Blog {
 
 Alternatively, if not using Maud, the `url()` method on the image can be used to generate any necessary HTML or other output.
 
-```rust
+```rs
 fn render(&self, ctx: &mut RouteContext) -> RenderResult {
   let image = ctx.assets.add_image("logo.png");
 
@@ -48,7 +48,7 @@ To import a stylesheet, add it anywhere in your project's directory, and use the
 
 In [supported templating languages](/docs/templating/), the return value of `ctx.assets.add_style()` can be used directly in the template.
 
-```rust
+```rs
 use maudit::page::prelude::*;
 use maud::{html, Markup};
 
@@ -68,7 +68,7 @@ impl Page<RouteParams, Markup> for Blog {
 
 Alternatively, the `include_style()` method can be used to automatically include the stylesheet in the page, without needing to manually add it to the template. Note that, at this time, pages without a `head` tag won't have the stylesheet included.
 
-```rust
+```rs
 fn render(&self, ctx: &mut RouteContext) -> Markup {
   ctx.assets.include_style("style.css", false);
 
@@ -84,7 +84,7 @@ fn render(&self, ctx: &mut RouteContext) -> Markup {
 
 Maudit includes built-in support for [Tailwind CSS](https://tailwindcss.com/). To use it, pass `true` as the second argument to `add_style()` or `include_style()`. In the future, Maudit will automatically detect Tailwind CSS and enable it when needed.
 
-```rust
+```rs
 fn render(&self, ctx: &mut RouteContext) -> Markup {
   ctx.assets.add_style("style.css", true);
 
@@ -104,7 +104,7 @@ Tailwind can then be configured normally, through native CSS in Tailwind 4.0, or
 
 JavaScript and TypeScript files can be added to pages using the `ctx.assets.add_script()` method.
 
-```rust
+```rs
 use maudit::page::prelude::*;
 use maud::{html, Markup};
 
@@ -124,7 +124,7 @@ impl Page<RouteParams, Markup> for Blog {
 
 The `include_script()` method can be used to automatically include the script in the page, which can be useful when using layouts or other shared templates.
 
-```rust
+```rs
 fn render(&self, ctx: &mut RouteContext) -> Markup {
   ctx.assets.include_script("script.js");
 

@@ -6,7 +6,7 @@ use std::str::FromStr;
 /// Convert a path parameter string into a type.
 ///
 /// ## Example
-/// ```rust
+/// ```rs
 /// use maudit::params::FromParam;
 ///
 /// struct UserId(String);

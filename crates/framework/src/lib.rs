@@ -32,7 +32,7 @@ pub mod maud {
     //! Maudit supports Maud by default, but you can use your own templating engine.
     //!
     //! ## Example
-    //! ```rust
+    //! ```rs
     //! use maudit::page::prelude::*;
     //! use maud::{html, Markup};
     //!
@@ -64,7 +64,7 @@ use page::FullPage;
 /// Helps to define every route that should be build by [`coronate()`].
 ///
 /// ## Example
-/// ```rust
+/// ```rs
 /// use maudit::{
 ///   content_sources, coronate, routes, BuildOptions, BuildOutput,
 /// };
@@ -107,7 +107,7 @@ macro_rules! routes {
 /// Helps to define all sources of content that should be loaded by [`coronate()`].
 ///
 /// ## Example
-/// ```rust
+/// ```rs
 /// use maudit::{
 ///  content_sources, coronate, routes, BuildOptions, BuildOutput,
 /// };
@@ -131,7 +131,7 @@ macro_rules! routes {
 /// ```
 ///
 /// ## Expand
-/// ```rust
+/// ```rs
 /// # use maudit::{content_sources};
 /// # use maudit::content::{glob_markdown, markdown_entry};
 /// # #[markdown_entry]
@@ -145,7 +145,7 @@ macro_rules! routes {
 /// ];
 /// ```
 /// expands to
-/// ```rust
+/// ```rs
 /// # use maudit::content::{glob_markdown, markdown_entry};
 /// # #[markdown_entry]
 /// # pub struct ArticleContent {
@@ -171,7 +171,7 @@ pub const GENERATOR: &str = concat!("Maudit v", env!("CARGO_PKG_VERSION"));
 ///
 /// ## Example
 /// Should be called from the main function of the binary crate.
-/// ```rust
+/// ```rs
 /// use maudit::{
 ///  content_sources, coronate, routes, BuildOptions, BuildOutput,
 /// };

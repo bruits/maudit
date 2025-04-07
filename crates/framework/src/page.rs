@@ -12,7 +12,7 @@ use rustc_hash::FxHashMap;
 /// End users should rarely need to interact with this enum directly.
 ///
 /// ## Example
-/// ```rust
+/// ```rs
 /// use maudit::page::prelude::*;
 ///
 /// #[route("/")]
@@ -62,7 +62,7 @@ impl From<&[u8]> for RenderResult {
 /// Allows to access various data and assets in a [`Page`] implementation.
 ///
 /// ## Example
-/// ```rust
+/// ```rs
 /// use maudit::page::prelude::*;
 /// use maud::html;
 /// # use maudit::content::markdown_entry;
@@ -111,7 +111,7 @@ impl RouteContext<'_> {
 /// Allows to access the content source in the [`Page::routes`] method.
 ///
 /// ## Example
-/// ```rust
+/// ```rs
 /// use maudit::page::prelude::*;
 /// # use maudit::content::markdown_entry;
 /// #
@@ -155,7 +155,7 @@ pub struct DynamicRouteContext<'a> {
 /// The page struct implementing this trait can be passed to [`coronate()`](crate::coronate), through the [`routes!`](crate::routes) macro, to be built.
 ///
 /// ## Example
-/// ```rust
+/// ```rs
 /// use maudit::page::prelude::*;
 ///
 /// #[route("/")]
@@ -254,7 +254,7 @@ pub mod prelude {
     //! This module is meant to be glob imported in your page files.
     //!
     //! ## Example
-    //! ```rust
+    //! ```rs
     //! use maudit::page::prelude::*;
     //! ```
     pub use super::{
