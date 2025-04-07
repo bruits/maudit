@@ -1779,13 +1779,14 @@ dependencies = [
 
 [[package]]
 name = "maudit-cli"
-version = "0.2.1"
+version = "0.3.1"
 dependencies = [
  "axum",
  "chrono",
  "clap",
  "colored",
  "env_logger",
+ "flate2",
  "futures",
  "futures-util",
  "http-body-util",
@@ -1822,6 +1823,13 @@ dependencies = [
  "maud",
  "maudit",
  "serde",
+]
+
+[[package]]
+name = "maudit-example-empty"
+version = "0.1.0"
+dependencies = [
+ "maudit",
 ]
 
 [[package]]

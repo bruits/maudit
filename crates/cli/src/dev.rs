@@ -50,6 +50,7 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> io::Result<()> {
             async move {
                 if action.signals().next().is_some() {
                     action.quit();
+                    return action;
                 } else {
                     info!(name: "build", "Detected changes. Rebuilding…");
                     let (_, job) = action.create_job(Arc::new(Command {

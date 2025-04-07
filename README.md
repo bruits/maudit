@@ -10,12 +10,12 @@ A library for generating static websites with Rust.
 
 📦 See the [crate](https://crates.io/crates/maudit) on Crates.io, and the [reference](https://docs.rs/maudit/latest/maudit/) on Docs.rs.
 
-🐛 [Report a bug](https://github.com/web-lsp/maudit/issues), please read our [contributing guidelines](#) and [code of conduct](#) first.
+🐛 [Report a bug](https://github.com/bruits/maudit/issues), please read our [contributing guidelines](#) and [code of conduct](#) first.
 
 🚨 [Report a security vulnerability](#), and be sure to review our [security policy](#).
 
-💬 Join the discussion on [Github](https://github.com/web-lsp/maudit/discussions) and [Discord](https://maudit.org/chat/), if you have any questions, ideas, or suggestions.
+💬 Join the discussion on [Github](https://github.com/bruits/maudit/discussions) and [Discord](https://maudit.org/chat/), if you have any questions, ideas, or suggestions.
 
 ## Crates
 
-*Work in progress.*
+_Work in progress._

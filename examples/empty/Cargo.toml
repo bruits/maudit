@@ -1,0 +1,11 @@
+[package]
+name = "maudit-example-empty"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[package.metadata.maudit]
+intended_version = "0.2.0"
+
+[dependencies]
+maudit = { workspace = true }

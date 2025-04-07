@@ -30,7 +30,7 @@ pub fn left_sidebar(ctx: &mut RouteContext) -> Markup {
         ("Reference", "https://docs.rs/maudit"),
         (
             "Examples",
-            "https://github.com/Princesseuh/maudit/tree/main/examples",
+            "https://github.com/bruits/maudit/tree/main/examples",
         ),
     ];
 
