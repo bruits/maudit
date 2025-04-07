@@ -7,7 +7,7 @@ In this guide, you'll learn how to create a Maudit website and the general basis
 
 If you prefer to read more detailed explanations, including exploration of various Maudit concepts, please read the [the tutorial]().
 
-> This guide assumes that you have Rust installed and are familiar with the terminal.
+**This guide assumes that you have Rust installed and are familiar with the terminal.**
 
 ## Installation
 
@@ -47,7 +47,7 @@ To create a page, create a `.rs` file with a public struct using the `route` att
 
 All of Maudit's useful imports for pages can be imported using the prelude from `maudit::page`.
 
-```rust
+```rs
 use maudit::page::prelude::*;
 
 #[route("/hello-world")]
@@ -56,7 +56,7 @@ pub struct HelloWorld;
 
 Every page must `impl` the `Page` trait, with the required method `render`.
 
-```rust
+```rs
 impl Page for HelloWorld {
   fn render(&self, ctx: &mut RouteContext) -> RenderResult {
     RenderResult::Text("Hello, world!".to_string())
@@ -66,7 +66,7 @@ impl Page for HelloWorld {
 
 Finally, pages' struct must be passed to the `coronate` function in the project's `main.rs`
 
-```rust
+```rs
 use pages::HelloWorld;
 use maudit::{coronate, routes, content_sources, BuildOptions, BuildOutput};
 

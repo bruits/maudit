@@ -1,21 +1,16 @@
 use glob::glob as glob_fs;
 use log::warn;
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use serde::de::DeserializeOwned;
-use syntect::{
-    highlighting::ThemeSet,
-    html::{highlighted_html_for_file, highlighted_html_for_string},
-    parsing::SyntaxSet,
-};
 
-use super::{slugger, ContentEntry};
+use super::{highlight::CodeBlock, slugger, ContentEntry};
 
 /// Represents a Markdown heading.
 ///
 /// Can be used to generate a table of contents.
 ///
 /// ## Example
-/// ```rust
+/// ```rs
 /// use maudit::page::prelude::*;
 /// use maud::{html, Markup};
 /// # use maudit::content::markdown_entry;
@@ -100,7 +95,7 @@ pub trait InternalMarkdownContent {
 /// Assumes that the Markdown content has no frontmatter.
 ///
 /// ## Example
-/// ```rust
+/// ```rs
 /// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
 /// use maudit::content::{glob_markdown, UntypedMarkdownContent};
 ///
@@ -137,7 +132,7 @@ impl InternalMarkdownContent for UntypedMarkdownContent {
 /// Typically used by [`content_sources!`](crate::content_sources) to define a Markdown content source in [`coronate()`](crate::coronate).
 ///
 /// ## Example
-/// ```rust
+/// ```rs
 /// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
 /// use maudit::content::{markdown_entry, glob_markdown};
 ///
@@ -280,7 +275,7 @@ fn find_headings(events: &[Event]) -> Vec<InternalHeadingEvent> {
 /// Render Markdown content to HTML.
 ///
 /// ## Example
-/// ```rust
+/// ```rs
 /// use maudit::content::render_markdown;
 /// let markdown = r#"# Hello, world!"#;
 /// let html = render_markdown(markdown);
@@ -291,7 +286,7 @@ pub fn render_markdown(content: &str) -> String {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS);
 
-    let mut last_code_block: bool = false;
+    let mut code_block = None;
     let mut code_block_content = String::new();
     let mut in_frontmatter = false;
     let mut events = Vec::new();
@@ -305,7 +300,7 @@ pub fn render_markdown(content: &str) -> String {
             }
             Event::Text(ref text) => {
                 if !in_frontmatter {
-                    if last_code_block {
+                    if code_block.is_some() {
                         code_block_content.push_str(text);
                     } else {
                         events.push(event);
@@ -313,22 +308,21 @@ pub fn render_markdown(content: &str) -> String {
                 }
             }
             Event::Start(Tag::CodeBlock(ref kind)) => {
-                last_code_block = true;
+                if let CodeBlockKind::Fenced(ref fence) = kind {
+                    let (block, begin) = CodeBlock::new(fence);
+                    code_block = Some(block);
+                    events.push(Event::Html(begin.into()));
+                }
             }
             Event::End(TagEnd::CodeBlock) => {
-                last_code_block = false;
+                if let Some(ref mut code_block) = code_block {
+                    let html = code_block.highlight(&code_block_content);
+                    events.push(Event::Html(html.unwrap().into()));
+                }
 
-                let ss = SyntaxSet::load_defaults_newlines();
-                let ts = ThemeSet::load_defaults();
-                let highlighted: Result<String, syntect::Error> = highlighted_html_for_string(
-                    &code_block_content,
-                    &ss,
-                    ss.find_syntax_by_token("rs").unwrap(),
-                    ts.themes.get("base16-ocean.dark").unwrap(),
-                );
-
+                code_block = None;
                 code_block_content.clear();
-                events.push(Event::Html(highlighted.unwrap().into()));
+                events.push(Event::Html("</code></pre>\n".into()));
             }
             _ => {
                 events.push(event);

@@ -2,7 +2,7 @@
 ///
 /// ## Examples
 /// Default values:
-/// ```rust
+/// ```rs
 /// use maudit::{
 ///  content_sources, coronate, routes, BuildOptions, BuildOutput,
 /// };
@@ -16,7 +16,7 @@
 /// }
 /// ```
 /// Custom values:
-/// ```rust
+/// ```rs
 /// use maudit::{
 ///   content_sources, coronate, routes, BuildOptions, BuildOutput,
 /// };
@@ -44,7 +44,7 @@ pub struct BuildOptions {
 /// Provides default values for [`crate::coronate()`]. Designed to work for most projects.
 ///
 /// ## Examples
-/// ```rust
+/// ```rs
 /// use maudit::{
 ///  content_sources, coronate, routes, BuildOptions, BuildOutput,
 /// };

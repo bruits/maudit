@@ -5,6 +5,7 @@ use std::{any::Any, path::PathBuf};
 
 use rustc_hash::FxHashMap;
 
+mod highlight;
 mod markdown;
 mod slugger;
 
@@ -14,7 +15,7 @@ pub use markdown::*;
 /// Helps implement a struct as a Markdown content entry.
 ///
 /// ## Example
-/// ```rust
+/// ```rs
 /// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
 /// use maudit::content::{markdown_entry, glob_markdown};
 ///
@@ -36,7 +37,7 @@ pub use markdown::*;
 /// ```
 ///
 /// ## Expand
-/// ```rust
+/// ```rs
 /// use maudit::content::{markdown_entry};
 ///
 /// #[markdown_entry]
@@ -46,7 +47,7 @@ pub use markdown::*;
 /// }
 /// ```
 /// expands to
-/// ```rust
+/// ```rs
 /// #[derive(serde::Deserialize)]
 /// pub struct Article {
 ///   pub title: String,
@@ -75,7 +76,7 @@ pub use maudit_macros::markdown_entry;
 ///
 /// ## Example
 /// In `main.rs`:
-/// ```rust
+/// ```rs
 /// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
 /// use maudit::content::{markdown_entry, glob_markdown};
 ///
@@ -97,7 +98,7 @@ pub use maudit_macros::markdown_entry;
 /// ```
 ///
 /// In a page:
-/// ```rust
+/// ```rs
 /// use maudit::page::prelude::*;
 /// # use maudit::content::markdown_entry;
 /// #
@@ -187,7 +188,7 @@ impl Content<'_> {
 /// Represents a single entry in a [`ContentSource`].
 ///
 /// ## Example
-/// ```rust
+/// ```rs
 /// use maudit::page::prelude::*;
 /// # use maudit::content::markdown_entry;
 /// #
@@ -253,7 +254,7 @@ pub type Untyped = FxHashMap<String, String>;
 /// Mostly seen as the return type of [`content_sources!`](crate::content_sources).
 ///
 /// ## Example
-/// ```rust
+/// ```rs
 /// use maudit::page::prelude::*;
 /// use maudit::content::{glob_markdown, ContentSources};
 /// use maudit::content_sources;

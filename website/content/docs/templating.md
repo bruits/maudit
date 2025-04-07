@@ -14,7 +14,7 @@ Through crate features, Maudit includes built-in helper methods and traits imple
 
 Maudit implements `Into<RenderResult>` for the Maud `Markup` type, allowing one to directly return Maud's templates from a page's `render` method.
 
-```rust
+```rs
 use maud::{html, Markup};
 use maudit::page::prelude::*;
 
@@ -32,7 +32,7 @@ impl Page<RouteParams, Markup> for Index {
 
 Maudit implements the `Render` trait for assets, such as scripts, styles, and images, allowing one to use them directly in Maud templates.
 
-```rust
+```rs
 use maud::{html, Markup};
 use maudit::page::prelude::*;
 

@@ -8,7 +8,7 @@ section: "core-concepts"
 
 To create a new page in your Maudit project, create a struct and implement the `Page` trait for it, adding the `#[route]` attribute to the struct definition with the path of the route as an argument. The path can be any Rust expression, as long as it returns a `String`.
 
-```rust
+```rs
 use maudit::page::prelude::*;
 
 #[route("/hello-world")]
@@ -29,7 +29,7 @@ Finally, make sure to [register the page](#registering-routes) in the `coronate`
 
 The `Page` trait accepts a generic parameter in second position for the return type of the `render` method. This type must implement `Into<RenderResult>`, enabling more ergonomic returns in certain cases.
 
-```rust
+```rs
 impl Page<RouteParams, String> for HelloWorld {
   fn render(&self, ctx: &mut RouteContext) -> String {
     "Hello, world!".to_string()
@@ -50,7 +50,7 @@ To create a dynamic route, export a struct using the `route!` attribute and add 
 
 The parameters will automatically be extracted from the URL and passed to the `render` method in the `RouteContext` struct.
 
-```rust
+```rs
 use maudit::route::prelude::*;
 
 #[route("/posts/[slug]")]
@@ -65,7 +65,7 @@ impl Page for Post {
 
 In addition to the `render` method, dynamic routes must implement a `routes` method for Page. The `routes` method returns a list of all the possible values for each parameter in the route's path, so that Maudit can generate all the necessary pages.
 
-```rust
+```rs
 use maudit::{page::prelude::*, FxHashMap};
 
 #[route("/posts/[slug]")]
@@ -93,7 +93,7 @@ Like static routes, dynamic routes must be [registered](#registering-routes) in 
 
 Interacting with HashMaps in Rust can be a bit cumbersome, so Maudit provides the ability to use a struct to define your params. This struct must derive the `Params` trait.
 
-```rust
+```rs
 #[derive(Params)]
 pub struct Params {
   pub slug: String,
@@ -112,7 +112,7 @@ impl Page<Params> for Post {
 
 This struct can also be used inside `render`, making it possible to access the parameters in a type-safe way.
 
-```rust
+```rs
 #[derive(Params)]
 pub struct Params {
   pub slug: String,
@@ -139,7 +139,7 @@ Maudit implements conversions from string route parameters for the following typ
 
 Maudit supports returning other types of content besides HTML, such as JSON, plain text or binary data. To do this, simply add a file extension to the route path and return the content in the `render` method.
 
-```rust
+```rs
 use maudit::page::prelude::*;
 
 #[route("/api.json")]
@@ -154,7 +154,7 @@ impl Page for HelloWorldJson {
 
 Dynamic routes can also return different types of content. For example, to return a JSON response with the post's content, you could write:
 
-```rust
+```rs
 use maudit::page::prelude::*;
 
 #[route("/api/[slug].json")]
@@ -188,7 +188,7 @@ All kinds of routes must be passed to the `coronate` function in [the entrypoint
 
 The first argument to the `coronate` function is a `Vec` of all the routes that should be built. This list can be created using the `routes!` macro to make it more concise.
 
-```rust
+```rs
 use pages::Index;
 use maudit::{coronate, routes, BuildOptions, BuildOutput};
 
