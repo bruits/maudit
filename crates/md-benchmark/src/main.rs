@@ -13,9 +13,7 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     println!("Building with {} markdown files", markdown_count);
 
     coronate(
-        routes![page::Article {
-            route: "/yeehaw/[file]".to_string()
-        }],
+        routes![page::Article],
         content_sources!["articles" => glob_markdown::<UntypedMarkdownContent>(&format!("content/{}/*.md", markdown_count))],
         BuildOptions::default(),
     )

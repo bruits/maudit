@@ -1,10 +1,8 @@
 use maud::{html, PreEscaped};
 use maudit::{content::UntypedMarkdownContent, page::prelude::*};
 
-#[route(self.route)]
-pub struct Article {
-    pub route: String,
-}
+#[route("/[file]")]
+pub struct Article;
 
 #[derive(Params)]
 struct Params {
