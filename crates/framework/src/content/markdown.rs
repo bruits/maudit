@@ -3,7 +3,9 @@ use log::warn;
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use serde::de::DeserializeOwned;
 
-use super::{highlight::CodeBlock, slugger, ContentEntry};
+use super::{
+    components::MarkdownComponents, highlight::CodeBlock, slugger, ContentEntry, ContentRenderer,
+};
 
 /// Represents a Markdown heading.
 ///
@@ -218,7 +220,7 @@ where
 
         entries.push(ContentEntry {
             id,
-            render: Some(Box::new(render_markdown)),
+            render: Some(Box::new(MarkdownRenderer)),
             raw_content: Some(content),
             file_path: Some(entry),
             data: parsed,
@@ -226,6 +228,30 @@ where
     }
 
     entries
+}
+
+struct MarkdownRenderer;
+
+impl ContentRenderer for MarkdownRenderer {
+    fn render(&self, content: &str) -> String {
+        let options = MarkdownOptions {
+            components: MarkdownComponents {
+                heading: Some(Box::new(|heading: MarkdownHeading| {
+                    format!(
+                        "<h{} id=\"{}\" class=\"{}\">Wawout!{}Wawout!</h{}>",
+                        heading.level,
+                        heading.id,
+                        heading.classes.join(" "),
+                        heading.title,
+                        heading.level
+                    )
+                })),
+                ..Default::default()
+            },
+        };
+
+        render_markdown(content, Some(options))
+    }
 }
 
 fn get_text_from_events(parser_slice: &[Event]) -> String {
@@ -272,6 +298,10 @@ fn find_headings(events: &[Event]) -> Vec<InternalHeadingEvent> {
     heading_refs
 }
 
+pub struct MarkdownOptions {
+    pub components: MarkdownComponents,
+}
+
 /// Render Markdown content to HTML.
 ///
 /// ## Example
@@ -280,17 +310,35 @@ fn find_headings(events: &[Event]) -> Vec<InternalHeadingEvent> {
 /// let markdown = r#"# Hello, world!"#;
 /// let html = render_markdown(markdown);
 /// ```
-pub fn render_markdown(content: &str) -> String {
-    let mut slugger = slugger::Slugger::new();
+pub fn render_markdown(content: &str, markdown_options: Option<MarkdownOptions>) -> String {
     let mut html_output = String::new();
-    let mut options = Options::empty();
-    options.insert(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS);
+
+    let mut parser_options = Options::empty();
+    parser_options.insert(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS);
+
+    let parsed_events = Parser::new_ext(content, parser_options);
+    let collected_events = parsed_events.collect::<Vec<_>>();
+
+    let events = process_events(collected_events, markdown_options);
+
+    pulldown_cmark::html::push_html(&mut html_output, events.into_iter());
+
+    html_output
+}
+
+fn process_events(
+    parsed_events: Vec<Event>,
+    markdown_options: Option<MarkdownOptions>,
+) -> Vec<Event> {
+    let mut slugger = slugger::Slugger::new();
 
     let mut code_block = None;
     let mut code_block_content = String::new();
     let mut in_frontmatter = false;
     let mut events = Vec::new();
-    for (event, _) in Parser::new_ext(content, options).into_offset_iter() {
+
+    let mut current_paragraph: Option<(u32, u32)> = None;
+    for event in parsed_events {
         match event {
             Event::Start(Tag::MetadataBlock(_)) => {
                 in_frontmatter = true;
@@ -307,6 +355,10 @@ pub fn render_markdown(content: &str) -> String {
                     }
                 }
             }
+            Event::Start(Tag::Paragraph) => {
+                
+            }
+
             Event::Start(Tag::CodeBlock(ref kind)) => {
                 if let CodeBlockKind::Fenced(ref fence) = kind {
                     let (block, begin) = CodeBlock::new(fence);
@@ -332,9 +384,37 @@ pub fn render_markdown(content: &str) -> String {
 
     let headings = find_headings(&events);
 
-    for heading in &headings {
-        let heading_content = get_text_from_events(&events[heading.start..heading.end]);
-        let slug: String = slugger.slugify(&heading_content);
+    for heading in headings.iter().rev() {
+        let extracted_heading_text = get_text_from_events(&events[heading.start..heading.end]);
+        let slug: String = slugger.slugify(&extracted_heading_text);
+
+        if let Some(options) = &markdown_options {
+            if let Some(component) = &options.components.heading {
+                // Bit of a dubious performance cost here, not sure if there's a better way to do this
+                let heading_content_events = // +1 to skip the start tag and only get the content
+                    process_events(events[heading.start + 1..heading.end].to_vec(), None);
+
+                let mut heading_content_html = String::new();
+                pulldown_cmark::html::push_html(
+                    &mut heading_content_html,
+                    heading_content_events.into_iter(),
+                );
+
+                let heading_obj = MarkdownHeading {
+                    title: heading_content_html,
+                    id: heading.id.clone().unwrap_or(slug),
+                    level: heading.level as u8,
+                    classes: heading.classes.clone(),
+                };
+
+                let html_content = component(heading_obj);
+                events.splice(
+                    heading.start..=heading.end,
+                    vec![Event::Html(html_content.into())],
+                );
+                continue;
+            }
+        }
 
         events[heading.start] = Event::Html(
             format!(
@@ -347,7 +427,5 @@ pub fn render_markdown(content: &str) -> String {
         );
     }
 
-    pulldown_cmark::html::push_html(&mut html_output, events.into_iter());
-
-    html_output
+    events
 }
