@@ -1,3 +1,4 @@
+use std::sync::OnceLock;
 use syntect::{
     easy::HighlightLines,
     highlighting::ThemeSet,
@@ -6,6 +7,17 @@ use syntect::{
     util::LinesWithEndings,
     Error,
 };
+
+static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
+static THEME_SET: OnceLock<ThemeSet> = OnceLock::new();
+
+fn get_syntax_set() -> &'static SyntaxSet {
+    SYNTAX_SET.get_or_init(SyntaxSet::load_defaults_newlines)
+}
+
+fn get_theme_set() -> &'static ThemeSet {
+    THEME_SET.get_or_init(ThemeSet::load_defaults)
+}
 
 fn opening_html(language: Option<&str>) -> String {
     let mut attrs = Vec::new();
@@ -62,9 +74,8 @@ impl CodeBlock {
     }
 
     pub fn highlight(&self, content: &str) -> Result<String, Error> {
-        // TODO: Re-use the syntax set and everything else
-        let ss = SyntaxSet::load_defaults_newlines();
-        let ts = ThemeSet::load_defaults();
+        let ss = get_syntax_set();
+        let ts = get_theme_set();
         let syntax = ss
             .find_syntax_by_name(&self.meta.language)
             .or_else(|| ss.find_syntax_by_extension(&self.meta.language))
@@ -76,7 +87,7 @@ impl CodeBlock {
 
         let mut highlighted = String::new();
         for line in LinesWithEndings::from(content) {
-            let regions = h.highlight_line(line, &ss).unwrap();
+            let regions = h.highlight_line(line, ss).unwrap();
             let html = styled_line_to_highlighted_html(&regions, IncludeBackground::No)?; // TODO: Handle the background coloring
             highlighted.push_str(&html);
         }
