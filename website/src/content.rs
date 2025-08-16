@@ -28,6 +28,14 @@ pub struct DocsContent {
     pub section: Option<DocsSection>,
 }
 
+#[markdown_entry]
+pub struct NewsContent {
+    pub title: String,
+    pub description: Option<String>,
+    pub date: Option<String>,
+    pub author: Option<String>,
+}
+
 pub fn content_sources() -> ContentSources {
-    content_sources!["docs" => glob_markdown::<DocsContent>("content/docs/*.md")]
+    content_sources!["docs" => glob_markdown::<DocsContent>("content/docs/*.md"), "news" => glob_markdown::<NewsContent>("content/news/*.md")]
 }

@@ -18,6 +18,7 @@ pub fn header(_: &mut RouteContext, bottom_border: bool) -> Markup {
                         a href="/docs/" { "Documentation" }
                         a href="/news/" { "News" }
                         a href="/contribute/" { "Contribute" }
+                        a href="https://github.com/bruits/maudit/issues/1" { "Roadmap" }
                     }
                 }
 

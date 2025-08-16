@@ -45,6 +45,8 @@ pub async fn start_dev_web_server(
     tx: broadcast::Sender<WebSocketMessage>,
     host: bool,
 ) {
+    // TODO: The live-reload script should be included on the 404 too
+    // TODO: Design an actual cool 404 page, and using the user's if they have one
     async fn handle_404() -> (StatusCode, &'static str) {
         (StatusCode::NOT_FOUND, "Not found")
     }

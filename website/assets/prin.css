@@ -68,6 +68,6 @@ a:hover {
 
 @media (min-width: 1280px) {
     .hero-background {
-        background-position-x: calc(100% - 5rem);
+        background-position-x: calc(100% - 4rem);
     }
 }

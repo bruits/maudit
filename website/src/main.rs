@@ -5,11 +5,18 @@ mod content;
 mod layout;
 mod pages;
 
-use pages::{ChatRedirect, DocsIndex, DocsPage, Index};
+use pages::{ChatRedirect, DocsIndex, DocsPage, Index, NewsIndex, NewsPage};
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(
-        routes![Index, DocsIndex, DocsPage, ChatRedirect],
+        routes![
+            Index,
+            DocsIndex,
+            NewsIndex,
+            DocsPage,
+            NewsPage,
+            ChatRedirect
+        ],
         content_sources(),
         BuildOptions {
             tailwind_binary_path: "../node_modules/.bin/tailwindcss".to_string(),

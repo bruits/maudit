@@ -20,6 +20,8 @@ MARKDOWN_COUNT=4000 cargo run --release
 
 Valid values for `MARKDOWN_COUNT` are 250, 500, 1000, 2000, and 4000.
 
+Note that `cargo run` has a certain overhead, as such if checking the total time, it's more useful to run the compiled binary (`target/release/maudit-benchmark`) directly
+
 ## Results
 
 The following results were obtained on 2025-01-07 using a MacBook Pro (13-inch, M1, 2020) with 16 GB of RAM:
@@ -36,6 +38,6 @@ These numbers are not scientific and only serve as a rough estimate of the perfo
 
 ## On compile times
 
-All the numbers in this document only include the **running time** of the benchmark. Maudit operates on the idea that your content and assets change way more often than any parts that would require re-compilation (static templates, pretty much anything in a `*.rs` file) and as such expect that the vast majority of your builds won't require compilation.
+All the numbers in this document only include the **running time** of the benchmark. [Maudit operates on the idea that your content and assets change way more often than any parts that would require re-compilation](https://maudit.org/docs/philosophy/#your-website-changes-less-often-than-its-content) (static templates, pretty much anything in a `*.rs` file) and as such expect that the vast majority of your builds won't require compilation.
 
 This is not a gotcha moment or anything we're trying to hide: **With compilation times included, Maudit is slower than most static site generators.**
