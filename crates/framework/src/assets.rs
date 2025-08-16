@@ -43,8 +43,9 @@ impl PageAssets {
         }
 
         let image = Box::new(Image {
-            path: image_path,
+            path: image_path.clone(),
             assets_dir: self.assets_dir.clone(),
+            hash: calculate_hash(&image_path),
         });
 
         self.assets.insert(image.clone());
@@ -62,9 +63,11 @@ impl PageAssets {
     where
         P: Into<PathBuf>,
     {
+        let path = script_path.into();
         let script = Script {
-            path: script_path.into(),
+            path: path.clone(),
             assets_dir: self.assets_dir.clone(),
+            hash: calculate_hash(&path),
         };
 
         self.scripts.insert(script.clone());
@@ -81,9 +84,11 @@ impl PageAssets {
     where
         P: Into<PathBuf>,
     {
+        let path = script_path.into();
         let script = Script {
-            path: script_path.into(),
+            path: path.clone(),
             assets_dir: self.assets_dir.clone(),
+            hash: calculate_hash(&path),
         };
 
         self.scripts.insert(script.clone());
@@ -99,11 +104,13 @@ impl PageAssets {
     where
         P: Into<PathBuf>,
     {
+        let path = style_path.into();
         let style = Style {
-            path: style_path.into(),
+            path: path.clone(),
             tailwind,
             assets_dir: self.assets_dir.clone(),
             tailwind_path: self.tailwind_path.clone(),
+            hash: calculate_hash(&path),
         };
 
         self.styles.insert(style.clone());
@@ -120,11 +127,13 @@ impl PageAssets {
     where
         P: Into<PathBuf>,
     {
+        let path = style_path.into();
         let style = Style {
-            path: style_path.into(),
+            path: path.clone(),
             tailwind,
             assets_dir: self.assets_dir.clone(),
             tailwind_path: self.tailwind_path.clone(),
+            hash: calculate_hash(&path),
         };
 
         self.styles.insert(style.clone());
@@ -140,7 +149,38 @@ pub trait Asset: DynEq + InternalAsset + Sync + Send {
     fn process(&self, _dist_assets_dir: &Path, _tmp_dir: &Path) -> Option<String> {
         None
     }
-    fn hash(&self) -> [u8; 8];
+
+    fn hash(&self) -> String {
+        // This will be overridden by each implementation to return the cached hash
+        String::new()
+    }
+
+    fn final_file_name(&self) -> String {
+        let file_stem = self.path().file_stem().unwrap().to_str().unwrap();
+        let extension = self
+            .path()
+            .extension()
+            .map(|ext| ext.to_str().unwrap())
+            .unwrap_or("");
+
+        if extension.is_empty() {
+            format!("{}.{}", file_stem, self.hash())
+        } else {
+            format!("{}.{}.{}", file_stem, self.hash(), extension)
+        }
+    }
+}
+
+fn calculate_hash(path: &PathBuf) -> String {
+    let content = fs::read(path).unwrap();
+
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(&content);
+    hasher.update(path.to_string_lossy().as_bytes());
+    let hash = hasher.finalize();
+
+    // Take the first 5 characters of the hex string for a short hash like "al3hx"
+    hash.to_hex()[..5].to_string()
 }
 
 trait InternalAsset {
@@ -149,7 +189,7 @@ trait InternalAsset {
 
 impl Hash for dyn Asset {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.hash().hash(state);
+        self.path().hash(state);
     }
 }
 
@@ -160,6 +200,7 @@ dyn_eq::eq_trait_object!(Asset);
 pub struct Image {
     pub path: PathBuf,
     pub(crate) assets_dir: PathBuf,
+    pub(crate) hash: String,
 }
 
 impl InternalAsset for Image {
@@ -170,27 +211,26 @@ impl InternalAsset for Image {
 
 impl Asset for Image {
     fn url(&self) -> Option<String> {
-        let file_name = self.path.file_name().unwrap().to_str().unwrap();
-
-        format!("/{}/{}", self.assets_dir().to_string_lossy(), file_name).into()
+        format!(
+            "/{}/{}",
+            self.assets_dir().to_string_lossy(),
+            self.final_file_name()
+        )
+        .into()
     }
 
     fn path(&self) -> &PathBuf {
         &self.path
     }
 
-    fn process(&self, dist_assets_dir: &Path, _: &Path) -> Option<String> {
-        fs::copy(
-            &self.path,
-            dist_assets_dir.join(self.path.file_name().unwrap()),
-        )
-        .unwrap();
-
-        None
+    fn hash(&self) -> String {
+        self.hash.clone()
     }
 
-    fn hash(&self) -> [u8; 8] {
-        [0; 8]
+    fn process(&self, dist_assets_dir: &Path, _: &Path) -> Option<String> {
+        fs::copy(&self.path, dist_assets_dir.join(self.final_file_name())).unwrap();
+
+        None
     }
 }
 
@@ -199,6 +239,7 @@ impl Asset for Image {
 pub struct Script {
     pub path: PathBuf,
     pub(crate) assets_dir: PathBuf,
+    pub(crate) hash: String,
 }
 
 impl InternalAsset for Script {
@@ -209,18 +250,20 @@ impl InternalAsset for Script {
 
 impl Asset for Script {
     fn url(&self) -> Option<String> {
-        let file_name = self.path.file_name().unwrap().to_str().unwrap();
-
-        format!("/{}/{}", self.assets_dir().to_string_lossy(), file_name).into()
+        format!(
+            "/{}/{}",
+            self.assets_dir().to_string_lossy(),
+            self.final_file_name()
+        )
+        .into()
     }
 
     fn path(&self) -> &PathBuf {
         &self.path
     }
 
-    fn hash(&self) -> [u8; 8] {
-        // TODO: Proper hash
-        [0; 8]
+    fn hash(&self) -> String {
+        self.hash.clone()
     }
 }
 
@@ -231,6 +274,7 @@ pub struct Style {
     pub(crate) tailwind: bool,
     pub(crate) assets_dir: PathBuf,
     pub(crate) tailwind_path: PathBuf,
+    pub(crate) hash: String,
 }
 
 impl InternalAsset for Style {
@@ -241,13 +285,20 @@ impl InternalAsset for Style {
 
 impl Asset for Style {
     fn url(&self) -> Option<String> {
-        let file_name = self.path.file_name().unwrap().to_str().unwrap();
-
-        format!("/{}/{}", self.assets_dir().to_string_lossy(), file_name).into()
+        format!(
+            "/{}/{}",
+            self.assets_dir().to_string_lossy(),
+            self.final_file_name()
+        )
+        .into()
     }
 
     fn path(&self) -> &PathBuf {
         &self.path
+    }
+
+    fn hash(&self) -> String {
+        self.hash.clone()
     }
 
     fn process(&self, _: &Path, tmp_dir: &Path) -> Option<String> {
@@ -272,11 +323,6 @@ impl Asset for Style {
         }
 
         None
-    }
-
-    fn hash(&self) -> [u8; 8] {
-        // TODO: Proper hash
-        [0; 8]
     }
 }
 

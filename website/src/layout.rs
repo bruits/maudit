@@ -14,8 +14,6 @@ pub fn docs_layout(
     ctx: &mut RouteContext,
     headings: &[MarkdownHeading],
 ) -> RenderResult {
-    ctx.assets.include_style("assets/prin.css", true);
-
     layout(
         html! {
             div.container.mx-auto."grid-cols-(--docs-columns)".grid."min-h-[calc(100%-64px)]" {

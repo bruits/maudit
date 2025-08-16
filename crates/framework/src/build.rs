@@ -233,6 +233,20 @@ pub async fn build(
                 let processed_path = style.process(&assets_dir, &tmp_dir);
 
                 InputItem {
+                    name: Some(
+                        style
+                            .final_file_name()
+                            .strip_suffix(&format!(
+                                ".{}",
+                                style
+                                    .path()
+                                    .extension()
+                                    .map(|ext| ext.to_str().unwrap())
+                                    .unwrap_or("")
+                            ))
+                            .unwrap_or(&style.final_file_name())
+                            .to_string(),
+                    ),
                     import: {
                         if let Some(processed_path) = processed_path {
                             processed_path
@@ -240,7 +254,6 @@ pub async fn build(
                             style.path().to_string_lossy().to_string()
                         }
                     },
-                    ..Default::default()
                 }
             })
             .collect::<Vec<InputItem>>();
@@ -249,7 +262,20 @@ pub async fn build(
             .iter()
             .map(|script| InputItem {
                 import: script.path().to_string_lossy().to_string(),
-                ..Default::default()
+                name: Some(
+                    script
+                        .final_file_name()
+                        .strip_suffix(&format!(
+                            ".{}",
+                            script
+                                .path()
+                                .extension()
+                                .map(|ext| ext.to_str().unwrap())
+                                .unwrap_or("")
+                        ))
+                        .unwrap_or(&script.final_file_name())
+                        .to_string(),
+                ),
             })
             .chain(css_inputs.into_iter())
             .collect::<Vec<InputItem>>();
