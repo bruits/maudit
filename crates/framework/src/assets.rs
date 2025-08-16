@@ -329,29 +329,43 @@ impl Asset for Style {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
+
+    fn setup_temp_dir() -> PathBuf {
+        // Create a temporary directory and test files
+        let temp_dir = env::temp_dir().join("maudit_test");
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        std::fs::write(temp_dir.join("style.css"), "body { background: red; }").unwrap();
+        std::fs::write(temp_dir.join("script.js"), "console.log('Hello, world!');").unwrap();
+        std::fs::write(temp_dir.join("image.png"), b"").unwrap();
+        temp_dir
+    }
 
     #[test]
     fn test_add_style() {
+        let temp_dir = setup_temp_dir();
         let mut page_assets = PageAssets {
             assets_dir: PathBuf::from("assets"),
             tailwind_path: PathBuf::from("tailwind"),
             ..Default::default()
         };
 
-        page_assets.add_style("style.css", false);
+        page_assets.add_style(temp_dir.join("style.css"), false);
 
         assert!(page_assets.styles.len() == 1);
     }
 
     #[test]
     fn test_include_style() {
+        let temp_dir = setup_temp_dir();
         let mut page_assets = PageAssets {
             assets_dir: PathBuf::from("assets"),
             tailwind_path: PathBuf::from("tailwind"),
             ..Default::default()
         };
 
-        page_assets.include_style("style.css", false);
+        page_assets.include_style(temp_dir.join("style.css"), false);
 
         assert!(page_assets.styles.len() == 1);
         assert!(page_assets.included_styles.len() == 1);
@@ -359,25 +373,27 @@ mod tests {
 
     #[test]
     fn test_add_script() {
+        let temp_dir = setup_temp_dir();
         let mut page_assets = PageAssets {
             assets_dir: PathBuf::from("assets"),
             tailwind_path: PathBuf::from("tailwind"),
             ..Default::default()
         };
 
-        page_assets.add_script("script.js");
+        page_assets.add_script(temp_dir.join("script.js"));
         assert!(page_assets.scripts.len() == 1);
     }
 
     #[test]
     fn test_include_script() {
+        let temp_dir = setup_temp_dir();
         let mut page_assets = PageAssets {
             assets_dir: PathBuf::from("assets"),
             tailwind_path: PathBuf::from("tailwind"),
             ..Default::default()
         };
 
-        page_assets.include_script("script.js");
+        page_assets.include_script(temp_dir.join("script.js"));
 
         assert!(page_assets.scripts.len() == 1);
         assert!(page_assets.included_scripts.len() == 1);
@@ -385,31 +401,77 @@ mod tests {
 
     #[test]
     fn test_add_image() {
+        let temp_dir = setup_temp_dir();
         let mut page_assets = PageAssets {
             assets_dir: PathBuf::from("assets"),
             tailwind_path: PathBuf::from("tailwind"),
             ..Default::default()
         };
 
-        page_assets.add_image("image.png");
+        page_assets.add_image(temp_dir.join("image.png"));
         assert!(page_assets.assets.len() == 1);
     }
 
     #[test]
     fn test_asset_has_leading_slash() {
+        let temp_dir = setup_temp_dir();
         let mut page_assets = PageAssets {
             assets_dir: PathBuf::from("assets"),
             tailwind_path: PathBuf::from("tailwind"),
             ..Default::default()
         };
 
-        let image = page_assets.add_image("image.png");
+        let image = page_assets.add_image(temp_dir.join("image.png"));
         assert_eq!(image.url().unwrap().chars().next(), Some('/'));
 
-        let script = page_assets.add_script("script.js");
+        let script = page_assets.add_script(temp_dir.join("script.js"));
         assert_eq!(script.url().unwrap().chars().next(), Some('/'));
 
-        let style = page_assets.add_style("style.css", false);
+        let style = page_assets.add_style(temp_dir.join("style.css"), false);
         assert_eq!(style.url().unwrap().chars().next(), Some('/'));
+    }
+
+    #[test]
+    fn test_asset_url_include_hash() {
+        let temp_dir = setup_temp_dir();
+        let mut page_assets = PageAssets {
+            assets_dir: PathBuf::from("assets"),
+            tailwind_path: PathBuf::from("tailwind"),
+            ..Default::default()
+        };
+
+        let image = page_assets.add_image(temp_dir.join("image.png"));
+        let image_hash = image.hash.clone();
+        assert!(image.url().unwrap().contains(&image_hash));
+
+        let script = page_assets.add_script(temp_dir.join("script.js"));
+        let script_hash = script.hash.clone();
+        assert!(script.url().unwrap().contains(&script_hash));
+
+        let style = page_assets.add_style(temp_dir.join("style.css"), false);
+        let style_hash = style.hash.clone();
+        assert!(style.url().unwrap().contains(&style_hash));
+    }
+
+    #[test]
+    fn test_asset_path_include_hash() {
+        let temp_dir = setup_temp_dir();
+        let mut page_assets = PageAssets {
+            assets_dir: PathBuf::from("assets"),
+            tailwind_path: PathBuf::from("tailwind"),
+            ..Default::default()
+        };
+
+        let image = page_assets.add_image(temp_dir.join("image.png"));
+        let image_hash = image.hash.clone();
+        assert!(image.path().to_string_lossy().contains(&image_hash));
+
+        let script = page_assets.add_script(temp_dir.join("script.js"));
+        let script_hash = script.hash.clone();
+        assert!(script.path().to_string_lossy().contains(&script_hash));
+
+        let style = page_assets.add_style(temp_dir.join("style.css"), false);
+        let style_hash = style.hash.clone();
+        assert!(style.path().to_string_lossy().contains(&style_hash));
     }
 }
