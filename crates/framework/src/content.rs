@@ -138,7 +138,7 @@ pub struct Content<'a> {
 }
 
 impl Content<'_> {
-    pub fn new(sources: &[Box<dyn ContentSourceInternal>]) -> Content {
+    pub fn new(sources: &'_ [Box<dyn ContentSourceInternal>]) -> Content<'_> {
         Content { sources }
     }
 
