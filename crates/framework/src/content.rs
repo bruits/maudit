@@ -5,6 +5,7 @@ use std::{any::Any, path::PathBuf};
 
 use rustc_hash::FxHashMap;
 
+mod components;
 mod highlight;
 mod markdown;
 mod slugger;
@@ -216,25 +217,27 @@ impl Content<'_> {
 /// ```
 pub struct ContentEntry<T> {
     pub id: String,
-    render: OptionalContentRenderFn,
+    render: Option<Box<dyn ContentRenderer>>,
     pub raw_content: Option<String>,
     pub data: T,
     pub file_path: Option<PathBuf>,
 }
 
-type OptionalContentRenderFn = Option<Box<dyn Fn(&str) -> String + Send + Sync>>;
+pub trait ContentRenderer: Send + Sync {
+    fn render(&self, raw_content: &str) -> String;
+}
 
 impl<T> ContentEntry<T> {
     pub fn new(
         id: String,
-        render: OptionalContentRenderFn,
+        renderer: Option<Box<dyn ContentRenderer>>,
         raw_content: Option<String>,
         data: T,
         file_path: Option<PathBuf>,
     ) -> Self {
         Self {
             id,
-            render,
+            render: renderer,
             raw_content,
             data,
             file_path,
@@ -242,7 +245,15 @@ impl<T> ContentEntry<T> {
     }
 
     pub fn render(&self) -> String {
-        (self.render.as_ref().unwrap())(self.raw_content.as_ref().unwrap())
+        if let Some(ref renderer) = self.render {
+            if let Some(ref raw_content) = self.raw_content {
+                renderer.render(raw_content)
+            } else {
+                panic!("No raw content to render")
+            }
+        } else {
+            panic!("No renderer found for this entry")
+        }
     }
 }
 
