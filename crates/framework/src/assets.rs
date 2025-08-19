@@ -143,6 +143,9 @@ impl PageAssets {
 
 #[allow(private_bounds)] // Users never interact with the internal trait, so it's fine
 pub trait Asset: DynEq + InternalAsset + Sync + Send {
+    fn build_path(&self) -> PathBuf {
+        self.assets_dir().join(self.final_file_name())
+    }
     fn url(&self) -> Option<String>;
     fn path(&self) -> &PathBuf;
 
@@ -227,8 +230,8 @@ impl Asset for Image {
         self.hash.clone()
     }
 
-    fn process(&self, dist_assets_dir: &Path, _: &Path) -> Option<String> {
-        fs::copy(&self.path, dist_assets_dir.join(self.final_file_name())).unwrap();
+    fn process(&self, _: &Path, _: &Path) -> Option<String> {
+        fs::copy(&self.path, self.build_path()).unwrap();
 
         None
     }
@@ -464,14 +467,14 @@ mod tests {
 
         let image = page_assets.add_image(temp_dir.join("image.png"));
         let image_hash = image.hash.clone();
-        assert!(image.path().to_string_lossy().contains(&image_hash));
+        assert!(image.build_path().to_string_lossy().contains(&image_hash));
 
         let script = page_assets.add_script(temp_dir.join("script.js"));
         let script_hash = script.hash.clone();
-        assert!(script.path().to_string_lossy().contains(&script_hash));
+        assert!(script.build_path().to_string_lossy().contains(&script_hash));
 
         let style = page_assets.add_style(temp_dir.join("style.css"), false);
         let style_hash = style.hash.clone();
-        assert!(style.path().to_string_lossy().contains(&style_hash));
+        assert!(style.build_path().to_string_lossy().contains(&style_hash));
     }
 }
