@@ -7,3 +7,7 @@ pub use chat::ChatRedirect;
 
 mod news;
 pub use news::{NewsIndex, NewsPage};
+
+#[path = "404.rs"]
+mod not_found;
+pub use not_found::NotFound;

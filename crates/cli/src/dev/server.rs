@@ -28,7 +28,9 @@ use axum::extract::connect_info::ConnectInfo;
 use futures::{stream::StreamExt, SinkExt};
 
 use crate::logging::{format_elapsed_time, FormatElapsedTimeOptions};
+use axum::http::header;
 use local_ip_address::local_ip;
+use tokio::fs;
 
 #[derive(Clone, Debug)]
 pub struct WebSocketMessage {
@@ -40,19 +42,47 @@ struct AppState {
     tx: broadcast::Sender<WebSocketMessage>,
 }
 
+fn inject_live_reload_script(html_content: &str, socket_addr: SocketAddr, host: bool) -> String {
+    let mut content = html_content.to_string();
+
+    let script_content = include_str!("./client.js").replace(
+        "{SERVER_ADDRESS}",
+        &format!(
+            "{}:{}",
+            if !host {
+                socket_addr.ip().to_string()
+            } else {
+                local_ip().unwrap().to_string()
+            },
+            &socket_addr.port().to_string()
+        ),
+    );
+
+    content.push_str(&format!("<script>{script_content}</script>"));
+    content
+}
+
 pub async fn start_dev_web_server(
     start_time: std::time::Instant,
     tx: broadcast::Sender<WebSocketMessage>,
     host: bool,
 ) {
-    // TODO: The live-reload script should be included on the 404 too
-    // TODO: Design an actual cool 404 page, and using the user's if they have one
-    async fn handle_404() -> (StatusCode, &'static str) {
-        (StatusCode::NOT_FOUND, "Not found")
-    }
+    // TODO: The dist dir should be configurable
+    let dist_dir = "dist";
 
-    let service = handle_404.into_service();
-    let serve_dir = ServeDir::new("dist").not_found_service(service);
+    async fn handle_404(socket_addr: SocketAddr, host: bool, dist_dir: &str) -> impl IntoResponse {
+        let content = match fs::read_to_string(format!("{}/404.html", dist_dir)).await {
+            Ok(custom_content) => custom_content,
+            Err(_) => include_str!("./404.html").to_string(),
+        };
+
+        (
+            StatusCode::NOT_FOUND,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            inject_live_reload_script(&content, socket_addr, host),
+        )
+            .into_response()
+    }
 
     // run it with hyper, if --host 0.0.0.0 otherwise localhost
     let addr = if host {
@@ -69,6 +99,9 @@ pub async fn start_dev_web_server(
     let listener = socket.listen(1024).unwrap();
 
     debug!("listening on {}", listener.local_addr().unwrap());
+
+    let service = (move || handle_404(socket_addr, host, dist_dir)).into_service();
+    let serve_dir = ServeDir::new(dist_dir).not_found_service(service);
 
     let router = Router::new()
         .route("/ws", get(ws_handler))
@@ -184,26 +217,13 @@ async fn add_dev_client_script(
         let body = res.into_body();
         let bytes = to_bytes(body, usize::MAX).await.unwrap();
 
-        let mut body = String::from_utf8_lossy(&bytes).into_owned();
-
-        let script_content = include_str!("./client.js").replace(
-            "{SERVER_ADDRESS}",
-            &format!(
-                "{}:{}",
-                if !host {
-                    socket_addr.ip().to_string()
-                } else {
-                    local_ip().unwrap().to_string()
-                },
-                &socket_addr.port().to_string()
-            ),
-        );
+        let body = String::from_utf8_lossy(&bytes).into_owned();
 
         // TODO: Handle HTML documents with no tags, e.g. `"Hello, world"`. Appending a raw script tag will cause it to show up as text.
-        body.push_str(&format!("<script>{script_content}</script>"));
+        let body_with_script = inject_live_reload_script(&body, socket_addr, host);
 
         // Copy the headers from the original response
-        let mut res = Response::new(body.into());
+        let mut res = Response::new(body_with_script.into());
         *res.headers_mut() = res.headers().clone();
 
         res.extensions_mut().insert(uri);

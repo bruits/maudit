@@ -231,6 +231,7 @@ impl Asset for Image {
     }
 
     fn process(&self, _: &Path, _: &Path) -> Option<String> {
+        // TODO: Image processing
         fs::copy(&self.path, self.build_path()).unwrap();
 
         None

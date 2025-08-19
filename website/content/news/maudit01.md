@@ -62,9 +62,7 @@ We keep a [roadmap](https://github.com/bruits/maudit/issues/1) up to date with o
 
 ## Join the coven
 
-[Maudit is fully open source under the MIT license](https://github.com/bruits/maudit), and we would be thrilled to receive your contributions, no matter your skill level.
-
-We welcome contributions of all kinds! Whether it's code, documentation, design, issues, or just spreading the word, every little bit helps.
+[Maudit is open source, licensed under MIT](https://github.com/bruits/maudit), and we would be thrilled to receive your contributions, no matter your skill level. Whether it's code, documentation, design, issues, or just spreading the word, every little bit helps.
 
 We also have a [Discord server](/chat) where you can chat with other users and contributors. We hope to see you there!
 

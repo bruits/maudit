@@ -53,7 +53,6 @@ async fn main() {
         }
         Commands::Preview => {
             // TODO: Dist path is hardcoded for now. Ideally, Maudit should output some kind of metadata file that can be read by the CLI.
-            // (and then we could error on that instead of the dist path, ha)
             let dist_path = Path::new("dist");
             if !dist_path.exists() {
                 println!(
@@ -65,6 +64,7 @@ async fn main() {
             let _ = start_preview_web_server(PathBuf::from("dist")).await;
         }
         Commands::Dev { host } => {
+            // TODO: cwd should be configurable, ex: --root <path>
             let _ = start_dev_env(".", *host).await;
         }
     }

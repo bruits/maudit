@@ -1,3 +1,7 @@
+/**
+ * TODO: This is a quite naive implementation, without necessarily thinking about complex HMR and stuff
+ * It might be better to use a more sophisticated approach, using some sort of diffing, handling reconnecting, etc.
+ */
 const debounceReload = (time) => {
 	let timer;
 	return () => {

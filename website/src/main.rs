@@ -7,6 +7,8 @@ mod pages;
 
 use pages::{ChatRedirect, DocsIndex, DocsPage, Index, NewsIndex, NewsPage};
 
+use crate::pages::NotFound;
+
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(
         routes![
@@ -15,7 +17,8 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
             NewsIndex,
             DocsPage,
             NewsPage,
-            ChatRedirect
+            ChatRedirect,
+            NotFound
         ],
         content_sources(),
         BuildOptions {
