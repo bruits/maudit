@@ -9,7 +9,7 @@ examples:
 
 "crt:maudit":
   - changed-files:
-      - any-glob-to-any-file: crates/framework/**
+      - any-glob-to-any-file: crates/maudit/**
 
 "crt:oubli":
   - changed-files:
@@ -17,15 +17,15 @@ examples:
 
 "crt:cli":
   - changed-files:
-      - any-glob-to-any-file: crates/cli/**
+      - any-glob-to-any-file: crates/maudit-cli/**
 
 "crt:macros":
   - changed-files:
-      - any-glob-to-any-file: crates/macros/**
+      - any-glob-to-any-file: crates/maudit-macros/**
 
 "crt:benchmarks":
   - changed-files:
-      - any-glob-to-any-file: crates/md-benchmarks/**
+      - any-glob-to-any-file: crates/maudit-md-benchmarks/**
 
 devops:
   - changed-files:

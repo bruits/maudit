@@ -1,6 +1,10 @@
 # Contributing to Our Open Source Projects
 
-First, a huge **thank you** for dedicating your time to helping us improve our projects 🧡
+First, a huge **thank you** for dedicating your time to helping us improve Maudit ❤️
+
+> [!Tip]
+>
+> **New to open source?** Check out [https://github.com/firstcontributions/first-contributions](https://github.com/firstcontributions/first-contributions) for helpful information on contributing
 
 ## Before Opening Issues
 
@@ -19,6 +23,29 @@ First, a huge **thank you** for dedicating your time to helping us improve our p
 ## Code of Conduct
 
 We’re committed to fostering a welcoming and respectful community. Any issue, PR, or discussion that violates our [code of conduct](https://github.com/bruits/maudit/blob/main/CODE_OF_CONDUCT.md) will be deleted, and the authors will be **banned**.
+
+## Getting started
+
+Maudit is a fairly standard Rust project with a typical directory structure. It does not rely on any third-party build systems, complex configurations or dependencies in other languages.
+
+### Prerequisites
+
+- Latest stable version of [Rust](https://www.rust-lang.org/)
+- (Optional, for website and examples using Tailwind) [Node.js](https://nodejs.org/) and [pnpm](https://pnpm.io/).
+  - We recommend installing pnpm using [Corepack](https://pnpm.io/installation#using-corepack).
+
+### Project structure
+
+Maudit is a Rust monorepo using [Cargo workspaces](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html).
+
+```bash
+├── crates/
+│   ├── maudit/ # Maudit
+│   ├── maudit-macros/ # Proc macros the library exposes (e.g. #[route])
+│   └── maudit-cli/ # Maudit's CLI and dev server
+├── examples/ # Various examples showcasing Maudit's capabilities, also used as templates
+└── website/ # Maudit's website and documentation
+```
 
 ---
 

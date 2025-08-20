@@ -6,6 +6,6 @@ license = "MIT"
 edition = "2021"
 
 [dependencies]
-maudit = { path = "../framework", version = "0.2" }
+maudit = { path = "../maudit", version = "0.2" }
 maud = { workspace = true }
 serde = { workspace = true }

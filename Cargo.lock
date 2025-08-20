@@ -1802,14 +1802,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "maudit-benchmark"
-version = "0.1.0"
-dependencies = [
- "maud",
- "maudit",
-]
-
-[[package]]
 name = "maudit-cli"
 version = "0.3.1"
 dependencies = [
@@ -1878,6 +1870,14 @@ version = "0.2.0"
 dependencies = [
  "quote",
  "syn 2.0.98",
+]
+
+[[package]]
+name = "maudit-md-benchmark"
+version = "0.1.0"
+dependencies = [
+ "maud",
+ "maudit",
 ]
 
 [[package]]

@@ -99,7 +99,7 @@ pub fn derive_params(item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 // Helps implement a struct as a Markdown content entry.
 //
-// See complete documentation in `crates/framework/src/content.rs`.
+// See complete documentation in `crates/maudit/src/content.rs`.
 pub fn markdown_entry(args: TokenStream, item: TokenStream) -> TokenStream {
     let mut item_struct = syn::parse_macro_input!(item as ItemStruct);
     let _ = parse_macro_input!(args as parse::Nothing);

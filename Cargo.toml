@@ -3,7 +3,7 @@ members = ["crates/*", "examples/*", "website"]
 resolver = "2"
 
 [workspace.dependencies]
-maudit = { path = "crates/framework", version = "*" }
+maudit = { path = "crates/maudit", version = "*" }
 oubli = { path = "crates/oubli", version = "*" }
 maud = { version = "0.26.0" }
 serde = { version = "1.0.216" }
