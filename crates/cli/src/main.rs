@@ -4,6 +4,7 @@ mod init;
 mod preview;
 
 mod logging;
+mod server_utils;
 
 use clap::{Parser, Subcommand};
 use dev::start_dev_env;
@@ -34,7 +35,10 @@ enum Commands {
         host: bool,
     },
     /// Preview the project
-    Preview,
+    Preview {
+        #[clap(long)]
+        host: bool,
+    },
 }
 
 #[tokio::main]
@@ -51,7 +55,7 @@ async fn main() {
         Commands::Build => {
             build::start_build();
         }
-        Commands::Preview => {
+        Commands::Preview { host } => {
             // TODO: Dist path is hardcoded for now. Ideally, Maudit should output some kind of metadata file that can be read by the CLI.
             let dist_path = Path::new("dist");
             if !dist_path.exists() {
@@ -61,7 +65,7 @@ async fn main() {
                 return;
             }
 
-            let _ = start_preview_web_server(PathBuf::from("dist")).await;
+            let _ = start_preview_web_server(PathBuf::from("dist"), *host).await;
         }
         Commands::Dev { host } => {
             // TODO: cwd should be configurable, ex: --root <path>

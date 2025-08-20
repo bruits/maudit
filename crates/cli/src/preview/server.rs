@@ -1,29 +1,73 @@
+use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 
-use axum::{handler::HandlerWithoutStateExt, http::StatusCode, Router};
+use axum::{
+    handler::HandlerWithoutStateExt,
+    http::{header, StatusCode},
+    response::IntoResponse,
+    Router,
+};
+use tokio::{fs, net::TcpSocket};
+use tracing::{debug, Level};
 
 use tower_http::{
     services::ServeDir,
     trace::{DefaultMakeSpan, TraceLayer},
 };
 
-pub async fn start_preview_web_server(dist_dir: PathBuf) {
-    async fn handle_404() -> (StatusCode, &'static str) {
-        (StatusCode::NOT_FOUND, "Not found")
+use crate::server_utils::{find_open_port, log_server_start, CustomOnResponse};
+
+pub async fn start_preview_web_server(dist_dir: PathBuf, host: bool) {
+    let start_time = std::time::Instant::now();
+
+    async fn handle_404(dist_dir: PathBuf) -> impl IntoResponse {
+        let content = match fs::read_to_string(dist_dir.join("404.html")).await {
+            Ok(custom_content) => custom_content,
+            Err(_) => include_str!("../dev/404.html").to_string(),
+        };
+
+        (
+            StatusCode::NOT_FOUND,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            content,
+        )
+            .into_response()
     }
 
-    let service = handle_404.into_service();
+    // run it with hyper, if --host 0.0.0.0 otherwise localhost
+    let addr = if host {
+        IpAddr::from([0, 0, 0, 0])
+    } else {
+        IpAddr::from([127, 0, 0, 1])
+    };
+
+    let port = find_open_port(&addr, 3000).await;
+    let socket = TcpSocket::new_v4().unwrap();
+
+    let socket_addr = SocketAddr::new(addr, port);
+    socket.bind(socket_addr).unwrap();
+
+    let listener = socket.listen(1024).unwrap();
+
+    debug!("listening on {}", listener.local_addr().unwrap());
+
+    let dist_dir_clone = dist_dir.clone();
+    let service = (move || handle_404(dist_dir_clone.clone())).into_service();
     let serve_dir = ServeDir::new(dist_dir).not_found_service(service);
 
-    let router = Router::new().fallback_service(serve_dir).layer(
-        TraceLayer::new_for_http().make_span_with(DefaultMakeSpan::default().include_headers(true)),
-    );
+    let router = Router::new()
+        .fallback_service(serve_dir)
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::default().include_headers(true)),
+        )
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                .on_response(CustomOnResponse),
+        );
 
-    // run it with hyper
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
-        .await
-        .unwrap();
-    tracing::debug!("listening on {}", listener.local_addr().unwrap());
+    log_server_start(start_time, host, listener.local_addr().unwrap(), "Preview");
 
     axum::serve(listener, router.into_make_service())
         .await
