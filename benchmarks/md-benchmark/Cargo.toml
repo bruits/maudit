@@ -1,0 +1,16 @@
+[package]
+name = "md-benchmark"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+maudit = { workspace = true }
+maud = { workspace = true }
+
+[dev-dependencies]
+divan = { version = "3.0.5", package = "codspeed-divan-compat" }
+
+[[bench]]
+name = "build"
+harness = false

@@ -26,9 +26,10 @@ impl Default for FormatElapsedTimeOptions<'_> {
 
 pub fn init_logging() {
     let logging_env = Env::default().filter_or("RUST_LOG", "info");
-    Builder::from_env(logging_env)
+
+    let _ = Builder::from_env(logging_env)
         .format(|buf, record| {
-            if std::env::args().any(|arg| arg == "--quiet") {
+            if std::env::args().any(|arg| arg == "--quiet") || std::env::var("MAUDIT_QUIET").is_ok() {
                 return Ok(());
             }
 
@@ -46,7 +47,7 @@ pub fn init_logging() {
                 record.args()
             )
         })
-        .init();
+        .try_init();
 }
 
 pub fn format_elapsed_time(

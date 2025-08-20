@@ -1,4 +1,4 @@
-# Contributing to Our Open Source Projects
+# Contributing to Maudit
 
 First, a huge **thank you** for dedicating your time to helping us improve Maudit ❤️
 

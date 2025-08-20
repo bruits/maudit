@@ -22,6 +22,14 @@ Valid values for `MARKDOWN_COUNT` are 250, 500, 1000, 2000, and 4000.
 
 Note that `cargo run` has a certain overhead, as such if checking the total time, it's more useful to run the compiled binary (`target/release/maudit-benchmark`) directly
 
+## `cargo bench`
+
+All 5 benchmarks can be run at once using the `cargo bench` command:
+
+```sh
+cargo bench
+```
+
 ## Results
 
 The following results were obtained on 2025-01-07 using a MacBook Pro (13-inch, M1, 2020) with 16 GB of RAM:
