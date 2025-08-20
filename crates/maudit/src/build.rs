@@ -67,7 +67,7 @@ pub async fn build(
         let source_start = SystemTime::now();
         source.init();
 
-        info!(target: "build", "{}", format!("{} initialized in {}", source.get_name(), format_elapsed_time(source_start.elapsed(), &FormatElapsedTimeOptions::default()).unwrap()));
+        info!(target: "build", "{} initialized in {}", source.get_name(), format_elapsed_time(source_start.elapsed(), &FormatElapsedTimeOptions::default()).unwrap());
     });
 
     info!(target: "build", "{}", format!("Content sources initialized in {}", format_elapsed_time(
@@ -283,7 +283,7 @@ pub async fn build(
         if !bundler_inputs.is_empty() {
             let mut bundler = Bundler::new(BundlerOptions {
                 input: Some(bundler_inputs),
-                minify: Some(true),
+                minify: Some(rolldown::RawMinifyOptions::Bool(true)),
                 dir: Some(assets_dir.to_string_lossy().to_string()),
 
                 ..Default::default()

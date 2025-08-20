@@ -18,7 +18,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 maud = { workspace = true, optional = true }
 
 # TODO: Allow making those optional
-rolldown = { package = "maudit_rolldown", version = "0.1.0" }
+rolldown = { package = "brk_rolldown", version = "0.1.4" }
 serde = { workspace = true }
 serde_yml = "0.0.12"
 pulldown-cmark = "0.12.2"
