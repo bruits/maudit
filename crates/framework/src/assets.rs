@@ -230,9 +230,9 @@ impl Asset for Image {
         self.hash.clone()
     }
 
-    fn process(&self, _: &Path, _: &Path) -> Option<String> {
+    fn process(&self, dist_path: &Path, _: &Path) -> Option<String> {
         // TODO: Image processing
-        fs::copy(&self.path, self.build_path()).unwrap();
+        fs::copy(&self.path, dist_path.join(self.final_file_name())).unwrap();
 
         None
     }

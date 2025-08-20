@@ -13,6 +13,9 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(
         routes![pages::Index, pages::DynamicExample, pages::Endpoint],
         vec![].into(),
-        BuildOptions::default(),
+        BuildOptions {
+            tailwind_binary_path: "../../node_modules/.bin/tailwindcss".to_string(),
+            ..Default::default()
+        },
     )
 }
