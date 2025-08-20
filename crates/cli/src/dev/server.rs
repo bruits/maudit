@@ -99,6 +99,8 @@ pub async fn start_dev_web_server(
     let service = (move || handle_404(socket_addr, host, dist_dir)).into_service();
     let serve_dir = ServeDir::new(dist_dir).not_found_service(service);
 
+    // TODO: Return a `.well-known/appspecific/com.chrome.devtools.json` for Chrome
+
     let router = Router::new()
         .route("/ws", get(ws_handler))
         .fallback_service(serve_dir)

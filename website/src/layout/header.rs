@@ -14,7 +14,7 @@ pub fn header(_: &mut RouteContext, bottom_border: bool) -> Markup {
                         (PreEscaped(include_str!("../../assets/logo.svg")))
                         h1.text-2xl.tracking-wide { "Maudit" }
                     }
-                    nav.text-lg.flex.gap-x-12.relative."top-[2px]" {
+                    nav.text-lg.gap-x-12.relative."top-[2px]".hidden."sm:flex" {
                         a href="/docs/" { "Documentation" }
                         a href="/news/" { "News" }
                         a href="/contribute/" { "Contribute" }

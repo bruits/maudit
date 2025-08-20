@@ -104,14 +104,14 @@ impl Page<NewsPageParams> for NewsPage {
 
         layout(
             html! {
-                div.container.mx-auto."py-10"."pb-24"."max-w-[80ch]" {
+                div.container.mx-auto."py-10"."pb-24"."max-w-[80ch]"."px-8"."sm:px-0" {
                     section.mb-4.border-b."border-[#e9e9e7]".pb-2 {
                         @if let Some(date) = &entry.data.date {
                             p.text-sm.font-bold { (date) }
                         }
-                        h1."text-7xl".font-bold { (entry.data.title) }
+                        h1."text-6xl"."sm:text-7xl".font-bold { (entry.data.title) }
                         @if let Some(description) = &entry.data.description {
-                            p.text-2xl { (description) }
+                            p.text-xl."sm:text-2xl" { (description) }
                         }
                     }
 

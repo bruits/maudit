@@ -57,7 +57,7 @@ pub fn layout(
                     (header(ctx, bottom_border))
                     (main)
                     footer.bg-our-black.text-white {
-                        div.container.mx-auto.py-8.flex.justify-between.items-center {
+                        div.container.mx-auto.px-8.py-8.flex.justify-between.items-center.flex-col-reverse."sm:flex-row".gap-y-12 {
                             div.grow."basis-[0]" {
                                 a.text-md.font-bold href="https://bruits.org" {
                                     "Copyright © 2025 Bruits."

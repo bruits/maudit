@@ -7,8 +7,6 @@ use crate::layout::layout;
 #[route("/")]
 pub struct Index;
 
-const LATEST_NEWS: (&str, &str) = ("Introducing Maudit", "/news/maudit01");
-
 impl Page for Index {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let features = [
@@ -23,29 +21,28 @@ impl Page for Index {
         layout(
             html! {
                 div.w-full {
-                    div."lg:container".mx-auto.hero-background.relative {
-                        div.px-4.py-14.mx-6.my-28 {
-                            a.bg-our-black.text-our-white.rounded-sm.px-2.py-1.text-sm.mb-2.inline-block."hover:!text-brighter-brand"."hover:cursor-pointer" href=(LATEST_NEWS.1) {
-                                (format!("{}", LATEST_NEWS.0))
-                            }
-                            h2.text-5xl."w-[22ch]"."xl:w-[30ch]"."mb-1"."leading-[1.15]" {
+                    div."lg:container".mx-auto.relative {
+                        div."px-4"."sm:py-8"."sm:mx-6"."sm:my-26"."my-14"."mb-20".flex.flex-col.justify-center.items-center.text-center {
+                            h2."sm:text-6xl"."text-5xl"."sm:w-[22ch]"."xl:w-[30ch]"."mb-2"."leading-[1.15]" {
                                 "Lo, " span.text-brand-red { "the still scrolls of the web"} ", unchanging and steadfast, at last!"
                             }
                             p.opacity-80.italic {
                                 "Or, in simpler words, " span.text-brand-red {"a static site generator"} "."
                             }
                             div.mt-6.leading-tight {
-                                a.btn.block.group.inline-block href="/docs/" { "Get Started" span.inline-block."group-hover:translate-x-3".transition-transform.translate-x-2 { "→" } }
+                                a.btn.block.group.inline-block href="/docs/" { "Get Started" }
                                 p.opacity-80.italic { "or scroll down to learn more" }
                             }
                         }
                     }
                 }
 
-                div.h-14.bg-linear-to-b."from-darker-white".border-t.border-t-borders{}
+                div."hero-background"."w-[175px]"."h-[175px]".absolute."left-1/2"."-translate-x-1/2"."-translate-y-1/2" {}
+
+                div.h-14.bg-linear-to-b."from-darker-white".border-t.border-t-borders."sm:mb-24".mb-10 {}
 
                 section.banner.py-14.text-center {
-                    div."px-52"."lg:container".mx-auto {
+                    div."sm:px-52"."px-4"."lg:container".mx-auto {
                         h3.text-4xl."mb-5".inline-block { "Crafted for timeless sites" }
                         p.font-bold {
                             "Maudit was built for one purpose: creating static websites."
@@ -75,7 +72,7 @@ impl Page for Index {
                 div.h-12.bg-linear-to-b."from-darker-white".border-t.border-t-borders{}
 
             },
-            false,
+            true,
             true,
             ctx,
         )
