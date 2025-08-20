@@ -40,7 +40,7 @@ impl Page<RouteParams, String> for HelloWorld {
 Maudit implements `Into<RenderResult>` for the following types:
 
 - `String`, `Vec<u8>`, `&str`, `&[u8]`
-- `maud::Markup`
+- [Various templating libraries](/docs/templating/)
 
 ### Dynamic Routes
 

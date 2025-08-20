@@ -1,6 +1,6 @@
 ---
 title: "Entrypoint"
-description: "Welcome to the Maudit documentation!"
+description: "Learn how to set up the entrypoint for your Maudit project."
 section: "core-concepts"
 ---
 

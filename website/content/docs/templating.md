@@ -4,9 +4,7 @@ description: "Learn how to render content using your favorite templating engine.
 section: "core-concepts"
 ---
 
-While Maudit gets its name partially from [the Maud templating langage](https://maud.lambda.xyz), Maudit supports using most Rust templating libraries.
-
-In general, if a library can return a String, you can use it to generate pages with Maudit.
+Maudit supports using most Rust templating libraries. In general, if a library can return a String, you can use it to generate pages with Maudit.
 
 Through crate features, Maudit includes built-in helper methods and traits implementation for numerous popular templating libraries.
 

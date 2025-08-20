@@ -26,7 +26,7 @@ impl Page for Index {
                     div."lg:container".mx-auto.hero-background.relative {
                         div.px-4.py-14.mx-6.my-28 {
                             a.bg-our-black.text-our-white.rounded-sm.px-2.py-1.text-sm.mb-2.inline-block."hover:!text-brighter-brand"."hover:cursor-pointer" href=(LATEST_NEWS.1) {
-                                (format!("{} →", LATEST_NEWS.0))
+                                (format!("{}", LATEST_NEWS.0))
                             }
                             h2.text-5xl."w-[22ch]"."xl:w-[30ch]"."mb-1"."leading-[1.15]" {
                                 "Lo, " span.text-brand-red { "the still scrolls of the web"} ", unchanging and steadfast, at last!"

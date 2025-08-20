@@ -1,4 +1,4 @@
-use maud::html;
+use maud::{html, PreEscaped};
 use maudit::page::prelude::*;
 
 use crate::layout::layout;
@@ -10,9 +10,11 @@ impl Page for NotFound {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         layout(
             html! {
-                div class="container" {
-                    h1 { "404 - Not Found" }
-                    p { "The page you are looking for could not be found." }
+                div.container.mx-auto.text-center.my-50.flex.items-center.flex-col.gap-y-4 {
+                    (PreEscaped(include_str!("../../assets/logo.svg")))
+                    h1.text-6xl { "404 - Not Found" }
+                    p.text-xl { "All the site's a stage, but this page plays not its part." }
+                    a.btn.btn-primary href="/" { "Go back to safety" }
                 }
             },
             false,
