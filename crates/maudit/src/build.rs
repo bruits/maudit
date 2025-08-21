@@ -1,10 +1,13 @@
 use std::{
-    fs::{self, remove_dir_all, File},
-    io::{self, Write},
+    fs::{self, remove_dir_all},
+    io,
     path::{Path, PathBuf},
     str::FromStr,
+    thread,
     time::SystemTime,
 };
+
+use crossbeam::channel::{self, Sender};
 
 use crate::{
     assets,
@@ -27,6 +30,86 @@ use crate::assets::Asset;
 use crate::logging::{format_elapsed_time, FormatElapsedTimeOptions};
 
 use lol_html::{element, rewrite_str, RewriteStrSettings};
+
+/// Task for writing content to a file path
+#[derive(Debug)]
+pub struct WriteTask {
+    pub path: PathBuf,
+    pub content: String,
+}
+
+/// Async file writer that processes writes in a pool of worker threads.
+///
+/// This separates CPU-intensive processing (content generation) from I/O operations (file writing),
+/// allowing multiple files to be written concurrently while the main thread continues processing routes.
+pub struct AsyncFileWriter {
+    sender: Sender<WriteTask>,
+    handles: Vec<thread::JoinHandle<()>>,
+}
+
+impl AsyncFileWriter {
+    /// Create a new async file writer with the specified number of worker threads
+    pub fn new(num_workers: usize) -> Self {
+        let (sender, receiver) = channel::unbounded::<WriteTask>();
+        let mut handles = Vec::new();
+
+        for worker_id in 0..num_workers {
+            let receiver = receiver.clone();
+            let handle = thread::spawn(move || {
+                log::trace!(target: "async_writer", "Writer worker {} started", worker_id);
+
+                while let Ok(task) = receiver.recv() {
+                    if let Err(e) = Self::write_file(&task) {
+                        log::error!(target: "async_writer", "Failed to write file {}: {}", task.path.display(), e);
+                    }
+                }
+
+                log::trace!(target: "async_writer", "Writer worker {} finished", worker_id);
+            });
+            handles.push(handle);
+        }
+
+        Self { sender, handles }
+    }
+
+    /// Queue a write task to be processed by worker threads
+    pub fn queue_write(
+        &self,
+        path: PathBuf,
+        content: String,
+    ) -> Result<(), crossbeam::channel::SendError<WriteTask>> {
+        self.sender.send(WriteTask { path, content })
+    }
+
+    /// Wait for all writes to complete by dropping the sender and joining all worker threads
+    pub fn finish(self) -> Result<(), Box<dyn std::error::Error>> {
+        // Drop the sender to signal workers to stop
+        drop(self.sender);
+
+        // Wait for all worker threads to finish
+        for (i, handle) in self.handles.into_iter().enumerate() {
+            handle
+                .join()
+                .map_err(|_| format!("Writer worker thread {} panicked", i))?;
+        }
+
+        log::trace!(target: "async_writer", "All writer threads finished successfully");
+        Ok(())
+    }
+
+    fn write_file(task: &WriteTask) -> io::Result<()> {
+        // Create parent directories if they don't exist
+        if let Some(parent_dir) = task.path.parent() {
+            fs::create_dir_all(parent_dir)?;
+        }
+
+        // Write the file
+        fs::write(&task.path, &task.content)?;
+
+        log::trace!(target: "async_writer", "Wrote file: {}", task.path.display());
+        Ok(())
+    }
+}
 
 pub mod metadata;
 pub mod options;
@@ -78,6 +161,11 @@ pub async fn build(
     print_title("generating pages");
     let pages_start = SystemTime::now();
 
+    // Create async file writer with dynamic worker count based on CPU cores
+    let n_writers = std::cmp::min(num_cpus::get() * 2, 8);
+    log::trace!(target: "async_writer", "Creating {} writer workers for {} CPU cores", n_writers, num_cpus::get());
+    let async_writer = AsyncFileWriter::new(n_writers);
+
     let route_format_options = FormatElapsedTimeOptions {
         additional_fn: Some(&|msg: ColoredString| {
             let formatted_msg = format!("(+{})", msg);
@@ -125,17 +213,19 @@ pub async fn build(
                     current_url: String::new(), // TODO
                 };
 
-                let (file_path, mut file) =
+                let (file_path, _) =
                     create_route_file(*route, &params_def, ctx.raw_params, &dist_dir)?;
                 let result = route.render_internal(&mut ctx);
 
-                finish_route(
+                let content = finish_route(
                     result,
-                    &mut file,
                     &page_assets.included_styles,
                     &page_assets.included_scripts,
-                    route.route_raw(),
+                    route.route_raw().to_string(),
                 )?;
+
+                // Queue the write task for async processing
+                async_writer.queue_write(file_path.clone(), content)?;
 
                 info!(target: "build", "{} -> {} {}", get_route_url(&route.route_raw(), &params_def, &params), file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap());
 
@@ -181,7 +271,7 @@ pub async fn build(
                         current_url: String::new(), // TODO
                     };
 
-                    let (file_path, mut file) =
+                    let (file_path, _) =
                         create_route_file(*route, &params_def, ctx.raw_params, &dist_dir)?;
 
                     let result = route.render_internal(&mut ctx);
@@ -192,13 +282,15 @@ pub async fn build(
                         Some(params.0),
                     );
 
-                    finish_route(
+                    let content = finish_route(
                         result,
-                        &mut file,
                         &pages_assets.included_styles,
                         &pages_assets.included_scripts,
-                        route.route_raw(),
+                        route.route_raw().to_string(),
                     )?;
+
+                    // Queue the write task for async processing
+                    async_writer.queue_write(file_path.clone(), content)?;
 
                     info!(target: "build", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap());
 
@@ -308,6 +400,9 @@ pub async fn build(
         info!(target: "build", "{}", format!("Assets copied in {}", format_elapsed_time(assets_start.elapsed(), &FormatElapsedTimeOptions::default()).unwrap()).bold());
     }
 
+    // Wait for all async writes to complete before proceeding
+    async_writer.finish()?;
+
     // Remove temporary files
     let _ = remove_dir_all(&tmp_dir);
 
@@ -353,7 +448,7 @@ fn create_route_file(
     params_def: &Vec<ParameterDef>,
     params: &RouteParams,
     dist_dir: &Path,
-) -> Result<(PathBuf, File), Box<dyn std::error::Error>> {
+) -> Result<(PathBuf, ()), Box<dyn std::error::Error>> {
     let file_path = dist_dir.join(get_route_file_path(
         &route.route_raw(),
         params_def,
@@ -361,29 +456,21 @@ fn create_route_file(
         route.is_endpoint(),
     ));
 
-    // Create the parent directories if it doesn't exist
-    if let Some(parent_dir) = file_path.parent() {
-        fs::create_dir_all(parent_dir)?
-    }
-
-    // Create file
-    let file = File::create(file_path.clone())?;
-
-    Ok((file_path, file))
+    // We no longer create the file here, just return the path
+    // The async writer will handle creating parent directories and the file
+    Ok((file_path, ()))
 }
 
 fn finish_route(
     render_result: RenderResult,
-    file: &mut File,
     included_styles: &[assets::Style],
     included_scripts: &[assets::Script],
     route: String,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<String, Box<dyn std::error::Error>> {
     match render_result {
         RenderResult::Text(html) => {
             if included_scripts.is_empty() && included_styles.is_empty() {
-                file.write_all(html.as_bytes())?;
-                return Ok(());
+                return Ok(html);
             }
 
             let element_content_handlers = vec![
@@ -427,16 +514,14 @@ fn finish_route(
                 },
             )?;
 
-            file.write_all(output.as_bytes())?;
+            Ok(output)
         }
         RenderResult::Raw(content) => {
             if !included_scripts.is_empty() || !included_styles.is_empty() {
                 Err(BuildError::InvalidRenderResult { route })?;
             }
 
-            file.write_all(&content)?;
+            Ok(String::from_utf8(content)?)
         }
     }
-
-    Ok(())
 }
