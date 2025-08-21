@@ -28,7 +28,7 @@ use super::{highlight::CodeBlock, slugger, ContentEntry};
 ///   fn render(&self, ctx: &mut RouteContext) -> Markup {
 ///     let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///     let article = articles.get_entry("my-article");
-///     let headings = article.data.get_headings(); // returns a Vec<MarkdownHeading>
+///     let headings = article.data().get_headings(); // returns a Vec<MarkdownHeading>
 ///     let toc = html! {
 ///       ul {
 ///         @for heading in headings {
@@ -40,7 +40,7 @@ use super::{highlight::CodeBlock, slugger, ContentEntry};
 ///     };
 ///     html! {
 ///       main {
-///         h1 { (article.data.title) }
+///         h1 { (article.data().title) }
 ///         nav { (toc) }
 ///       }
 ///     }
@@ -154,12 +154,11 @@ impl InternalMarkdownContent for UntypedMarkdownContent {
 /// ```
 pub fn glob_markdown<T>(pattern: &str) -> Vec<ContentEntry<T>>
 where
-    T: DeserializeOwned + MarkdownContent + InternalMarkdownContent,
+    T: DeserializeOwned + MarkdownContent + InternalMarkdownContent + Send + Sync + 'static,
 {
     let mut entries = vec![];
 
     for entry in glob_fs(pattern).unwrap() {
-        let mut slugger = slugger::Slugger::new();
         let entry = entry.unwrap();
 
         if let Some(extension) = entry.extension() {
@@ -172,57 +171,65 @@ where
         let id = entry.file_stem().unwrap().to_str().unwrap().to_string();
         let content = std::fs::read_to_string(&entry).unwrap();
 
-        let mut options = Options::empty();
-        options.insert(
-            Options::ENABLE_YAML_STYLE_METADATA_BLOCKS | Options::ENABLE_HEADING_ATTRIBUTES,
-        );
+        // Clone content for the closure
+        let content_clone = content.clone();
+        let data_loader = Box::new(move || {
+            let mut slugger = slugger::Slugger::new();
 
-        let mut frontmatter = String::new();
-        let mut in_frontmatter = false;
+            let mut options = Options::empty();
+            options.insert(
+                Options::ENABLE_YAML_STYLE_METADATA_BLOCKS | Options::ENABLE_HEADING_ATTRIBUTES,
+            );
 
-        let mut content_events = Vec::new();
-        for (event, _) in Parser::new_ext(&content, options).into_offset_iter() {
-            match event {
-                Event::Start(Tag::MetadataBlock(_)) => in_frontmatter = true,
-                Event::End(TagEnd::MetadataBlock(_)) => in_frontmatter = false,
-                Event::Text(ref text) => {
-                    if in_frontmatter {
-                        frontmatter.push_str(text);
-                    } else {
-                        content_events.push(event);
+            let mut frontmatter = String::new();
+            let mut in_frontmatter = false;
+
+            let mut content_events = Vec::new();
+            for (event, _) in Parser::new_ext(&content_clone, options).into_offset_iter() {
+                match event {
+                    Event::Start(Tag::MetadataBlock(_)) => in_frontmatter = true,
+                    Event::End(TagEnd::MetadataBlock(_)) => in_frontmatter = false,
+                    Event::Text(ref text) => {
+                        if in_frontmatter {
+                            frontmatter.push_str(text);
+                        } else {
+                            content_events.push(event);
+                        }
                     }
+                    _ => content_events.push(event),
                 }
-                _ => content_events.push(event),
             }
-        }
 
-        // TODO: Prettier errors for serialization errors (e.g. missing fields)
-        let mut parsed = serde_yml::from_str::<T>(&frontmatter).unwrap();
+            // TODO: Prettier errors for serialization errors (e.g. missing fields)
+            let mut parsed = serde_yml::from_str::<T>(&frontmatter).unwrap();
 
-        let headings_internal = find_headings(&content_events);
+            let headings_internal = find_headings(&content_events);
 
-        let mut headings = vec![];
-        for heading in headings_internal {
-            let heading_content = get_text_from_events(&content_events[heading.start..heading.end]);
-            let slug: String = slugger.slugify(&heading_content);
+            let mut headings = vec![];
+            for heading in headings_internal {
+                let heading_content =
+                    get_text_from_events(&content_events[heading.start..heading.end]);
+                let slug: String = slugger.slugify(&heading_content);
 
-            headings.push(MarkdownHeading {
-                title: heading_content,
-                id: heading.id.unwrap_or(slug),
-                level: heading.level as u8,
-                classes: heading.classes,
-            });
-        }
+                headings.push(MarkdownHeading {
+                    title: heading_content,
+                    id: heading.id.unwrap_or(slug),
+                    level: heading.level as u8,
+                    classes: heading.classes,
+                });
+            }
 
-        parsed.set_headings(headings);
-
-        entries.push(ContentEntry {
-            id,
-            render: Some(Box::new(render_markdown)),
-            raw_content: Some(content),
-            file_path: Some(entry),
-            data: parsed,
+            parsed.set_headings(headings);
+            parsed
         });
+
+        entries.push(ContentEntry::new_lazy(
+            id,
+            Some(Box::new(render_markdown)),
+            Some(content),
+            data_loader,
+            Some(entry),
+        ));
     }
 
     entries

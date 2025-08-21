@@ -218,7 +218,8 @@ pub struct ContentEntry<T> {
     pub id: String,
     render: OptionalContentRenderFn,
     pub raw_content: Option<String>,
-    pub data: T,
+    data_loader: Option<Box<dyn Fn() -> T + Send + Sync>>,
+    cached_data: std::sync::OnceLock<T>,
     pub file_path: Option<PathBuf>,
 }
 
@@ -236,9 +237,37 @@ impl<T> ContentEntry<T> {
             id,
             render,
             raw_content,
-            data,
+            data_loader: None,
+            cached_data: std::sync::OnceLock::from(data),
             file_path,
         }
+    }
+
+    pub fn new_lazy(
+        id: String,
+        render: OptionalContentRenderFn,
+        raw_content: Option<String>,
+        data_loader: Box<dyn Fn() -> T + Send + Sync>,
+        file_path: Option<PathBuf>,
+    ) -> Self {
+        Self {
+            id,
+            render,
+            raw_content,
+            data_loader: Some(data_loader),
+            cached_data: std::sync::OnceLock::new(),
+            file_path,
+        }
+    }
+
+    pub fn data(&self) -> &T {
+        self.cached_data.get_or_init(|| {
+            if let Some(ref loader) = self.data_loader {
+                loader()
+            } else {
+                panic!("No data loader available and no cached data")
+            }
+        })
     }
 
     pub fn render(&self) -> String {

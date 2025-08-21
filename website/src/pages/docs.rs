@@ -13,7 +13,7 @@ impl Page for DocsIndex {
             .get_source::<DocsContent>("docs")
             .get_entry("index");
 
-        let headings = index_page.data.get_headings().clone();
+        let headings = index_page.data().get_headings().clone();
 
         docs_layout(render_entry(index_page), ctx, &headings)
     }
@@ -22,11 +22,11 @@ impl Page for DocsIndex {
 fn render_entry(entry: &ContentEntry<DocsContent>) -> Markup {
     html! {
         section.mb-4.border-b."border-[#e9e9e7]".pb-2 {
-            @if let Some(section) = &entry.data.section {
+            @if let Some(section) = &entry.data().section {
                 p.text-sm.font-bold { (section) }
             }
-            h2.text-5xl.font-bold.mb-2 { (entry.data.title) }
-            @if let Some(description) = &entry.data.description {
+            h2.text-5xl.font-bold.mb-2 { (entry.data().title) }
+            @if let Some(description) = &entry.data().description {
                 h3.text-lg { (description) }
             }
         }
@@ -60,7 +60,7 @@ impl Page<DocsPageParams> for DocsPage {
             .get_source::<DocsContent>("docs")
             .get_entry(&slug);
 
-        let headings = entry.data.get_headings().clone();
+        let headings = entry.data().get_headings().clone();
         docs_layout(render_entry(entry), ctx, &headings)
     }
 }

@@ -17,7 +17,7 @@ impl Page for Index {
             (logo)
             h1 { "Hello World" }
             @for archetype in &archetype_store.entries {
-                a href=(archetype.id) { (archetype.data.title) }
+                a href=(archetype.id) { (archetype.data().title) }
             }
         })
         .into()

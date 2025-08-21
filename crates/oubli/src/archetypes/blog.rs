@@ -19,8 +19,8 @@ pub fn blog_index_content<T: FullPage>(
         main {
             @for entry in &blog_entries.entries {
                 a href=(get_page_url(&route, BlogEntryParams { entry: entry.id.clone() })) {
-                    h2 { (entry.data.title) }
-                    p { (entry.data.description) }
+                    h2 { (entry.data().title) }
+                    p { (entry.data().description) }
                 }
             }
         }
@@ -57,7 +57,7 @@ pub fn blog_entry_render(ctx: &mut RouteContext, name: &str, stringified_ident: 
         .get_source::<BlogEntryContent>(stringified_ident);
     let blog_entry = blog_entries.get_entry(&params.entry);
 
-    let headings = blog_entry.data.get_headings();
+    let headings = blog_entry.data().get_headings();
     println!("{:?}", headings);
 
     layout(name, blog_entry.render())

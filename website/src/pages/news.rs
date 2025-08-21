@@ -17,7 +17,7 @@ impl Page for NewsIndex {
         let mut articles_by_year: BTreeMap<String, Vec<_>> = BTreeMap::new();
 
         for article in &content.entries {
-            if let Some(date) = &article.data.date {
+            if let Some(date) = &article.data().date {
                 // Extract year from date (format: 2025-08-16)
                 let year = date.split('-').next().unwrap_or("Unknown").to_string();
                 articles_by_year
@@ -42,15 +42,15 @@ impl Page for NewsIndex {
                             ul.space-y-8 {
                                 @for article in articles {
                                     li.border-b.border-gray-200.pb-4 {
-                                        @if let Some(date) = &article.data.date {
+                                        @if let Some(date) = &article.data().date {
                                             p.text-sm.font-bold { (date) }
                                         }
                                         h3.text-5xl {
                                             a."hover:text-brand-red" href=(article.id) {
-                                                (article.data.title)
+                                                (article.data().title)
                                             }
                                         }
-                                        @if let Some(description) = &article.data.description {
+                                        @if let Some(description) = &article.data().description {
                                             p.text-lg.text-gray-600 { (description) }
                                         }
                                     }
@@ -106,11 +106,11 @@ impl Page<NewsPageParams> for NewsPage {
             html! {
                 div.container.mx-auto."py-10"."pb-24"."max-w-[80ch]"."px-8"."sm:px-0" {
                     section.mb-4.border-b."border-[#e9e9e7]".pb-2 {
-                        @if let Some(date) = &entry.data.date {
+                        @if let Some(date) = &entry.data().date {
                             p.text-sm.font-bold { (date) }
                         }
-                        h1."text-6xl"."sm:text-7xl".font-bold { (entry.data.title) }
-                        @if let Some(description) = &entry.data.description {
+                        h1."text-6xl"."sm:text-7xl".font-bold { (entry.data().title) }
+                        @if let Some(description) = &entry.data().description {
                             p.text-xl."sm:text-2xl" { (description) }
                         }
                     }
@@ -119,7 +119,7 @@ impl Page<NewsPageParams> for NewsPage {
                         (PreEscaped(entry.render()))
                     }
 
-                    @if let Some(author) = &entry.data.author {
+                    @if let Some(author) = &entry.data().author {
                         h2."text-xl".font-bold.mt-12.text-center { (author) }
                     }
                 }
