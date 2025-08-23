@@ -288,39 +288,37 @@ fn find_headings(events: &[Event]) -> Vec<InternalHeadingEvent> {
 /// use maudit::content::{render_markdown_with_components, MarkdownComponents};
 /// use maudit::content::components::{MarkdownComponent, CustomHeading};
 /// use pulldown_cmark::{Event, Tag, TagEnd};
-/// 
+///
 /// // Define a custom component
 /// struct MyCustomHeading;
-/// 
+///
 /// impl MarkdownComponent for MyCustomHeading {
-///     fn handles(&self, event: &Event) -> bool {
-///         matches!(event, Event::Start(Tag::Heading { .. }) | Event::End(TagEnd::Heading(_)))
-///     }
-///     
 ///     fn render_start(&self, event: &Event) -> Option<String> {
 ///         if let Event::Start(Tag::Heading { level, id, classes, .. }) = event {
+///             let level_num = *level as u8;
 ///             let id_attr = id.as_ref().map(|i| format!(" id=\"{}\"", i)).unwrap_or_default();
-///             let class_attr = if classes.is_empty() { 
-///                 String::new() 
-///             } else { 
-///                 format!(" class=\"{}\"", classes.iter().map(|c| c.as_ref()).collect::<Vec<_>>().join(" ")) 
+///             let class_attr = if classes.is_empty() {
+///                 String::new()
+///             } else {
+///                 format!(" class=\"{}\"", classes.iter().map(|c| c.as_ref()).collect::<Vec<_>>().join(" "))
 ///             };
-///             Some(format!("<h{level}{id_attr}{class_attr}><span class=\"icon\">§</span>"))
+///             Some(format!("<h{level_num}{id_attr}{class_attr}><span class=\"icon\">§</span>"))
 ///         } else {
 ///             None
 ///         }
 ///     }
-///     
+///
 ///     fn render_end(&self, event: &Event) -> Option<String> {
 ///         if let Event::End(TagEnd::Heading(level)) = event {
-///             Some(format!("</h{level}>"))
+///             let level_num = *level as u8;
+///             Some(format!("</h{level_num}>"))
 ///         } else {
 ///             None
 ///         }
 ///     }
 /// }
-/// 
-/// let components = MarkdownComponents::new().register(MyCustomHeading);
+///
+/// let components = MarkdownComponents::new().heading(MyCustomHeading);
 /// let markdown = r#"# Hello, world!"#;
 /// let html = render_markdown_with_components(markdown, &components);
 /// ```
@@ -334,7 +332,7 @@ pub fn render_markdown_with_components(content: &str, components: &MarkdownCompo
     let mut code_block_content = String::new();
     let mut in_frontmatter = false;
     let mut events = Vec::new();
-    
+
     // First pass: collect events, handle frontmatter and code blocks
     for (event, _) in Parser::new_ext(content, options).into_offset_iter() {
         match event {
@@ -377,7 +375,7 @@ pub fn render_markdown_with_components(content: &str, components: &MarkdownCompo
 
     // Second pass: transform events with custom components
     let transformed_events = transform_events_with_components(&events, components, &mut slugger);
-    
+
     pulldown_cmark::html::push_html(&mut html_output, transformed_events.into_iter());
     html_output
 }
@@ -395,16 +393,16 @@ pub fn render_markdown(content: &str) -> String {
 }
 
 fn transform_events_with_components<'a>(
-    events: &'a [Event], 
+    events: &'a [Event],
     components: &MarkdownComponents,
-    slugger: &mut slugger::Slugger
+    slugger: &mut slugger::Slugger,
 ) -> Vec<Event<'a>> {
     let mut transformed = Vec::new();
     let mut i = 0;
-    
+
     while i < events.len() {
         let event = &events[i];
-        
+
         if let Some(component) = components.find_component(event) {
             match event {
                 Event::Start(_) => {
@@ -414,24 +412,31 @@ fn transform_events_with_components<'a>(
                     } else {
                         // Fallback to default behavior
                         match event {
-                            Event::Start(Tag::Heading { level, id, classes, .. }) => {
-                                let heading_content = if let Some(end_index) = find_matching_heading_end(events, i) {
-                                    get_text_from_events(&events[i+1..end_index])
-                                } else {
-                                    String::new()
-                                };
+                            Event::Start(Tag::Heading {
+                                level, id, classes, ..
+                            }) => {
+                                let heading_content =
+                                    if let Some(end_index) = find_matching_heading_end(events, i) {
+                                        get_text_from_events(&events[i + 1..end_index])
+                                    } else {
+                                        String::new()
+                                    };
                                 let slug = slugger.slugify(&heading_content);
                                 let heading_id = id.as_ref().map(|s| s.to_string()).unwrap_or(slug);
-                                let classes_vec: Vec<String> = classes.iter().map(|c| c.to_string()).collect();
-                                
+                                let classes_vec: Vec<String> =
+                                    classes.iter().map(|c| c.to_string()).collect();
+
                                 transformed.push(Event::Html(
                                     format!(
                                         "<h{} id=\"{}\" class=\"{}\">",
-                                        level, heading_id, classes_vec.join(" ")
-                                    ).into()
+                                        level,
+                                        heading_id,
+                                        classes_vec.join(" ")
+                                    )
+                                    .into(),
                                 ));
                             }
-                            _ => transformed.push(event.clone())
+                            _ => transformed.push(event.clone()),
                         }
                     }
                 }
@@ -451,21 +456,27 @@ fn transform_events_with_components<'a>(
         } else {
             // Handle default heading logic for backwards compatibility
             match event {
-                Event::Start(Tag::Heading { level, id, classes, .. }) => {
-                    let heading_content = if let Some(end_index) = find_matching_heading_end(events, i) {
-                        get_text_from_events(&events[i+1..end_index])
-                    } else {
-                        String::new()
-                    };
+                Event::Start(Tag::Heading {
+                    level, id, classes, ..
+                }) => {
+                    let heading_content =
+                        if let Some(end_index) = find_matching_heading_end(events, i) {
+                            get_text_from_events(&events[i + 1..end_index])
+                        } else {
+                            String::new()
+                        };
                     let slug = slugger.slugify(&heading_content);
                     let heading_id = id.as_ref().map(|s| s.to_string()).unwrap_or(slug);
                     let classes_vec: Vec<String> = classes.iter().map(|c| c.to_string()).collect();
-                    
+
                     transformed.push(Event::Html(
                         format!(
                             "<h{} id=\"{}\" class=\"{}\">",
-                            level, heading_id, classes_vec.join(" ")
-                        ).into()
+                            level,
+                            heading_id,
+                            classes_vec.join(" ")
+                        )
+                        .into(),
                     ));
                 }
                 _ => {
@@ -475,7 +486,7 @@ fn transform_events_with_components<'a>(
         }
         i += 1;
     }
-    
+
     transformed
 }
 
@@ -491,32 +502,41 @@ fn find_matching_heading_end(events: &[Event], start_index: usize) -> Option<usi
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::content::components::{MarkdownComponent};
+    use crate::content::components::MarkdownComponent;
     use pulldown_cmark::{Event, Tag, TagEnd};
 
     // Define a custom heading component for testing
     struct TestCustomHeading;
 
     impl MarkdownComponent for TestCustomHeading {
-        fn handles(&self, event: &Event) -> bool {
-            matches!(event, Event::Start(Tag::Heading { .. }) | Event::End(TagEnd::Heading(_)))
-        }
-        
         fn render_start(&self, event: &Event) -> Option<String> {
-            if let Event::Start(Tag::Heading { level, id, classes, .. }) = event {
+            if let Event::Start(Tag::Heading {
+                level, id, classes, ..
+            }) = event
+            {
                 let level_num = *level as u8;
-                let id_attr = id.as_ref().map(|i| format!(" id=\"{}\"", i)).unwrap_or_default();
-                let class_attr = if classes.is_empty() { 
-                    String::new() 
-                } else { 
-                    format!(" class=\"{}\"", classes.iter().map(|c| c.as_ref()).collect::<Vec<_>>().join(" ")) 
+                let id_attr = id
+                    .as_ref()
+                    .map(|i| format!(" id=\"{}\"", i))
+                    .unwrap_or_default();
+                let class_attr = if classes.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        " class=\"{}\"",
+                        classes
+                            .iter()
+                            .map(|c| c.as_ref())
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    )
                 };
                 Some(format!("<h{}{}{}>🎯", level_num, id_attr, class_attr))
             } else {
                 None
             }
         }
-        
+
         fn render_end(&self, event: &Event) -> Option<String> {
             if let Event::End(TagEnd::Heading(level)) = event {
                 let level_num = *level as u8;
@@ -529,7 +549,7 @@ mod tests {
 
     #[test]
     fn test_custom_heading_component() {
-        let components = MarkdownComponents::new().register(TestCustomHeading);
+        let components = MarkdownComponents::new().heading(TestCustomHeading);
         let markdown = r#"# Hello, world!
 
 This is a **bold** text.
@@ -537,15 +557,15 @@ This is a **bold** text.
 ## Subheading
 
 More content here."#;
-        
+
         let html = render_markdown_with_components(markdown, &components);
-        
+
         // Test that custom heading component is used
         assert!(html.contains("🎯"));
-        
+
         // Test that nested content (bold) is preserved
         assert!(html.contains("<strong>bold</strong>"));
-        
+
         // Test that multiple heading levels work
         assert!(html.contains("<h1"));
         assert!(html.contains("<h2"));
@@ -557,10 +577,10 @@ More content here."#;
     fn test_default_rendering_without_components() {
         let components = MarkdownComponents::new();
         let markdown = r#"# Hello, world!"#;
-        
+
         let html = render_markdown_with_components(markdown, &components);
         let default_html = render_markdown(markdown);
-        
+
         // Should be the same as default rendering
         assert_eq!(html, default_html);
     }
