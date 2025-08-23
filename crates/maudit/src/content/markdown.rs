@@ -309,9 +309,9 @@ fn find_headings(events: &[Event]) -> Vec<InternalHeadingEvent> {
 ///
 /// let components = MarkdownComponents::new().heading(MyCustomHeading);
 /// let markdown = r#"# Hello, world!"#;
-/// let html = render_markdown_with_components(markdown, &components);
+/// let html = render_markdown_with_components(markdown, Some(&components));
 /// ```
-pub fn render_markdown_with_components(content: &str, components: &MarkdownComponents) -> String {
+pub fn render_markdown_with_components(content: &str, components: Option<&MarkdownComponents>) -> String {
     let mut slugger = slugger::Slugger::new();
     let mut html_output = String::new();
     let mut options = Options::empty();
@@ -362,10 +362,18 @@ pub fn render_markdown_with_components(content: &str, components: &MarkdownCompo
         }
     }
 
-    // Second pass: transform events with custom components
-    let transformed_events = transform_events_with_components(&events, components, &mut slugger);
+    // Second pass: transform events with custom components only if needed
+    let final_events = match components {
+        Some(components) if components.has_any_components() => {
+            transform_events_with_components(&events, components, &mut slugger)
+        }
+        _ => {
+            // No components or empty components - use events as-is
+            events
+        }
+    };
 
-    pulldown_cmark::html::push_html(&mut html_output, transformed_events.into_iter());
+    pulldown_cmark::html::push_html(&mut html_output, final_events.into_iter());
     html_output
 }
 
@@ -378,7 +386,7 @@ pub fn render_markdown_with_components(content: &str, components: &MarkdownCompo
 /// let html = render_markdown(markdown);
 /// ```
 pub fn render_markdown(content: &str) -> String {
-    render_markdown_with_components(content, &MarkdownComponents::default())
+    render_markdown_with_components(content, None)
 }
 
 fn transform_events_with_components<'a>(
@@ -650,10 +658,7 @@ mod tests {
 
     #[test]
     fn test_custom_heading_component() {
-        let components = MarkdownComponents {
-            heading: Some(Box::new(TestCustomHeading)),
-            ..Default::default()
-        };
+        let components = MarkdownComponents::new().heading(TestCustomHeading);
         let markdown = r#"# Hello, world!
 
 This is a **bold** text.
@@ -662,7 +667,7 @@ This is a **bold** text.
 
 More content here."#;
 
-        let html = render_markdown_with_components(markdown, &components);
+        let html = render_markdown_with_components(markdown, Some(&components));
 
         // Test that custom heading component is used
         assert!(html.contains("🎯"));
@@ -682,10 +687,21 @@ More content here."#;
         let components = MarkdownComponents::new();
         let markdown = r#"# Hello, world!"#;
 
-        let html = render_markdown_with_components(markdown, &components);
+        let html = render_markdown_with_components(markdown, Some(&components));
         let default_html = render_markdown(markdown);
 
         // Should be the same as default rendering
         assert_eq!(html, default_html);
+    }
+
+    #[test]
+    fn test_rendering_with_none_components() {
+        let markdown = r#"# Hello, world!"#;
+
+        let html_with_none = render_markdown_with_components(markdown, None);
+        let default_html = render_markdown(markdown);
+
+        // Should be the same as default rendering
+        assert_eq!(html_with_none, default_html);
     }
 }

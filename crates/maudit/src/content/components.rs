@@ -106,4 +106,64 @@ impl MarkdownComponents {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Check if any components are defined
+    pub fn has_any_components(&self) -> bool {
+        self.heading.is_some()
+            || self.paragraph.is_some()
+            || self.link.is_some()
+            || self.image.is_some()
+            || self.strong.is_some()
+            || self.emphasis.is_some()
+            || self.code.is_some()
+            || self.blockquote.is_some()
+    }
+
+    /// Add a heading component
+    pub fn heading(mut self, component: impl HeadingComponent + Send + Sync + 'static) -> Self {
+        self.heading = Some(Box::new(component));
+        self
+    }
+
+    /// Add a paragraph component
+    pub fn paragraph(mut self, component: impl ParagraphComponent + Send + Sync + 'static) -> Self {
+        self.paragraph = Some(Box::new(component));
+        self
+    }
+
+    /// Add a link component
+    pub fn link(mut self, component: impl LinkComponent + Send + Sync + 'static) -> Self {
+        self.link = Some(Box::new(component));
+        self
+    }
+
+    /// Add an image component
+    pub fn image(mut self, component: impl ImageComponent + Send + Sync + 'static) -> Self {
+        self.image = Some(Box::new(component));
+        self
+    }
+
+    /// Add a strong component
+    pub fn strong(mut self, component: impl StrongComponent + Send + Sync + 'static) -> Self {
+        self.strong = Some(Box::new(component));
+        self
+    }
+
+    /// Add an emphasis component
+    pub fn emphasis(mut self, component: impl EmphasisComponent + Send + Sync + 'static) -> Self {
+        self.emphasis = Some(Box::new(component));
+        self
+    }
+
+    /// Add a code component
+    pub fn code(mut self, component: impl CodeComponent + Send + Sync + 'static) -> Self {
+        self.code = Some(Box::new(component));
+        self
+    }
+
+    /// Add a blockquote component
+    pub fn blockquote(mut self, component: impl BlockquoteComponent + Send + Sync + 'static) -> Self {
+        self.blockquote = Some(Box::new(component));
+        self
+    }
 }
