@@ -123,7 +123,7 @@ macro_rules! routes {
 ///    coronate(
 ///       routes![],
 ///      content_sources![
-///        "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
+///        "articles" => glob_markdown::<ArticleContent>("content/articles/*.md", None)
 ///     ],
 ///    BuildOptions::default(),
 /// )
@@ -141,7 +141,7 @@ macro_rules! routes {
 /// # }
 ///
 /// content_sources![
-///    "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
+///    "articles" => glob_markdown::<ArticleContent>("content/articles/*.md", None)
 /// ];
 /// ```
 /// expands to
@@ -154,7 +154,7 @@ macro_rules! routes {
 /// # }
 ///
 /// maudit::content::ContentSources(vec![
-///    Box::new(maudit::content::ContentSource::new("articles", Box::new(move || glob_markdown::<ArticleContent>("content/articles/*.md"))))
+///    Box::new(maudit::content::ContentSource::new("articles", Box::new(move || glob_markdown::<ArticleContent>("content/articles/*.md", None))))
 /// ]);
 #[macro_export]
 macro_rules! content_sources {

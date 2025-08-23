@@ -16,7 +16,7 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(
         routes![pages::Index, pages::Article],
         content_sources![
-            "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
+            "articles" => glob_markdown::<ArticleContent>("content/articles/*.md", None)
         ],
         BuildOptions::default(),
     )

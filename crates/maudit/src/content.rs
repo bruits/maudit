@@ -12,8 +12,8 @@ mod slugger;
 
 use crate::page::RouteParams;
 pub use components::{
-    MarkdownComponents, HeadingComponent, ParagraphComponent, LinkComponent,
-    ImageComponent, StrongComponent, EmphasisComponent, CodeComponent, BlockquoteComponent
+    BlockquoteComponent, CodeComponent, EmphasisComponent, HeadingComponent, ImageComponent,
+    LinkComponent, MarkdownComponents, ParagraphComponent, StrongComponent,
 };
 pub use markdown::*;
 
@@ -34,7 +34,7 @@ pub use markdown::*;
 ///   coronate(
 ///     routes![],
 ///     content_sources![
-///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
+///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md", None)
 ///     ],
 ///     BuildOptions::default(),
 ///   )
@@ -95,7 +95,7 @@ pub use maudit_macros::markdown_entry;
 ///   coronate(
 ///     routes![],
 ///     content_sources![
-///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
+///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md", None)
 ///     ],
 ///     BuildOptions::default(),
 ///   )
@@ -301,7 +301,7 @@ pub type Untyped = FxHashMap<String, String>;
 /// # }
 ///
 /// pub fn content_sources() -> ContentSources {
-///   content_sources!["docs" => glob_markdown::<ArticleContent>("content/docs/*.md")]
+///   content_sources!["docs" => glob_markdown::<ArticleContent>("content/docs/*.md", None)]
 /// }
 pub struct ContentSources(pub Vec<Box<dyn ContentSourceInternal>>);
 
