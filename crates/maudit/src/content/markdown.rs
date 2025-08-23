@@ -1,3 +1,6 @@
+use std::rc::Rc;
+use std::sync::Arc;
+
 use glob::glob as glob_fs;
 use log::warn;
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
@@ -174,6 +177,7 @@ where
     T: DeserializeOwned + MarkdownContent + InternalMarkdownContent + Send + Sync + 'static,
 {
     let mut entries = vec![];
+    let options = Arc::new(options);
 
     for entry in glob_fs(pattern).unwrap() {
         let entry = entry.unwrap();
@@ -240,17 +244,14 @@ where
             parsed
         });
 
-        // Create a render function that uses the provided options
-        // Note: Due to current architectural limitations with trait object cloning,
-        // custom components in MarkdownOptions are not yet supported in glob_markdown.
-        // The render function will use default markdown rendering.
-        // For custom components, use render_markdown directly with your content.
-        let _ = &options; // Acknowledge the parameter for future use
-        let render_fn = Box::new(|content: &str| render_markdown(content, None));
+        // Perhaps not ideal, but I don't know better - erika, 2025-08-24
+        let opts = Arc::clone(&options);
 
         entries.push(ContentEntry::new_lazy(
             id,
-            Some(Box::new(render_fn)),
+            Some(Box::new(move |content: &str| {
+                render_markdown(content, &opts)
+            })),
             Some(content),
             data_loader,
             Some(entry),
@@ -338,7 +339,7 @@ fn find_headings(events: &[Event]) -> Vec<InternalHeadingEvent> {
 /// };
 /// let html = render_markdown(markdown, Some(&options));
 /// ```
-pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> String {
+pub fn render_markdown(content: &str, options: &Option<MarkdownOptions>) -> String {
     let mut slugger = slugger::Slugger::new();
     let mut html_output = String::new();
     let mut parser_options = Options::empty();
@@ -684,7 +685,7 @@ This is a **bold** text.
 
 More content here."#;
 
-        let html = render_markdown(markdown, Some(&options));
+        let html = render_markdown(markdown, &Some(options));
 
         // Test that custom heading component is used
         assert!(html.contains("🎯"));
@@ -706,8 +707,8 @@ More content here."#;
         };
         let markdown = r#"# Hello, world!"#;
 
-        let html = render_markdown(markdown, Some(&options));
-        let default_html = render_markdown(markdown, None);
+        let html = render_markdown(markdown, &Some(options));
+        let default_html = render_markdown(markdown, &None);
 
         // Should be the same as default rendering
         assert_eq!(html, default_html);
