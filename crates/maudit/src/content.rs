@@ -5,11 +5,13 @@ use std::{any::Any, path::PathBuf};
 
 use rustc_hash::FxHashMap;
 
+mod components;
 mod highlight;
 mod markdown;
 mod slugger;
 
 use crate::page::RouteParams;
+pub use components::MarkdownComponents;
 pub use markdown::*;
 
 /// Helps implement a struct as a Markdown content entry.
