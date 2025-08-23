@@ -286,35 +286,24 @@ fn find_headings(events: &[Event]) -> Vec<InternalHeadingEvent> {
 /// ## Example
 /// ```rs
 /// use maudit::content::{render_markdown_with_components, MarkdownComponents};
-/// use maudit::content::components::{MarkdownComponent, CustomHeading};
-/// use pulldown_cmark::{Event, Tag, TagEnd};
+/// use maudit::content::components::HeadingComponent;
 ///
 /// // Define a custom component
 /// struct MyCustomHeading;
 ///
-/// impl MarkdownComponent for MyCustomHeading {
-///     fn render_start(&self, event: &Event) -> Option<String> {
-///         if let Event::Start(Tag::Heading { level, id, classes, .. }) = event {
-///             let level_num = *level as u8;
-///             let id_attr = id.as_ref().map(|i| format!(" id=\"{}\"", i)).unwrap_or_default();
-///             let class_attr = if classes.is_empty() {
-///                 String::new()
-///             } else {
-///                 format!(" class=\"{}\"", classes.iter().map(|c| c.as_ref()).collect::<Vec<_>>().join(" "))
-///             };
-///             Some(format!("<h{level_num}{id_attr}{class_attr}><span class=\"icon\">§</span>"))
+/// impl HeadingComponent for MyCustomHeading {
+///     fn render_start(&self, level: u8, id: Option<&str>, classes: &[&str]) -> String {
+///         let id_attr = id.map(|i| format!(" id=\"{}\"", i)).unwrap_or_default();
+///         let class_attr = if classes.is_empty() {
+///             String::new()
 ///         } else {
-///             None
-///         }
+///             format!(" class=\"{}\"", classes.join(" "))
+///         };
+///         format!("<h{level}{id_attr}{class_attr}><span class=\"icon\">§</span>")
 ///     }
 ///
-///     fn render_end(&self, event: &Event) -> Option<String> {
-///         if let Event::End(TagEnd::Heading(level)) = event {
-///             let level_num = *level as u8;
-///             Some(format!("</h{level_num}>"))
-///         } else {
-///             None
-///         }
+///     fn render_end(&self, level: u8) -> String {
+///         format!("</h{level}>")
 ///     }
 /// }
 ///
@@ -403,72 +392,27 @@ fn transform_events_with_components<'a>(
     while i < events.len() {
         let event = &events[i];
 
-        if let Some(component) = components.find_component(event) {
-            match event {
-                Event::Start(_) => {
-                    // Use custom component for start tag
-                    if let Some(custom_html) = component.render_start(event) {
-                        transformed.push(Event::Html(custom_html.into()));
-                    } else {
-                        // Fallback to default behavior
-                        match event {
-                            Event::Start(Tag::Heading {
-                                level, id, classes, ..
-                            }) => {
-                                let heading_content =
-                                    if let Some(end_index) = find_matching_heading_end(events, i) {
-                                        get_text_from_events(&events[i + 1..end_index])
-                                    } else {
-                                        String::new()
-                                    };
-                                let slug = slugger.slugify(&heading_content);
-                                let heading_id = id.as_ref().map(|s| s.to_string()).unwrap_or(slug);
-                                let classes_vec: Vec<String> =
-                                    classes.iter().map(|c| c.to_string()).collect();
+        match event {
+            // Handle headings with custom components or default behavior
+            Event::Start(Tag::Heading {
+                level, id, classes, ..
+            }) => {
+                let heading_content = if let Some(end_index) = find_matching_heading_end(events, i)
+                {
+                    get_text_from_events(&events[i + 1..end_index])
+                } else {
+                    String::new()
+                };
+                let slug = slugger.slugify(&heading_content);
+                let heading_id = id.as_ref().map(|s| s.as_ref()).unwrap_or(&slug);
+                let classes_vec: Vec<&str> = classes.iter().map(|c| c.as_ref()).collect();
 
-                                transformed.push(Event::Html(
-                                    format!(
-                                        "<h{} id=\"{}\" class=\"{}\">",
-                                        level,
-                                        heading_id,
-                                        classes_vec.join(" ")
-                                    )
-                                    .into(),
-                                ));
-                            }
-                            _ => transformed.push(event.clone()),
-                        }
-                    }
-                }
-                Event::End(_) => {
-                    // Use custom component for end tag
-                    if let Some(custom_html) = component.render_end(event) {
-                        transformed.push(Event::Html(custom_html.into()));
-                    } else {
-                        // Keep the original end event
-                        transformed.push(event.clone());
-                    }
-                }
-                _ => {
-                    transformed.push(event.clone());
-                }
-            }
-        } else {
-            // Handle default heading logic for backwards compatibility
-            match event {
-                Event::Start(Tag::Heading {
-                    level, id, classes, ..
-                }) => {
-                    let heading_content =
-                        if let Some(end_index) = find_matching_heading_end(events, i) {
-                            get_text_from_events(&events[i + 1..end_index])
-                        } else {
-                            String::new()
-                        };
-                    let slug = slugger.slugify(&heading_content);
-                    let heading_id = id.as_ref().map(|s| s.to_string()).unwrap_or(slug);
-                    let classes_vec: Vec<String> = classes.iter().map(|c| c.to_string()).collect();
-
+                if let Some(component) = &components.heading {
+                    let custom_html =
+                        component.render_start(*level as u8, Some(heading_id), &classes_vec);
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    // Default behavior
                     transformed.push(Event::Html(
                         format!(
                             "<h{} id=\"{}\" class=\"{}\">",
@@ -479,9 +423,181 @@ fn transform_events_with_components<'a>(
                         .into(),
                     ));
                 }
-                _ => {
+            }
+            Event::End(TagEnd::Heading(level)) => {
+                if let Some(component) = &components.heading {
+                    let custom_html = component.render_end(*level as u8);
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
                     transformed.push(event.clone());
                 }
+            }
+
+            // Handle paragraphs
+            Event::Start(Tag::Paragraph) => {
+                if let Some(component) = &components.paragraph {
+                    let custom_html = component.render_start();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+            Event::End(TagEnd::Paragraph) => {
+                if let Some(component) = &components.paragraph {
+                    let custom_html = component.render_end();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // Handle links
+            Event::Start(Tag::Link {
+                link_type,
+                dest_url,
+                title,
+                ..
+            }) => {
+                if let Some(component) = &components.link {
+                    let link_type_str = match link_type {
+                        pulldown_cmark::LinkType::Inline => "inline",
+                        pulldown_cmark::LinkType::Reference => "reference",
+                        pulldown_cmark::LinkType::ReferenceUnknown => "reference_unknown",
+                        pulldown_cmark::LinkType::Collapsed => "collapsed",
+                        pulldown_cmark::LinkType::CollapsedUnknown => "collapsed_unknown",
+                        pulldown_cmark::LinkType::Shortcut => "shortcut",
+                        pulldown_cmark::LinkType::ShortcutUnknown => "shortcut_unknown",
+                        pulldown_cmark::LinkType::Autolink => "autolink",
+                        pulldown_cmark::LinkType::Email => "email",
+                    };
+                    let title_str = if title.is_empty() {
+                        None
+                    } else {
+                        Some(title.as_ref())
+                    };
+                    let custom_html =
+                        component.render_start(dest_url.as_ref(), title_str, link_type_str);
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+            Event::End(TagEnd::Link) => {
+                if let Some(component) = &components.link {
+                    let custom_html = component.render_end();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // Handle images
+            Event::Start(Tag::Image {
+                dest_url, title, ..
+            }) => {
+                if let Some(component) = &components.image {
+                    // For images, we need to get the alt text from content between start and end
+                    let alt_text = if let Some(end_index) = find_matching_image_end(events, i) {
+                        get_text_from_events(&events[i + 1..end_index])
+                    } else {
+                        String::new()
+                    };
+                    let title_str = if title.is_empty() {
+                        None
+                    } else {
+                        Some(title.as_ref())
+                    };
+                    let custom_html = component.render(dest_url.as_ref(), &alt_text, title_str);
+                    transformed.push(Event::Html(custom_html.into()));
+                    // Skip to the end tag
+                    if let Some(end_index) = find_matching_image_end(events, i) {
+                        i = end_index;
+                    }
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+            Event::End(TagEnd::Image) => {
+                // Only add this if we didn't handle it above with custom component
+                if components.image.is_none() {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // Handle strong/bold
+            Event::Start(Tag::Strong) => {
+                if let Some(component) = &components.strong {
+                    let custom_html = component.render_start();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+            Event::End(TagEnd::Strong) => {
+                if let Some(component) = &components.strong {
+                    let custom_html = component.render_end();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // Handle emphasis/italic
+            Event::Start(Tag::Emphasis) => {
+                if let Some(component) = &components.emphasis {
+                    let custom_html = component.render_start();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+            Event::End(TagEnd::Emphasis) => {
+                if let Some(component) = &components.emphasis {
+                    let custom_html = component.render_end();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // Handle inline code
+            Event::Code(code) => {
+                if let Some(component) = &components.code {
+                    let custom_html = component.render(code.as_ref());
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // Handle blockquotes
+            Event::Start(Tag::BlockQuote(kind)) => {
+                if let Some(component) = &components.blockquote {
+                    let kind_str = kind.as_ref().map(|k| match k {
+                        pulldown_cmark::BlockQuoteKind::Note => "note",
+                        pulldown_cmark::BlockQuoteKind::Tip => "tip",
+                        pulldown_cmark::BlockQuoteKind::Important => "important",
+                        pulldown_cmark::BlockQuoteKind::Warning => "warning",
+                        pulldown_cmark::BlockQuoteKind::Caution => "caution",
+                    });
+                    let custom_html = component.render_start(kind_str);
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+            Event::End(TagEnd::BlockQuote(_)) => {
+                if let Some(component) = &components.blockquote {
+                    let custom_html = component.render_end();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // All other events pass through unchanged
+            _ => {
+                transformed.push(event.clone());
             }
         }
         i += 1;
@@ -499,57 +615,45 @@ fn find_matching_heading_end(events: &[Event], start_index: usize) -> Option<usi
     None
 }
 
+fn find_matching_image_end(events: &[Event], start_index: usize) -> Option<usize> {
+    for (i, event) in events.iter().enumerate().skip(start_index + 1) {
+        if matches!(event, Event::End(TagEnd::Image)) {
+            return Some(i);
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::content::components::MarkdownComponent;
-    use pulldown_cmark::{Event, Tag, TagEnd};
+    use crate::content::components::HeadingComponent;
 
     // Define a custom heading component for testing
     struct TestCustomHeading;
 
-    impl MarkdownComponent for TestCustomHeading {
-        fn render_start(&self, event: &Event) -> Option<String> {
-            if let Event::Start(Tag::Heading {
-                level, id, classes, ..
-            }) = event
-            {
-                let level_num = *level as u8;
-                let id_attr = id
-                    .as_ref()
-                    .map(|i| format!(" id=\"{}\"", i))
-                    .unwrap_or_default();
-                let class_attr = if classes.is_empty() {
-                    String::new()
-                } else {
-                    format!(
-                        " class=\"{}\"",
-                        classes
-                            .iter()
-                            .map(|c| c.as_ref())
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    )
-                };
-                Some(format!("<h{}{}{}>🎯", level_num, id_attr, class_attr))
+    impl HeadingComponent for TestCustomHeading {
+        fn render_start(&self, level: u8, id: Option<&str>, classes: &[&str]) -> String {
+            let id_attr = id.map(|i| format!(" id=\"{}\"", i)).unwrap_or_default();
+            let class_attr = if classes.is_empty() {
+                String::new()
             } else {
-                None
-            }
+                format!(" class=\"{}\"", classes.join(" "))
+            };
+            format!("<h{}{}{}>🎯", level, id_attr, class_attr)
         }
 
-        fn render_end(&self, event: &Event) -> Option<String> {
-            if let Event::End(TagEnd::Heading(level)) = event {
-                let level_num = *level as u8;
-                Some(format!("</h{}>", level_num))
-            } else {
-                None
-            }
+        fn render_end(&self, level: u8) -> String {
+            format!("</h{}>", level)
         }
     }
 
     #[test]
     fn test_custom_heading_component() {
-        let components = MarkdownComponents::new().heading(TestCustomHeading);
+        let components = MarkdownComponents {
+            heading: Some(Box::new(TestCustomHeading)),
+            ..Default::default()
+        };
         let markdown = r#"# Hello, world!
 
 This is a **bold** text.

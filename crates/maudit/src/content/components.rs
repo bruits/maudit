@@ -1,114 +1,109 @@
-use pulldown_cmark::{Event, Tag, TagEnd};
+// Component traits that hide pulldown-cmark implementation details
 
-/// Trait for custom markdown components
-pub trait MarkdownComponent {
-    /// Render the start tag with custom HTML
-    fn render_start(&self, event: &Event) -> Option<String>;
+/// Trait for custom heading components
+pub trait HeadingComponent {
+    /// Render the opening tag
+    fn render_start(&self, level: u8, id: Option<&str>, classes: &[&str]) -> String;
 
-    /// Render the end tag with custom HTML (optional)
-    fn render_end(&self, _event: &Event) -> Option<String> {
-        None // Most components only need to customize the start tag
+    /// Render the closing tag (optional)
+    fn render_end(&self, level: u8) -> String {
+        format!("</h{}>", level)
+    }
+}
+
+/// Trait for custom paragraph components
+pub trait ParagraphComponent {
+    /// Render the opening tag
+    fn render_start(&self) -> String {
+        "<p>".to_string()
+    }
+
+    /// Render the closing tag
+    fn render_end(&self) -> String {
+        "</p>".to_string()
+    }
+}
+
+/// Trait for custom link components
+pub trait LinkComponent {
+    /// Render the opening tag
+    fn render_start(&self, url: &str, title: Option<&str>, link_type: &str) -> String;
+
+    /// Render the closing tag
+    fn render_end(&self) -> String {
+        "</a>".to_string()
+    }
+}
+
+/// Trait for custom image components
+pub trait ImageComponent {
+    /// Render the image tag
+    fn render(&self, url: &str, alt: &str, title: Option<&str>) -> String;
+}
+
+/// Trait for custom strong/bold components
+pub trait StrongComponent {
+    /// Render the opening tag
+    fn render_start(&self) -> String {
+        "<strong>".to_string()
+    }
+
+    /// Render the closing tag
+    fn render_end(&self) -> String {
+        "</strong>".to_string()
+    }
+}
+
+/// Trait for custom emphasis/italic components
+pub trait EmphasisComponent {
+    /// Render the opening tag
+    fn render_start(&self) -> String {
+        "<em>".to_string()
+    }
+
+    /// Render the closing tag
+    fn render_end(&self) -> String {
+        "</em>".to_string()
+    }
+}
+
+/// Trait for custom inline code components
+pub trait CodeComponent {
+    /// Render the code span
+    fn render(&self, code: &str) -> String;
+}
+
+/// Trait for custom blockquote components
+pub trait BlockquoteComponent {
+    /// Render the opening tag
+    fn render_start(&self, kind: Option<&str>) -> String {
+        match kind {
+            Some(k) => format!("<blockquote data-kind=\"{}\">", k),
+            None => "<blockquote>".to_string(),
+        }
+    }
+
+    /// Render the closing tag
+    fn render_end(&self) -> String {
+        "</blockquote>".to_string()
     }
 }
 
 /// Registry for custom markdown components
 #[derive(Default)]
 pub struct MarkdownComponents {
-    pub heading: Option<Box<dyn MarkdownComponent + Send + Sync>>,
-    pub paragraph: Option<Box<dyn MarkdownComponent + Send + Sync>>,
-    pub link: Option<Box<dyn MarkdownComponent + Send + Sync>>,
-    pub image: Option<Box<dyn MarkdownComponent + Send + Sync>>,
-    pub strong: Option<Box<dyn MarkdownComponent + Send + Sync>>,
-    pub emphasis: Option<Box<dyn MarkdownComponent + Send + Sync>>,
-    pub code: Option<Box<dyn MarkdownComponent + Send + Sync>>,
-    pub blockquote: Option<Box<dyn MarkdownComponent + Send + Sync>>,
+    pub heading: Option<Box<dyn HeadingComponent + Send + Sync>>,
+    pub paragraph: Option<Box<dyn ParagraphComponent + Send + Sync>>,
+    pub link: Option<Box<dyn LinkComponent + Send + Sync>>,
+    pub image: Option<Box<dyn ImageComponent + Send + Sync>>,
+    pub strong: Option<Box<dyn StrongComponent + Send + Sync>>,
+    pub emphasis: Option<Box<dyn EmphasisComponent + Send + Sync>>,
+    pub code: Option<Box<dyn CodeComponent + Send + Sync>>,
+    pub blockquote: Option<Box<dyn BlockquoteComponent + Send + Sync>>,
 }
 
 impl MarkdownComponents {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Set a custom heading component
-    pub fn heading<C: MarkdownComponent + Send + Sync + 'static>(mut self, component: C) -> Self {
-        self.heading = Some(Box::new(component));
-        self
-    }
-
-    /// Set a custom paragraph component
-    pub fn paragraph<C: MarkdownComponent + Send + Sync + 'static>(mut self, component: C) -> Self {
-        self.paragraph = Some(Box::new(component));
-        self
-    }
-
-    /// Set a custom link component
-    pub fn link<C: MarkdownComponent + Send + Sync + 'static>(mut self, component: C) -> Self {
-        self.link = Some(Box::new(component));
-        self
-    }
-
-    /// Set a custom image component
-    pub fn image<C: MarkdownComponent + Send + Sync + 'static>(mut self, component: C) -> Self {
-        self.image = Some(Box::new(component));
-        self
-    }
-
-    /// Set a custom strong component
-    pub fn strong<C: MarkdownComponent + Send + Sync + 'static>(mut self, component: C) -> Self {
-        self.strong = Some(Box::new(component));
-        self
-    }
-
-    /// Set a custom emphasis component
-    pub fn emphasis<C: MarkdownComponent + Send + Sync + 'static>(mut self, component: C) -> Self {
-        self.emphasis = Some(Box::new(component));
-        self
-    }
-
-    /// Set a custom code component
-    pub fn code<C: MarkdownComponent + Send + Sync + 'static>(mut self, component: C) -> Self {
-        self.code = Some(Box::new(component));
-        self
-    }
-
-    /// Set a custom blockquote component
-    pub fn blockquote<C: MarkdownComponent + Send + Sync + 'static>(
-        mut self,
-        component: C,
-    ) -> Self {
-        self.blockquote = Some(Box::new(component));
-        self
-    }
-
-    /// Find a component that can handle the given event
-    pub(crate) fn find_component(
-        &self,
-        event: &Event,
-    ) -> Option<&(dyn MarkdownComponent + Send + Sync)> {
-        match event {
-            Event::Start(Tag::Heading { .. }) | Event::End(TagEnd::Heading(_)) => {
-                self.heading.as_ref().map(|c| c.as_ref())
-            }
-            Event::Start(Tag::Paragraph) | Event::End(TagEnd::Paragraph) => {
-                self.paragraph.as_ref().map(|c| c.as_ref())
-            }
-            Event::Start(Tag::Link { .. }) | Event::End(TagEnd::Link) => {
-                self.link.as_ref().map(|c| c.as_ref())
-            }
-            Event::Start(Tag::Image { .. }) | Event::End(TagEnd::Image) => {
-                self.image.as_ref().map(|c| c.as_ref())
-            }
-            Event::Start(Tag::Strong) | Event::End(TagEnd::Strong) => {
-                self.strong.as_ref().map(|c| c.as_ref())
-            }
-            Event::Start(Tag::Emphasis) | Event::End(TagEnd::Emphasis) => {
-                self.emphasis.as_ref().map(|c| c.as_ref())
-            }
-            Event::Code(_) => self.code.as_ref().map(|c| c.as_ref()),
-            Event::Start(Tag::BlockQuote { .. }) | Event::End(TagEnd::BlockQuote { .. }) => {
-                self.blockquote.as_ref().map(|c| c.as_ref())
-            }
-            _ => None,
-        }
     }
 }

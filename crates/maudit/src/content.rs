@@ -11,7 +11,10 @@ mod markdown;
 mod slugger;
 
 use crate::page::RouteParams;
-pub use components::MarkdownComponents;
+pub use components::{
+    MarkdownComponents, HeadingComponent, ParagraphComponent, LinkComponent,
+    ImageComponent, StrongComponent, EmphasisComponent, CodeComponent, BlockquoteComponent
+};
 pub use markdown::*;
 
 /// Helps implement a struct as a Markdown content entry.
