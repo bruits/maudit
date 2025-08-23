@@ -3,7 +3,20 @@
 /// Trait for custom heading components
 pub trait HeadingComponent {
     /// Render the opening tag
-    fn render_start(&self, level: u8, id: Option<&str>, classes: &[&str]) -> String;
+    fn render_start(&self, level: u8, id: Option<&str>, classes: &[&str]) -> String {
+        let class_attr = if !classes.is_empty() {
+            format!(" class=\"{}\"", classes.join(" "))
+        } else {
+            String::new()
+        };
+
+        let id_attr = id
+            .as_ref()
+            .map(|i| format!(" id=\"{}\"", i))
+            .unwrap_or_default();
+
+        format!("<h{}{}{}>", level, id_attr, class_attr)
+    }
 
     /// Render the closing tag (optional)
     fn render_end(&self, level: u8) -> String {
@@ -171,5 +184,77 @@ impl MarkdownComponents {
     ) -> Self {
         self.blockquote = Some(Box::new(component));
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::content::{render_markdown, MarkdownOptions};
+
+    // Define a custom heading component for testing
+    struct TestCustomHeading;
+
+    impl HeadingComponent for TestCustomHeading {
+        fn render_start(&self, level: u8, id: Option<&str>, classes: &[&str]) -> String {
+            let id_attr = id.map(|i| format!(" id=\"{}\"", i)).unwrap_or_default();
+            let class_attr = if classes.is_empty() {
+                String::new()
+            } else {
+                format!(" class=\"{}\"", classes.join(" "))
+            };
+            format!("<h{}{}{}>🎯", level, id_attr, class_attr)
+        }
+
+        fn render_end(&self, level: u8) -> String {
+            format!("</h{}>", level)
+        }
+    }
+
+    #[test]
+    fn test_custom_heading_component() {
+        let options = MarkdownOptions {
+            components: MarkdownComponents::new().heading(TestCustomHeading),
+        };
+        let markdown = r#"# Hello, world!
+
+This is a **bold** text.
+
+## Subheading
+
+More content here."#;
+
+        let html = render_markdown(markdown, Some(&options));
+
+        // Test that custom heading component is used
+        assert!(html.contains("🎯"));
+
+        // Test that nested content (bold) is preserved
+        assert!(html.contains("<strong>bold</strong>"));
+
+        // Test that multiple heading levels work
+        assert!(html.contains("<h1"));
+        assert!(html.contains("<h2"));
+        assert!(html.contains("</h1>"));
+        assert!(html.contains("</h2>"));
+    }
+
+    #[test]
+    fn test_components_builder_pattern() {
+        let components = MarkdownComponents::new().heading(TestCustomHeading);
+
+        // Test that builder pattern works
+        assert!(components.heading.is_some());
+        assert!(components.paragraph.is_none());
+        assert!(components.link.is_none());
+    }
+
+    #[test]
+    fn test_has_any_components() {
+        let empty_components = MarkdownComponents::new();
+        assert!(!empty_components.has_any_components());
+
+        let with_heading = MarkdownComponents::new().heading(TestCustomHeading);
+        assert!(with_heading.has_any_components());
     }
 }

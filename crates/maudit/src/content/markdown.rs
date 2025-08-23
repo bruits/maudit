@@ -650,32 +650,9 @@ fn find_matching_image_end(events: &[Event], start_index: usize) -> Option<usize
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::content::components::HeadingComponent;
-
-    // Define a custom heading component for testing
-    struct TestCustomHeading;
-
-    impl HeadingComponent for TestCustomHeading {
-        fn render_start(&self, level: u8, id: Option<&str>, classes: &[&str]) -> String {
-            let id_attr = id.map(|i| format!(" id=\"{}\"", i)).unwrap_or_default();
-            let class_attr = if classes.is_empty() {
-                String::new()
-            } else {
-                format!(" class=\"{}\"", classes.join(" "))
-            };
-            format!("<h{}{}{}>🎯", level, id_attr, class_attr)
-        }
-
-        fn render_end(&self, level: u8) -> String {
-            format!("</h{}>", level)
-        }
-    }
 
     #[test]
-    fn test_custom_heading_component() {
-        let options = MarkdownOptions {
-            components: MarkdownComponents::new().heading(TestCustomHeading),
-        };
+    fn test_basic_markdown_rendering() {
         let markdown = r#"# Hello, world!
 
 This is a **bold** text.
@@ -684,23 +661,20 @@ This is a **bold** text.
 
 More content here."#;
 
-        let html = render_markdown(markdown, Some(&options));
+        let html = render_markdown(markdown, None);
 
-        // Test that custom heading component is used
-        assert!(html.contains("🎯"));
-
-        // Test that nested content (bold) is preserved
-        assert!(html.contains("<strong>bold</strong>"));
-
-        // Test that multiple heading levels work
+        // Test basic markdown rendering
         assert!(html.contains("<h1"));
         assert!(html.contains("<h2"));
         assert!(html.contains("</h1>"));
         assert!(html.contains("</h2>"));
+        assert!(html.contains("<strong>bold</strong>"));
+        assert!(html.contains("Hello, world!"));
+        assert!(html.contains("Subheading"));
     }
 
     #[test]
-    fn test_default_rendering_without_components() {
+    fn test_rendering_with_empty_components() {
         let options = MarkdownOptions {
             components: MarkdownComponents::new(),
         };
@@ -709,7 +683,7 @@ More content here."#;
         let html = render_markdown(markdown, Some(&options));
         let default_html = render_markdown(markdown, None);
 
-        // Should be the same as default rendering
+        // Should be the same as default rendering when no custom components are provided
         assert_eq!(html, default_html);
     }
 }
