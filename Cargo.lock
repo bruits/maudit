@@ -2513,6 +2513,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "maudit-example-markdown-components"
+version = "0.1.0"
+dependencies = [
+ "maud",
+ "maudit",
+ "serde",
+]
+
+[[package]]
 name = "maudit-macros"
 version = "0.2.0"
 dependencies = [

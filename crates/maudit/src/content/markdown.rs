@@ -5,7 +5,9 @@ use log::warn;
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use serde::de::DeserializeOwned;
 
-use super::components::{LinkType, ListType, MarkdownComponents, TableAlignment};
+pub mod components;
+
+use components::{LinkType, ListType, MarkdownComponents, TableAlignment};
 
 use super::{highlight::CodeBlock, slugger, ContentEntry};
 

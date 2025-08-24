@@ -5,17 +5,21 @@ use std::{any::Any, path::PathBuf};
 
 use rustc_hash::FxHashMap;
 
-mod components;
 mod highlight;
-mod markdown;
+pub mod markdown;
 mod slugger;
 
 use crate::page::RouteParams;
-pub use components::{
-    BlockquoteComponent, CodeComponent, EmphasisComponent, HeadingComponent, ImageComponent,
-    LinkComponent, MarkdownComponents, ParagraphComponent, StrongComponent,
+pub use markdown::{
+    components::{
+        BlockQuoteKind, BlockquoteComponent, CodeComponent, EmphasisComponent, HardBreakComponent,
+        HeadingComponent, HorizontalRuleComponent, ImageComponent, LinkComponent, LinkType,
+        ListComponent, ListItemComponent, ListType, MarkdownComponents, ParagraphComponent,
+        StrikethroughComponent, StrongComponent, TableAlignment, TableCellComponent,
+        TableComponent, TableHeadComponent, TableRowComponent, TaskListMarkerComponent,
+    },
+    *,
 };
-pub use markdown::*;
 
 /// Helps implement a struct as a Markdown content entry.
 ///
