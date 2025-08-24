@@ -1,6 +1,3 @@
-// Component traits that hide pulldown-cmark implementation details
-
-/// The kind of blockquote
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlockQuoteKind {
     Note,
@@ -29,7 +26,6 @@ impl From<&pulldown_cmark::BlockQuoteKind> for BlockQuoteKind {
 }
 
 impl BlockQuoteKind {
-    /// Get the string representation of the blockquote kind
     pub fn as_str(&self) -> &'static str {
         match self {
             BlockQuoteKind::Note => "note",
@@ -41,7 +37,6 @@ impl BlockQuoteKind {
     }
 }
 
-/// The type of link
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LinkType {
     Inline,
@@ -78,7 +73,6 @@ impl From<&pulldown_cmark::LinkType> for LinkType {
 }
 
 impl LinkType {
-    /// Get the string representation of the link type
     pub fn as_str(&self) -> &'static str {
         match self {
             LinkType::Inline => "inline",
@@ -94,9 +88,7 @@ impl LinkType {
     }
 }
 
-/// Trait for custom heading components
 pub trait HeadingComponent {
-    /// Render the opening tag
     fn render_start(&self, level: u8, id: Option<&str>, classes: &[&str]) -> String {
         let class_attr = if !classes.is_empty() {
             format!(" class=\"{}\"", classes.join(" "))
@@ -112,77 +104,58 @@ pub trait HeadingComponent {
         format!("<h{}{}{}>", level, id_attr, class_attr)
     }
 
-    /// Render the closing tag (optional)
     fn render_end(&self, level: u8) -> String {
         format!("</h{}>", level)
     }
 }
 
-/// Trait for custom paragraph components
 pub trait ParagraphComponent {
-    /// Render the opening tag
     fn render_start(&self) -> String {
         "<p>".to_string()
     }
 
-    /// Render the closing tag
     fn render_end(&self) -> String {
         "</p>".to_string()
     }
 }
 
-/// Trait for custom link components
 pub trait LinkComponent {
-    /// Render the opening tag
     fn render_start(&self, url: &str, title: Option<&str>, link_type: LinkType) -> String;
 
-    /// Render the closing tag
     fn render_end(&self) -> String {
         "</a>".to_string()
     }
 }
 
-/// Trait for custom image components
 pub trait ImageComponent {
-    /// Render the image tag
     fn render(&self, url: &str, alt: &str, title: Option<&str>) -> String;
 }
 
-/// Trait for custom strong/bold components
 pub trait StrongComponent {
-    /// Render the opening tag
     fn render_start(&self) -> String {
         "<strong>".to_string()
     }
 
-    /// Render the closing tag
     fn render_end(&self) -> String {
         "</strong>".to_string()
     }
 }
 
-/// Trait for custom emphasis/italic components
 pub trait EmphasisComponent {
-    /// Render the opening tag
     fn render_start(&self) -> String {
         "<em>".to_string()
     }
 
-    /// Render the closing tag
     fn render_end(&self) -> String {
         "</em>".to_string()
     }
 }
 
-/// Trait for custom inline code components
 pub trait CodeComponent {
-    /// Render the code span
     fn render(&self, code: &str) -> String;
 }
 
-/// Trait for custom blockquote components
 pub trait BlockquoteComponent {
-    /// Render the opening tag
     fn render_start(&self, kind: Option<BlockQuoteKind>) -> String {
         match kind {
             Some(k) => format!("<blockquote data-kind=\"{}\">", k.as_str()),
@@ -190,31 +163,24 @@ pub trait BlockquoteComponent {
         }
     }
 
-    /// Render the closing tag
     fn render_end(&self, _kind: Option<BlockQuoteKind>) -> String {
         "</blockquote>".to_string()
     }
 }
 
-/// Trait for custom hard break components (line breaks)
 pub trait HardBreakComponent {
-    /// Render the hard break element
     fn render(&self) -> String {
         "<br />".to_string()
     }
 }
 
-/// Trait for custom horizontal rule components
 pub trait HorizontalRuleComponent {
-    /// Render the horizontal rule element
     fn render(&self) -> String {
         "<hr />".to_string()
     }
 }
 
-/// Trait for custom list components
 pub trait ListComponent {
-    /// Render the opening tag for a list
     fn render_start(&self, list_type: ListType, start_number: Option<u64>) -> String {
         match list_type {
             ListType::Ordered => {
@@ -232,7 +198,6 @@ pub trait ListComponent {
         }
     }
 
-    /// Render the closing tag for a list
     fn render_end(&self, list_type: ListType) -> String {
         match list_type {
             ListType::Ordered => "</ol>".to_string(),
@@ -241,35 +206,27 @@ pub trait ListComponent {
     }
 }
 
-/// Trait for custom list item components
 pub trait ListItemComponent {
-    /// Render the opening tag for a list item
     fn render_start(&self) -> String {
         "<li>".to_string()
     }
 
-    /// Render the closing tag for a list item
     fn render_end(&self) -> String {
         "</li>".to_string()
     }
 }
 
-/// Trait for custom strikethrough components
 pub trait StrikethroughComponent {
-    /// Render the opening tag
     fn render_start(&self) -> String {
         "<del>".to_string()
     }
 
-    /// Render the closing tag
     fn render_end(&self) -> String {
         "</del>".to_string()
     }
 }
 
-/// Trait for custom task list marker components
 pub trait TaskListMarkerComponent {
-    /// Render the task list marker
     fn render(&self, checked: bool) -> String {
         if checked {
             "<input type=\"checkbox\" checked disabled />".to_string()
@@ -279,48 +236,37 @@ pub trait TaskListMarkerComponent {
     }
 }
 
-/// Trait for custom table components
 pub trait TableComponent {
-    /// Render the opening tag for a table
     fn render_start(&self, _column_alignments: &[TableAlignment]) -> String {
         "<table>".to_string()
     }
 
-    /// Render the closing tag for a table
     fn render_end(&self) -> String {
         "</table>".to_string()
     }
 }
 
-/// Trait for custom table head components
 pub trait TableHeadComponent {
-    /// Render the opening tag for a table head
     fn render_start(&self) -> String {
         "<thead>".to_string()
     }
 
-    /// Render the closing tag for a table head
     fn render_end(&self) -> String {
         "</thead>".to_string()
     }
 }
 
-/// Trait for custom table row components
 pub trait TableRowComponent {
-    /// Render the opening tag for a table row
     fn render_start(&self) -> String {
         "<tr>".to_string()
     }
 
-    /// Render the closing tag for a table row
     fn render_end(&self) -> String {
         "</tr>".to_string()
     }
 }
 
-/// Trait for custom table cell components
 pub trait TableCellComponent {
-    /// Render the opening tag for a table cell
     fn render_start(&self, is_header: bool, alignment: Option<TableAlignment>) -> String {
         let tag = if is_header { "th" } else { "td" };
         match alignment {
@@ -331,7 +277,6 @@ pub trait TableCellComponent {
         }
     }
 
-    /// Render the closing tag for a table cell
     fn render_end(&self, is_header: bool) -> String {
         if is_header {
             "</th>".to_string()
@@ -341,14 +286,12 @@ pub trait TableCellComponent {
     }
 }
 
-/// The type of list
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ListType {
     Ordered,
     Unordered,
 }
 
-/// Table column alignment
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TableAlignment {
     Left,
@@ -356,7 +299,6 @@ pub enum TableAlignment {
     Right,
 }
 
-/// Registry for custom markdown components
 #[derive(Default)]
 pub struct MarkdownComponents {
     pub heading: Option<Box<dyn HeadingComponent + Send + Sync>>,
@@ -384,7 +326,6 @@ impl MarkdownComponents {
         Self::default()
     }
 
-    /// Check if any components are defined
     pub fn has_any_components(&self) -> bool {
         self.heading.is_some()
             || self.paragraph.is_some()
@@ -544,7 +485,6 @@ mod tests {
     use super::*;
     use crate::content::{render_markdown, MarkdownOptions};
 
-    // Define a custom heading component for testing
     struct TestCustomHeading;
 
     impl HeadingComponent for TestCustomHeading {
@@ -563,7 +503,6 @@ mod tests {
         }
     }
 
-    // Define a custom paragraph component for testing
     struct TestCustomParagraph;
 
     impl ParagraphComponent for TestCustomParagraph {
@@ -576,7 +515,6 @@ mod tests {
         }
     }
 
-    // Define a custom link component for testing
     struct TestCustomLink;
 
     impl LinkComponent for TestCustomLink {
@@ -592,7 +530,6 @@ mod tests {
         }
     }
 
-    // Define a custom image component for testing
     struct TestCustomImage;
 
     impl ImageComponent for TestCustomImage {
@@ -607,7 +544,6 @@ mod tests {
         }
     }
 
-    // Define a custom strong component for testing
     struct TestCustomStrong;
 
     impl StrongComponent for TestCustomStrong {
@@ -620,7 +556,6 @@ mod tests {
         }
     }
 
-    // Define a custom emphasis component for testing
     struct TestCustomEmphasis;
 
     impl EmphasisComponent for TestCustomEmphasis {
@@ -633,7 +568,6 @@ mod tests {
         }
     }
 
-    // Define a custom code component for testing
     struct TestCustomCode;
 
     impl CodeComponent for TestCustomCode {
@@ -642,7 +576,6 @@ mod tests {
         }
     }
 
-    // Define a custom blockquote component for testing
     struct TestCustomBlockquote;
 
     impl BlockquoteComponent for TestCustomBlockquote {
@@ -666,7 +599,6 @@ mod tests {
     fn test_components_builder_pattern() {
         let components = MarkdownComponents::new().heading(TestCustomHeading);
 
-        // Test that builder pattern works
         assert!(components.heading.is_some());
         assert!(components.paragraph.is_none());
         assert!(components.link.is_none());
@@ -813,7 +745,6 @@ mod tests {
         assert!(content.contains("</blockquote>"));
     }
 
-    // Test components for new component types
     struct TestHardBreak;
     impl HardBreakComponent for TestHardBreak {
         fn render(&self) -> String {

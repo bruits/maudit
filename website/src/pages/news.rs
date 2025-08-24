@@ -25,7 +25,7 @@ impl Page for NewsIndex {
                     .or_insert_with(Vec::new)
                     .push(article);
             } else {
-                // Handle articles without dates
+                // articles without dates
                 articles_by_year
                     .entry("Unknown".to_string())
                     .or_insert_with(Vec::new)

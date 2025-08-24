@@ -246,6 +246,7 @@ where
         });
 
         // Perhaps not ideal, but I don't know better. We're at the "get it working" stage - erika, 2025-08-24
+        // Ideally, we'd at least avoid the allocation here whenever `options` is None, not sure how to do that ergonomically
         let opts = options.clone();
 
         entries.push(ContentEntry::new_lazy(
@@ -356,7 +357,7 @@ pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> Stri
     let mut in_frontmatter = false;
     let mut events = Vec::new();
 
-    // First pass: collect events, handle frontmatter and code blocks
+    // Do a first pass to collect body events
     for (event, _) in Parser::new_ext(content, parser_options).into_offset_iter() {
         match event {
             Event::Start(Tag::MetadataBlock(_)) => {
@@ -426,7 +427,7 @@ fn transform_events_with_components<'a>(
         let event = &events[i];
 
         match event {
-            // Handle headings with custom components or default behavior
+            // Headings
             Event::Start(Tag::Heading {
                 level, id, classes, ..
             }) => {
@@ -466,7 +467,7 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle paragraphs
+            // Paragraphs
             Event::Start(Tag::Paragraph) => {
                 if let Some(component) = &components.paragraph {
                     let custom_html = component.render_start();
@@ -484,7 +485,7 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle links
+            // Links
             Event::Start(Tag::Link {
                 link_type,
                 dest_url,
@@ -514,7 +515,7 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle images
+            // Images
             Event::Start(Tag::Image {
                 dest_url, title, ..
             }) => {
@@ -547,7 +548,7 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle strong/bold
+            // Bold (strong)
             Event::Start(Tag::Strong) => {
                 if let Some(component) = &components.strong {
                     let custom_html = component.render_start();
@@ -565,7 +566,7 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle emphasis/italic
+            // Italic (emphasis)
             Event::Start(Tag::Emphasis) => {
                 if let Some(component) = &components.emphasis {
                     let custom_html = component.render_start();
@@ -583,7 +584,7 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle inline code
+            // Inline Code, i.e `something`
             Event::Code(code) => {
                 if let Some(component) = &components.code {
                     let custom_html = component.render(code.as_ref());
@@ -593,7 +594,7 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle blockquotes
+            // Blockquotes, i.e. > quote
             Event::Start(Tag::BlockQuote(kind)) => {
                 if let Some(component) = &components.blockquote {
                     let kind_converted = kind.as_ref().map(|k| k.into());
@@ -613,7 +614,7 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle hard breaks
+            // Hard Breaks, i.e. double spaces at the end of a line
             Event::HardBreak => {
                 if let Some(component) = &components.hard_break {
                     let custom_html = component.render();
@@ -623,7 +624,7 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle horizontal rules (i.e. --- -> <hr />)
+            // Horizontal Rules, i.e. --- -> <hr />
             Event::Rule => {
                 if let Some(component) = &components.horizontal_rule {
                     let custom_html = component.render();
@@ -633,7 +634,7 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle lists
+            // Lists, i.e. - item
             Event::Start(Tag::List(first_number)) => {
                 if let Some(component) = &components.list {
                     let list_type = if first_number.is_some() {
@@ -661,7 +662,7 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle list items
+            // List Items, i.e. individual - item
             Event::Start(Tag::Item) => {
                 if let Some(component) = &components.list_item {
                     let custom_html = component.render_start();
@@ -679,7 +680,7 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle strikethrough
+            // (GFM) Strikethrough, i.e. ~~strikethrough~~
             Event::Start(Tag::Strikethrough) => {
                 if let Some(component) = &components.strikethrough {
                     let custom_html = component.render_start();
@@ -697,7 +698,7 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle task list markers
+            // (GFM) Task List Markers, i.e. - [ ] item
             Event::TaskListMarker(checked) => {
                 if let Some(component) = &components.task_list_marker {
                     let custom_html = component.render(*checked);
@@ -707,7 +708,10 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle tables
+            // (GFM) Tables, i.e. | Header | Header |
+            //                    |--------|--------|
+            //                    | Cell   | Cell   |
+            //                    |--------|--------|
             Event::Start(Tag::Table(alignments)) => {
                 if let Some(component) = &components.table {
                     let alignment_vec: Vec<TableAlignment> = alignments
@@ -734,7 +738,7 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle table heads
+            // (GFM) Table Heads, i.e. | Header | Header |
             Event::Start(Tag::TableHead) => {
                 if let Some(component) = &components.table_head {
                     let custom_html = component.render_start();
@@ -752,7 +756,7 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle table rows
+            // (GFM) Table Rows, i.e. | Cell | Cell |
             Event::Start(Tag::TableRow) => {
                 if let Some(component) = &components.table_row {
                     let custom_html = component.render_start();
@@ -770,7 +774,7 @@ fn transform_events_with_components<'a>(
                 }
             }
 
-            // Handle table cells
+            // (GFM) Table Cells, i.e. individual | Cell |
             Event::Start(Tag::TableCell) => {
                 if let Some(component) = &components.table_cell {
                     // For now, assume it's not a header and no specific alignment
