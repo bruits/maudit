@@ -5,7 +5,7 @@ use log::warn;
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use serde::de::DeserializeOwned;
 
-use super::components::MarkdownComponents;
+use super::components::{MarkdownComponents, LinkType};
 
 use super::{highlight::CodeBlock, slugger, ContentEntry};
 
@@ -482,24 +482,14 @@ fn transform_events_with_components<'a>(
                 ..
             }) => {
                 if let Some(component) = &components.link {
-                    let link_type_str = match link_type {
-                        pulldown_cmark::LinkType::Inline => "inline",
-                        pulldown_cmark::LinkType::Reference => "reference",
-                        pulldown_cmark::LinkType::ReferenceUnknown => "reference_unknown",
-                        pulldown_cmark::LinkType::Collapsed => "collapsed",
-                        pulldown_cmark::LinkType::CollapsedUnknown => "collapsed_unknown",
-                        pulldown_cmark::LinkType::Shortcut => "shortcut",
-                        pulldown_cmark::LinkType::ShortcutUnknown => "shortcut_unknown",
-                        pulldown_cmark::LinkType::Autolink => "autolink",
-                        pulldown_cmark::LinkType::Email => "email",
-                    };
+                    let link_type_converted: LinkType = link_type.into();
                     let title_str = if title.is_empty() {
                         None
                     } else {
                         Some(title.as_ref())
                     };
                     let custom_html =
-                        component.render_start(dest_url.as_ref(), title_str, link_type_str);
+                        component.render_start(dest_url.as_ref(), title_str, link_type_converted);
                     transformed.push(Event::Html(custom_html.into()));
                 } else {
                     transformed.push(event.clone());

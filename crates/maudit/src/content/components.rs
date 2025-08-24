@@ -41,6 +41,59 @@ impl BlockQuoteKind {
     }
 }
 
+/// The type of link
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkType {
+    Inline,
+    Reference,
+    ReferenceUnknown,
+    Collapsed,
+    CollapsedUnknown,
+    Shortcut,
+    ShortcutUnknown,
+    Autolink,
+    Email,
+}
+
+impl From<pulldown_cmark::LinkType> for LinkType {
+    fn from(link_type: pulldown_cmark::LinkType) -> Self {
+        match link_type {
+            pulldown_cmark::LinkType::Inline => LinkType::Inline,
+            pulldown_cmark::LinkType::Reference => LinkType::Reference,
+            pulldown_cmark::LinkType::ReferenceUnknown => LinkType::ReferenceUnknown,
+            pulldown_cmark::LinkType::Collapsed => LinkType::Collapsed,
+            pulldown_cmark::LinkType::CollapsedUnknown => LinkType::CollapsedUnknown,
+            pulldown_cmark::LinkType::Shortcut => LinkType::Shortcut,
+            pulldown_cmark::LinkType::ShortcutUnknown => LinkType::ShortcutUnknown,
+            pulldown_cmark::LinkType::Autolink => LinkType::Autolink,
+            pulldown_cmark::LinkType::Email => LinkType::Email,
+        }
+    }
+}
+
+impl From<&pulldown_cmark::LinkType> for LinkType {
+    fn from(link_type: &pulldown_cmark::LinkType) -> Self {
+        (*link_type).into()
+    }
+}
+
+impl LinkType {
+    /// Get the string representation of the link type
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            LinkType::Inline => "inline",
+            LinkType::Reference => "reference",
+            LinkType::ReferenceUnknown => "reference_unknown",
+            LinkType::Collapsed => "collapsed",
+            LinkType::CollapsedUnknown => "collapsed_unknown",
+            LinkType::Shortcut => "shortcut",
+            LinkType::ShortcutUnknown => "shortcut_unknown",
+            LinkType::Autolink => "autolink",
+            LinkType::Email => "email",
+        }
+    }
+}
+
 /// Trait for custom heading components
 pub trait HeadingComponent {
     /// Render the opening tag
@@ -81,7 +134,7 @@ pub trait ParagraphComponent {
 /// Trait for custom link components
 pub trait LinkComponent {
     /// Render the opening tag
-    fn render_start(&self, url: &str, title: Option<&str>, link_type: &str) -> String;
+    fn render_start(&self, url: &str, title: Option<&str>, link_type: LinkType) -> String;
 
     /// Render the closing tag
     fn render_end(&self) -> String {
@@ -269,7 +322,7 @@ mod tests {
     struct TestCustomLink;
 
     impl LinkComponent for TestCustomLink {
-        fn render_start(&self, url: &str, title: Option<&str>, _link_type: &str) -> String {
+        fn render_start(&self, url: &str, title: Option<&str>, _link_type: LinkType) -> String {
             let title_attr = title
                 .map(|t| format!(" title=\"{}\"", t))
                 .unwrap_or_default();
