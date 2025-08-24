@@ -358,7 +358,7 @@ pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> Stri
     let mut events = Vec::new();
 
     // Do a first pass to collect body events
-    for (event, _) in Parser::new_ext(content, parser_options).into_offset_iter() {
+    for event in Parser::new_ext(content, parser_options) {
         match event {
             Event::Start(Tag::MetadataBlock(_)) => {
                 in_frontmatter = true;
@@ -400,6 +400,26 @@ pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> Stri
         }
     }
 
+    // If we don't have a custom heading component, use default heading rendering
+    if options.is_none_or(|o| o.components.heading.is_none()) {
+        let headings = find_headings(&events);
+
+        for heading in &headings {
+            let heading_content = get_text_from_events(&events[heading.start..heading.end]);
+            let slug: String = slugger.slugify(&heading_content);
+
+            events[heading.start] = Event::Html(
+                format!(
+                    "<h{} id=\"{}\" class=\"{}\">",
+                    heading.level,
+                    heading.id.clone().unwrap_or(slug),
+                    heading.classes.join(" ")
+                )
+                .into(),
+            );
+        }
+    }
+
     // Second pass: transform events with custom components only if needed
     let final_events = match options {
         Some(options) if options.components.has_any_components() => {
@@ -431,31 +451,22 @@ fn transform_events_with_components<'a>(
             Event::Start(Tag::Heading {
                 level, id, classes, ..
             }) => {
-                let heading_content = if let Some(end_index) = find_matching_heading_end(events, i)
-                {
-                    get_text_from_events(&events[i + 1..end_index])
-                } else {
-                    String::new()
-                };
-                let slug = slugger.slugify(&heading_content);
-                let heading_id = id.as_ref().map(|s| s.as_ref()).unwrap_or(&slug);
-                let classes_vec: Vec<&str> = classes.iter().map(|c| c.as_ref()).collect();
-
                 if let Some(component) = &components.heading {
+                    let heading_content =
+                        if let Some(end_index) = find_matching_heading_end(events, i) {
+                            get_text_from_events(&events[i + 1..end_index])
+                        } else {
+                            String::new()
+                        };
+                    let slug = slugger.slugify(&heading_content);
+                    let heading_id = id.as_ref().map(|s| s.as_ref()).unwrap_or(&slug);
+                    let classes_vec: Vec<&str> = classes.iter().map(|c| c.as_ref()).collect();
+
                     let custom_html =
                         component.render_start(*level as u8, Some(heading_id), &classes_vec);
                     transformed.push(Event::Html(custom_html.into()));
                 } else {
-                    // Default behavior
-                    transformed.push(Event::Html(
-                        format!(
-                            "<h{} id=\"{}\" class=\"{}\">",
-                            level,
-                            heading_id,
-                            classes_vec.join(" ")
-                        )
-                        .into(),
-                    ));
+                    transformed.push(event.clone());
                 }
             }
             Event::End(TagEnd::Heading(level)) => {
@@ -863,4 +874,34 @@ More content here."#;
         // Should be the same as default rendering when no custom components are provided
         assert_eq!(html, default_html);
     }
+
+    #[test]
+    fn test_default_heading_behavior_with_and_without_options() {
+        let markdown = r#"# Main Title
+
+## Subheading
+
+### Another Level"#;
+
+        // Render without any options
+        let html_no_options = render_markdown(markdown, None);
+
+        // Render with options but no custom heading component
+        let options_no_heading = MarkdownOptions {
+            components: MarkdownComponents::new(),
+        };
+        let html_with_empty_options = render_markdown(markdown, Some(&options_no_heading));
+
+        // Both should produce identical output
+        assert_eq!(html_no_options, html_with_empty_options);
+        
+        // Both should have default heading behavior (id attributes and proper HTML structure)
+        assert!(html_no_options.contains("id=\""));
+        assert!(html_no_options.contains("<h1"));
+        assert!(html_no_options.contains("<h2"));
+        assert!(html_no_options.contains("<h3"));
+        assert!(html_with_empty_options.contains("id=\""));
+    }
+
+
 }
