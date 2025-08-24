@@ -1,5 +1,46 @@
 // Component traits that hide pulldown-cmark implementation details
 
+/// The kind of blockquote
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlockQuoteKind {
+    Note,
+    Tip,
+    Important,
+    Warning,
+    Caution,
+}
+
+impl From<pulldown_cmark::BlockQuoteKind> for BlockQuoteKind {
+    fn from(kind: pulldown_cmark::BlockQuoteKind) -> Self {
+        match kind {
+            pulldown_cmark::BlockQuoteKind::Note => BlockQuoteKind::Note,
+            pulldown_cmark::BlockQuoteKind::Tip => BlockQuoteKind::Tip,
+            pulldown_cmark::BlockQuoteKind::Important => BlockQuoteKind::Important,
+            pulldown_cmark::BlockQuoteKind::Warning => BlockQuoteKind::Warning,
+            pulldown_cmark::BlockQuoteKind::Caution => BlockQuoteKind::Caution,
+        }
+    }
+}
+
+impl From<&pulldown_cmark::BlockQuoteKind> for BlockQuoteKind {
+    fn from(kind: &pulldown_cmark::BlockQuoteKind) -> Self {
+        (*kind).into()
+    }
+}
+
+impl BlockQuoteKind {
+    /// Get the string representation of the blockquote kind
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            BlockQuoteKind::Note => "note",
+            BlockQuoteKind::Tip => "tip",
+            BlockQuoteKind::Important => "important",
+            BlockQuoteKind::Warning => "warning",
+            BlockQuoteKind::Caution => "caution",
+        }
+    }
+}
+
 /// Trait for custom heading components
 pub trait HeadingComponent {
     /// Render the opening tag
@@ -89,15 +130,15 @@ pub trait CodeComponent {
 /// Trait for custom blockquote components
 pub trait BlockquoteComponent {
     /// Render the opening tag
-    fn render_start(&self, kind: Option<&str>) -> String {
+    fn render_start(&self, kind: Option<BlockQuoteKind>) -> String {
         match kind {
-            Some(k) => format!("<blockquote data-kind=\"{}\">", k),
+            Some(k) => format!("<blockquote data-kind=\"{}\">", k.as_str()),
             None => "<blockquote>".to_string(),
         }
     }
 
     /// Render the closing tag
-    fn render_end(&self) -> String {
+    fn render_end(&self, _kind: Option<BlockQuoteKind>) -> String {
         "</blockquote>".to_string()
     }
 }
@@ -294,17 +335,18 @@ mod tests {
     struct TestCustomBlockquote;
 
     impl BlockquoteComponent for TestCustomBlockquote {
-        fn render_start(&self, kind: Option<&str>) -> String {
+        fn render_start(&self, kind: Option<BlockQuoteKind>) -> String {
             match kind {
                 Some(k) => format!(
                     "<blockquote class=\"custom-blockquote {}\" data-kind=\"{}\">📝",
-                    k, k
+                    k.as_str(),
+                    k.as_str()
                 ),
                 None => "<blockquote class=\"custom-blockquote\">📝".to_string(),
             }
         }
 
-        fn render_end(&self) -> String {
+        fn render_end(&self, _kind: Option<BlockQuoteKind>) -> String {
             "</blockquote>".to_string()
         }
     }

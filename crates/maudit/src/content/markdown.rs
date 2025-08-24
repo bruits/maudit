@@ -596,22 +596,17 @@ fn transform_events_with_components<'a>(
             // Handle blockquotes
             Event::Start(Tag::BlockQuote(kind)) => {
                 if let Some(component) = &components.blockquote {
-                    let kind_str = kind.as_ref().map(|k| match k {
-                        pulldown_cmark::BlockQuoteKind::Note => "note",
-                        pulldown_cmark::BlockQuoteKind::Tip => "tip",
-                        pulldown_cmark::BlockQuoteKind::Important => "important",
-                        pulldown_cmark::BlockQuoteKind::Warning => "warning",
-                        pulldown_cmark::BlockQuoteKind::Caution => "caution",
-                    });
-                    let custom_html = component.render_start(kind_str);
+                    let kind_converted = kind.as_ref().map(|k| k.into());
+                    let custom_html = component.render_start(kind_converted);
                     transformed.push(Event::Html(custom_html.into()));
                 } else {
                     transformed.push(event.clone());
                 }
             }
-            Event::End(TagEnd::BlockQuote(_)) => {
+            Event::End(TagEnd::BlockQuote(kind)) => {
                 if let Some(component) = &components.blockquote {
-                    let custom_html = component.render_end();
+                    let kind_converted = kind.as_ref().map(|k| k.into());
+                    let custom_html = component.render_end(kind_converted);
                     transformed.push(Event::Html(custom_html.into()));
                 } else {
                     transformed.push(event.clone());
