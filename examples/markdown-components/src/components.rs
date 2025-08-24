@@ -5,12 +5,7 @@ pub struct CustomHeading;
 
 impl HeadingComponent for CustomHeading {
     fn render_start(&self, level: u8, id: Option<&str>, classes: &[&str]) -> String {
-        println!(
-            "Rendering heading level {level} with id {:?} and classes {:?}",
-            id, classes
-        );
         let id_attr = id.map(|i| format!(" id=\"{}\"", i)).unwrap_or_default();
-        println!("id_attr: {}", id_attr);
         let class_attr = if classes.is_empty() {
             String::new()
         } else {
@@ -42,7 +37,7 @@ pub struct CustomParagraph;
 
 impl ParagraphComponent for CustomParagraph {
     fn render_start(&self) -> String {
-        "<p class=\"prose prose-lg text-gray-800 leading-relaxed\">".to_string()
+        "<p class=\"prose\">".to_string()
     }
 
     fn render_end(&self) -> String {
@@ -94,7 +89,7 @@ pub struct CustomStrong;
 
 impl StrongComponent for CustomStrong {
     fn render_start(&self) -> String {
-        "<strong class=\"font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent\">".to_string()
+        "<strong class=\"gradient-text\">".to_string()
     }
 
     fn render_end(&self) -> String {
@@ -107,7 +102,7 @@ pub struct CustomEmphasis;
 
 impl EmphasisComponent for CustomEmphasis {
     fn render_start(&self) -> String {
-        "<em class=\"italic text-indigo-600\">".to_string()
+        "<em class=\"emphasis-text\">".to_string()
     }
 
     fn render_end(&self) -> String {
@@ -120,7 +115,7 @@ pub struct CustomCode;
 
 impl CodeComponent for CustomCode {
     fn render(&self, code: &str) -> String {
-        format!("<code class=\"bg-gray-100 text-red-600 px-1 py-0.5 rounded font-mono text-sm\">{}</code>", code)
+        format!("<code class=\"inline-code\">{}</code>", code)
     }
 }
 
@@ -130,18 +125,18 @@ pub struct CustomBlockquote;
 impl BlockquoteComponent for CustomBlockquote {
     fn render_start(&self, kind: Option<BlockQuoteKind>) -> String {
         match kind {
-            Some(BlockQuoteKind::Note) => "<blockquote class=\"border-l-4 border-blue-500 bg-blue-50 p-4 my-4\"><div class=\"flex\"><span class=\"text-blue-500 mr-2\">ℹ️</span><div>".to_string(),
-            Some(BlockQuoteKind::Tip) => "<blockquote class=\"border-l-4 border-green-500 bg-green-50 p-4 my-4\"><div class=\"flex\"><span class=\"text-green-500 mr-2\">💡</span><div>".to_string(),
-            Some(BlockQuoteKind::Warning) => "<blockquote class=\"border-l-4 border-yellow-500 bg-yellow-50 p-4 my-4\"><div class=\"flex\"><span class=\"text-yellow-500 mr-2\">⚠️</span><div>".to_string(),
-            Some(BlockQuoteKind::Important) => "<blockquote class=\"border-l-4 border-purple-500 bg-purple-50 p-4 my-4\"><div class=\"flex\"><span class=\"text-purple-500 mr-2\">❗</span><div>".to_string(),
-            Some(BlockQuoteKind::Caution) => "<blockquote class=\"border-l-4 border-red-500 bg-red-50 p-4 my-4\"><div class=\"flex\"><span class=\"text-red-500 mr-2\">🚨</span><div>".to_string(),
-            None => "<blockquote class=\"border-l-4 border-gray-400 bg-gray-50 p-4 my-4 italic\">".to_string(),
+            Some(BlockQuoteKind::Note) => "<blockquote class=\"blockquote-note\"><div class=\"blockquote-icon\">ℹ️</div><div class=\"blockquote-content\">".to_string(),
+            Some(BlockQuoteKind::Tip) => "<blockquote class=\"blockquote-tip\"><div class=\"blockquote-icon\">💡</div><div class=\"blockquote-content\">".to_string(),
+            Some(BlockQuoteKind::Warning) => "<blockquote class=\"blockquote-warning\"><div class=\"blockquote-icon\">⚠️</div><div class=\"blockquote-content\">".to_string(),
+            Some(BlockQuoteKind::Important) => "<blockquote class=\"blockquote-important\"><div class=\"blockquote-icon\">❗</div><div class=\"blockquote-content\">".to_string(),
+            Some(BlockQuoteKind::Caution) => "<blockquote class=\"blockquote-caution\"><div class=\"blockquote-icon\">🚨</div><div class=\"blockquote-content\">".to_string(),
+            None => "<blockquote class=\"blockquote-default blockquote-content\">".to_string(),
         }
     }
 
     fn render_end(&self, kind: Option<BlockQuoteKind>) -> String {
         if kind.is_some() {
-            "</div></div></blockquote>".to_string()
+            "</div></blockquote>".to_string()
         } else {
             "</blockquote>".to_string()
         }
@@ -162,8 +157,7 @@ pub struct CustomHorizontalRule;
 
 impl HorizontalRuleComponent for CustomHorizontalRule {
     fn render(&self) -> String {
-        "<hr class=\"my-8 border-t-2 border-gradient-to-r from-purple-400 to-pink-400\" />"
-            .to_string()
+        "<hr class=\"custom-hr\" />".to_string()
     }
 }
 
@@ -177,13 +171,10 @@ impl ListComponent for CustomList {
                 let start_attr = start_number
                     .map(|n| format!(" start=\"{}\"", n))
                     .unwrap_or_default();
-                format!(
-                    "<ol class=\"list-decimal list-inside space-y-2 ml-4\"{}>",
-                    start_attr
-                )
+                format!("<ol class=\"custom-list\" style=\"list-style-type: decimal; list-style-position: inside;\"{}>", start_attr)
             }
             ListType::Unordered => {
-                "<ul class=\"list-disc list-inside space-y-2 ml-4\">".to_string()
+                "<ul class=\"custom-list\" style=\"list-style-type: disc; list-style-position: inside;\">".to_string()
             }
         }
     }
@@ -201,7 +192,7 @@ pub struct CustomListItem;
 
 impl ListItemComponent for CustomListItem {
     fn render_start(&self) -> String {
-        "<li class=\"text-gray-700 hover:text-gray-900 transition-colors\">".to_string()
+        "<li>".to_string()
     }
 
     fn render_end(&self) -> String {
@@ -214,7 +205,7 @@ pub struct CustomStrikethrough;
 
 impl StrikethroughComponent for CustomStrikethrough {
     fn render_start(&self) -> String {
-        "<del class=\"line-through text-gray-500 opacity-75\">".to_string()
+        "<del class=\"strikethrough\">".to_string()
     }
 
     fn render_end(&self) -> String {
@@ -228,10 +219,9 @@ pub struct CustomTaskListMarker;
 impl TaskListMarkerComponent for CustomTaskListMarker {
     fn render(&self, checked: bool) -> String {
         if checked {
-            "<input type=\"checkbox\" checked disabled class=\"mr-2 accent-green-500\" />"
-                .to_string()
+            "<input type=\"checkbox\" checked disabled class=\"task-checkbox\" />".to_string()
         } else {
-            "<input type=\"checkbox\" disabled class=\"mr-2\" />".to_string()
+            "<input type=\"checkbox\" disabled class=\"task-checkbox\" />".to_string()
         }
     }
 }
@@ -241,7 +231,7 @@ pub struct CustomTable;
 
 impl TableComponent for CustomTable {
     fn render_start(&self, _alignments: &[TableAlignment]) -> String {
-        "<table class=\"min-w-full divide-y divide-gray-200 border border-gray-300 rounded-lg overflow-hidden\">".to_string()
+        "<table class=\"custom-table\">".to_string()
     }
 
     fn render_end(&self) -> String {
@@ -254,7 +244,7 @@ pub struct CustomTableHead;
 
 impl TableHeadComponent for CustomTableHead {
     fn render_start(&self) -> String {
-        "<thead class=\"bg-gray-50\">".to_string()
+        "<thead class=\"table-header\">".to_string()
     }
 
     fn render_end(&self) -> String {
@@ -267,7 +257,7 @@ pub struct CustomTableRow;
 
 impl TableRowComponent for CustomTableRow {
     fn render_start(&self) -> String {
-        "<tr class=\"hover:bg-gray-50 transition-colors\">".to_string()
+        "<tr class=\"table-row\">".to_string()
     }
 
     fn render_end(&self) -> String {
@@ -281,19 +271,15 @@ pub struct CustomTableCell;
 impl TableCellComponent for CustomTableCell {
     fn render_start(&self, is_header: bool, alignment: Option<TableAlignment>) -> String {
         let tag = if is_header { "th" } else { "td" };
-        let base_class = if is_header {
-            "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-        } else {
-            "px-6 py-4 whitespace-nowrap text-sm text-gray-900"
+        let mut class = "table-cell".to_string();
+
+        match alignment {
+            Some(TableAlignment::Center) => class.push_str(" center"),
+            Some(TableAlignment::Right) => class.push_str(" right"),
+            _ => {}
         };
 
-        let align_class = match alignment {
-            Some(TableAlignment::Center) => " text-center",
-            Some(TableAlignment::Right) => " text-right",
-            _ => "",
-        };
-
-        format!("<{} class=\"{}{}\">", tag, base_class, align_class)
+        format!("<{} class=\"{}\">", tag, class)
     }
 
     fn render_end(&self, is_header: bool) -> String {

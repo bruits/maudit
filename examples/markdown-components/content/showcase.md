@@ -1,8 +1,3 @@
----
-title: "Custom Markdown Components Showcase"
-description: "A comprehensive demonstration of all custom markdown components in Maudit"
----
-
 # Main Heading
 
 Welcome to the **Maudit Custom Components** showcase! This example demonstrates _all_ the available markdown components with custom styling.
@@ -37,7 +32,7 @@ Here are different types of links:
 
 1. First numbered item
 2. Second numbered item
-3. Third numbered item with [a link](https://example.com)
+3. Third numbered item with [an external link](https://example.com)
 
 ### Task List
 
@@ -83,6 +78,8 @@ fn main() {
 }
 ```
 
+In Maudit 0.3.0, code blocks do not unfortunately allow for custom components.
+
 ## Tables
 
 | Header 1     |             Header 2             |        Header 3 |
@@ -103,21 +100,19 @@ The line above is a horizontal rule that separates sections.
 Here's a complex example with nested formatting:
 
 1. **First item** with _italic_ and `code`
-2. Second item with [a link](https://example.com) and ~~strikethrough~~
+2. Second item with [an external link](https://example.com) and ~~strikethrough~~
    - Nested unordered item
    - Another nested item with **bold** text
 3. Third item with an image: ![Small image](https://placehold.co/100x100)
 
 ### Complex Blockquote
 
-> This blockquote contains:
+> This blockquote contains a list with:
 >
 > - **Bold text**
 > - _Italic text_
 > - `Inline code`
 > - [A link](https://example.com)
->
-> And even a nested list!
 
 ## All Together
 

@@ -967,7 +967,6 @@ mod tests {
             components: MarkdownComponents::new().strikethrough(TestStrikethrough),
         };
         let content = render_markdown("~~strikethrough~~", Some(&options));
-        println!("Strikethrough content: {}", content);
         assert!(content.contains("<del class=\"custom-strike\">"));
     }
 
@@ -977,7 +976,6 @@ mod tests {
             components: MarkdownComponents::new().task_list_marker(TestTaskListMarker),
         };
         let content = render_markdown("- [x] Done\n- [ ] Todo", Some(&options));
-        println!("Task list content: {}", content);
         assert!(content.contains("<input type=\"checkbox\" checked class=\"custom-task\" />"));
         assert!(content.contains("<input type=\"checkbox\" class=\"custom-task\" />"));
     }
@@ -995,7 +993,6 @@ mod tests {
             "| Header | Header |\n|--------|--------|\n| Cell   | Cell   |",
             Some(&options),
         );
-        println!("Table content: {}", content);
         assert!(content.contains("<table class=\"custom-table\">"));
         assert!(content.contains("<thead class=\"custom-thead\">"));
         assert!(content.contains("<tr class=\"custom-row\">"));
