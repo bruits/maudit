@@ -24,11 +24,7 @@ impl HeadingComponent for CustomHeading {
     }
 
     fn render_end(&self, level: u8) -> String {
-        if let Some(id) = level.checked_sub(1) {
-            format!(" <a href=\"#heading-{id}\" class=\"anchor-link\">🔗</a></h{level}>")
-        } else {
-            format!("</h{level}>")
-        }
+        format!("</h{level}>")
     }
 }
 
