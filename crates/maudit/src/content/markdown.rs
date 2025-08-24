@@ -421,32 +421,25 @@ pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> Stri
     }
 
     // Second pass: transform events with custom components only if needed
-    let final_events = match options {
-        Some(options) if options.components.has_any_components() => {
-            transform_events_with_components(&events, &options.components, &mut slugger)
+    if let Some(options) = options {
+        if options.components.has_any_components() {
+            transform_events_with_components(&mut events, &options.components, &mut slugger);
         }
-        _ => {
-            // No options, no components, or empty components - use events as-is
-            events
-        }
-    };
+    }
 
-    pulldown_cmark::html::push_html(&mut html_output, final_events.into_iter());
+    pulldown_cmark::html::push_html(&mut html_output, events.into_iter());
     html_output
 }
 
-fn transform_events_with_components<'a>(
-    events: &'a [Event],
+fn transform_events_with_components(
+    events: &mut Vec<Event>,
     components: &MarkdownComponents,
     slugger: &mut slugger::Slugger,
-) -> Vec<Event<'a>> {
-    let mut transformed = Vec::new();
+) {
     let mut i = 0;
 
     while i < events.len() {
-        let event = &events[i];
-
-        match event {
+        match &events[i] {
             // Headings
             Event::Start(Tag::Heading {
                 level, id, classes, ..
@@ -464,17 +457,13 @@ fn transform_events_with_components<'a>(
 
                     let custom_html =
                         component.render_start(*level as u8, Some(heading_id), &classes_vec);
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
             Event::End(TagEnd::Heading(level)) => {
                 if let Some(component) = &components.heading {
                     let custom_html = component.render_end(*level as u8);
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
@@ -482,17 +471,13 @@ fn transform_events_with_components<'a>(
             Event::Start(Tag::Paragraph) => {
                 if let Some(component) = &components.paragraph {
                     let custom_html = component.render_start();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
             Event::End(TagEnd::Paragraph) => {
                 if let Some(component) = &components.paragraph {
                     let custom_html = component.render_end();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
@@ -512,21 +497,17 @@ fn transform_events_with_components<'a>(
                     };
                     let custom_html =
                         component.render_start(dest_url.as_ref(), title_str, link_type_converted);
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
             Event::End(TagEnd::Link) => {
                 if let Some(component) = &components.link {
                     let custom_html = component.render_end();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
-            // Images
+            // Images - special case that consumes multiple events
             Event::Start(Tag::Image {
                 dest_url, title, ..
             }) => {
@@ -543,19 +524,13 @@ fn transform_events_with_components<'a>(
                         Some(title.as_ref())
                     };
                     let custom_html = component.render(dest_url.as_ref(), &alt_text, title_str);
-                    transformed.push(Event::Html(custom_html.into()));
-                    // Skip to the end tag
+                    events[i] = Event::Html(custom_html.into());
+
+                    // Skip to the end tag and remove intermediate events
                     if let Some(end_index) = find_matching_image_end(events, i) {
-                        i = end_index;
+                        // Remove all events between start and end (inclusive of end)
+                        events.drain(i + 1..=end_index);
                     }
-                } else {
-                    transformed.push(event.clone());
-                }
-            }
-            Event::End(TagEnd::Image) => {
-                // Only add this if we didn't handle it above with custom component
-                if components.image.is_none() {
-                    transformed.push(event.clone());
                 }
             }
 
@@ -563,17 +538,13 @@ fn transform_events_with_components<'a>(
             Event::Start(Tag::Strong) => {
                 if let Some(component) = &components.strong {
                     let custom_html = component.render_start();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
             Event::End(TagEnd::Strong) => {
                 if let Some(component) = &components.strong {
                     let custom_html = component.render_end();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
@@ -581,71 +552,57 @@ fn transform_events_with_components<'a>(
             Event::Start(Tag::Emphasis) => {
                 if let Some(component) = &components.emphasis {
                     let custom_html = component.render_start();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
             Event::End(TagEnd::Emphasis) => {
                 if let Some(component) = &components.emphasis {
                     let custom_html = component.render_end();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
-            // Inline Code, i.e `something`
+            // Inline Code
             Event::Code(code) => {
                 if let Some(component) = &components.code {
                     let custom_html = component.render(code.as_ref());
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
-            // Blockquotes, i.e. > quote
+            // Blockquotes
             Event::Start(Tag::BlockQuote(kind)) => {
                 if let Some(component) = &components.blockquote {
                     let kind_converted = kind.as_ref().map(|k| k.into());
                     let custom_html = component.render_start(kind_converted);
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
             Event::End(TagEnd::BlockQuote(kind)) => {
                 if let Some(component) = &components.blockquote {
                     let kind_converted = kind.as_ref().map(|k| k.into());
                     let custom_html = component.render_end(kind_converted);
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
-            // Hard Breaks, i.e. double spaces at the end of a line
+            // Hard Breaks
             Event::HardBreak => {
                 if let Some(component) = &components.hard_break {
                     let custom_html = component.render();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
-            // Horizontal Rules, i.e. --- -> <hr />
+            // Horizontal Rules
             Event::Rule => {
                 if let Some(component) = &components.horizontal_rule {
                     let custom_html = component.render();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
-            // Lists, i.e. - item
+            // Lists
             Event::Start(Tag::List(first_number)) => {
                 if let Some(component) = &components.list {
                     let list_type = if first_number.is_some() {
@@ -654,9 +611,7 @@ fn transform_events_with_components<'a>(
                         ListType::Unordered
                     };
                     let custom_html = component.render_start(list_type, *first_number);
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
             Event::End(TagEnd::List(ordered)) => {
@@ -667,9 +622,7 @@ fn transform_events_with_components<'a>(
                         ListType::Unordered
                     };
                     let custom_html = component.render_end(list_type);
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
@@ -677,17 +630,13 @@ fn transform_events_with_components<'a>(
             Event::Start(Tag::Item) => {
                 if let Some(component) = &components.list_item {
                     let custom_html = component.render_start();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
             Event::End(TagEnd::Item) => {
                 if let Some(component) = &components.list_item {
                     let custom_html = component.render_end();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
@@ -695,17 +644,13 @@ fn transform_events_with_components<'a>(
             Event::Start(Tag::Strikethrough) => {
                 if let Some(component) = &components.strikethrough {
                     let custom_html = component.render_start();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
             Event::End(TagEnd::Strikethrough) => {
                 if let Some(component) = &components.strikethrough {
                     let custom_html = component.render_end();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
@@ -713,9 +658,7 @@ fn transform_events_with_components<'a>(
             Event::TaskListMarker(checked) => {
                 if let Some(component) = &components.task_list_marker {
                     let custom_html = component.render(*checked);
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
@@ -735,17 +678,13 @@ fn transform_events_with_components<'a>(
                         })
                         .collect();
                     let custom_html = component.render_start(&alignment_vec);
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
             Event::End(TagEnd::Table) => {
                 if let Some(component) = &components.table {
                     let custom_html = component.render_end();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
@@ -753,17 +692,13 @@ fn transform_events_with_components<'a>(
             Event::Start(Tag::TableHead) => {
                 if let Some(component) = &components.table_head {
                     let custom_html = component.render_start();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
             Event::End(TagEnd::TableHead) => {
                 if let Some(component) = &components.table_head {
                     let custom_html = component.render_end();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
@@ -771,17 +706,13 @@ fn transform_events_with_components<'a>(
             Event::Start(Tag::TableRow) => {
                 if let Some(component) = &components.table_row {
                     let custom_html = component.render_start();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
             Event::End(TagEnd::TableRow) => {
                 if let Some(component) = &components.table_row {
                     let custom_html = component.render_end();
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
@@ -791,30 +722,22 @@ fn transform_events_with_components<'a>(
                     // For now, assume it's not a header and no specific alignment
                     // TODO: Track context to determine if we're in a table head and column alignment
                     let custom_html = component.render_start(false, None);
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
             Event::End(TagEnd::TableCell) => {
                 if let Some(component) = &components.table_cell {
                     // TODO: Track context to determine if we're in a table head
                     let custom_html = component.render_end(false);
-                    transformed.push(Event::Html(custom_html.into()));
-                } else {
-                    transformed.push(event.clone());
+                    events[i] = Event::Html(custom_html.into());
                 }
             }
 
             // All other events pass through unchanged
-            _ => {
-                transformed.push(event.clone());
-            }
+            _ => {}
         }
         i += 1;
     }
-
-    transformed
 }
 
 fn find_matching_heading_end(events: &[Event], start_index: usize) -> Option<usize> {
@@ -894,7 +817,7 @@ More content here."#;
 
         // Both should produce identical output
         assert_eq!(html_no_options, html_with_empty_options);
-        
+
         // Both should have default heading behavior (id attributes and proper HTML structure)
         assert!(html_no_options.contains("id=\""));
         assert!(html_no_options.contains("<h1"));
@@ -902,6 +825,4 @@ More content here."#;
         assert!(html_no_options.contains("<h3"));
         assert!(html_with_empty_options.contains("id=\""));
     }
-
-
 }
