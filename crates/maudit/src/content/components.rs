@@ -211,32 +211,102 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_custom_heading_component() {
-        let options = MarkdownOptions {
-            components: MarkdownComponents::new().heading(TestCustomHeading),
-        };
-        let markdown = r#"# Hello, world!
+    // Define a custom paragraph component for testing
+    struct TestCustomParagraph;
 
-This is a **bold** text.
+    impl ParagraphComponent for TestCustomParagraph {
+        fn render_start(&self) -> String {
+            "<p class=\"custom-paragraph\">".to_string()
+        }
 
-## Subheading
+        fn render_end(&self) -> String {
+            "</p><!-- end custom paragraph -->".to_string()
+        }
+    }
 
-More content here."#;
+    // Define a custom link component for testing
+    struct TestCustomLink;
 
-        let html = render_markdown(markdown, Some(&options));
+    impl LinkComponent for TestCustomLink {
+        fn render_start(&self, url: &str, title: Option<&str>, _link_type: &str) -> String {
+            let title_attr = title
+                .map(|t| format!(" title=\"{}\"", t))
+                .unwrap_or_default();
+            format!("<a href=\"{}\" class=\"custom-link\"{}>🔗", url, title_attr)
+        }
 
-        // Test that custom heading component is used
-        assert!(html.contains("🎯"));
+        fn render_end(&self) -> String {
+            "</a>".to_string()
+        }
+    }
 
-        // Test that nested content (bold) is preserved
-        assert!(html.contains("<strong>bold</strong>"));
+    // Define a custom image component for testing
+    struct TestCustomImage;
 
-        // Test that multiple heading levels work
-        assert!(html.contains("<h1"));
-        assert!(html.contains("<h2"));
-        assert!(html.contains("</h1>"));
-        assert!(html.contains("</h2>"));
+    impl ImageComponent for TestCustomImage {
+        fn render(&self, url: &str, alt: &str, title: Option<&str>) -> String {
+            let title_attr = title
+                .map(|t| format!(" title=\"{}\"", t))
+                .unwrap_or_default();
+            format!(
+                "<img src=\"{}\" alt=\"{}\" class=\"custom-image\"{} />📸",
+                url, alt, title_attr
+            )
+        }
+    }
+
+    // Define a custom strong component for testing
+    struct TestCustomStrong;
+
+    impl StrongComponent for TestCustomStrong {
+        fn render_start(&self) -> String {
+            "<strong class=\"custom-strong\">💪".to_string()
+        }
+
+        fn render_end(&self) -> String {
+            "</strong>".to_string()
+        }
+    }
+
+    // Define a custom emphasis component for testing
+    struct TestCustomEmphasis;
+
+    impl EmphasisComponent for TestCustomEmphasis {
+        fn render_start(&self) -> String {
+            "<em class=\"custom-emphasis\">✨".to_string()
+        }
+
+        fn render_end(&self) -> String {
+            "</em>".to_string()
+        }
+    }
+
+    // Define a custom code component for testing
+    struct TestCustomCode;
+
+    impl CodeComponent for TestCustomCode {
+        fn render(&self, code: &str) -> String {
+            format!("<code class=\"custom-code\">💻{}</code>", code)
+        }
+    }
+
+    // Define a custom blockquote component for testing
+    struct TestCustomBlockquote;
+
+    impl BlockquoteComponent for TestCustomBlockquote {
+        fn render_start(&self, kind: Option<&str>) -> String {
+            match kind {
+                Some(k) => format!(
+                    "<blockquote class=\"custom-blockquote {}\" data-kind=\"{}\">📝",
+                    k, k
+                ),
+                None => "<blockquote class=\"custom-blockquote\">📝".to_string(),
+            }
+        }
+
+        fn render_end(&self) -> String {
+            "</blockquote>".to_string()
+        }
     }
 
     #[test]
@@ -256,5 +326,137 @@ More content here."#;
 
         let with_heading = MarkdownComponents::new().heading(TestCustomHeading);
         assert!(with_heading.has_any_components());
+    }
+
+    #[test]
+    fn test_custom_heading_component() {
+        let options = MarkdownOptions {
+            components: MarkdownComponents::new().heading(TestCustomHeading),
+        };
+
+        let html = render_markdown("# Hello, world!", Some(&options));
+        assert!(html.contains("🎯Hello, world!"));
+    }
+
+    #[test]
+    fn test_custom_paragraph_component() {
+        let options = MarkdownOptions {
+            components: MarkdownComponents::new().paragraph(TestCustomParagraph),
+        };
+
+        let content = render_markdown("This is a paragraph.", Some(&options));
+        assert!(content.contains(
+            "<p class=\"custom-paragraph\">This is a paragraph.</p><!-- end custom paragraph -->"
+        ));
+    }
+
+    #[test]
+    fn test_custom_link_component() {
+        let options = MarkdownOptions {
+            components: MarkdownComponents::new().link(TestCustomLink),
+        };
+
+        let content = render_markdown("[Example](https://example.com)", Some(&options));
+        assert!(
+            content.contains("<a href=\"https://example.com\" class=\"custom-link\">🔗Example</a>")
+        );
+    }
+
+    #[test]
+    fn test_custom_image_component() {
+        let options = MarkdownOptions {
+            components: MarkdownComponents::new().image(TestCustomImage),
+        };
+
+        let content = render_markdown("![Alt text](image.jpg)", Some(&options));
+        assert!(
+            content.contains("<img src=\"image.jpg\" alt=\"Alt text\" class=\"custom-image\" />📸")
+        );
+    }
+
+    #[test]
+    fn test_custom_strong_component() {
+        let options = MarkdownOptions {
+            components: MarkdownComponents::new().strong(TestCustomStrong),
+        };
+
+        let content = render_markdown("**Bold text**", Some(&options));
+        assert!(content.contains("<strong class=\"custom-strong\">💪Bold text</strong>"));
+    }
+
+    #[test]
+    fn test_custom_emphasis_component() {
+        let options = MarkdownOptions {
+            components: MarkdownComponents::new().emphasis(TestCustomEmphasis),
+        };
+
+        let content = render_markdown("*Italic text*", Some(&options));
+        assert!(content.contains("<em class=\"custom-emphasis\">✨Italic text</em>"));
+    }
+
+    #[test]
+    fn test_custom_code_component() {
+        let options = MarkdownOptions {
+            components: MarkdownComponents::new().code(TestCustomCode),
+        };
+
+        let content = render_markdown("`console.log('hello')`", Some(&options));
+        assert!(content.contains("<code class=\"custom-code\">💻console.log('hello')</code>"));
+    }
+
+    #[test]
+    fn test_custom_blockquote_component() {
+        let options = MarkdownOptions {
+            components: MarkdownComponents::new().blockquote(TestCustomBlockquote),
+        };
+
+        let content = render_markdown("> This is a quote", Some(&options));
+        assert!(content.contains("<blockquote class=\"custom-blockquote\">📝"));
+        assert!(content.contains("</blockquote>"));
+        assert!(content.contains("This is a quote"));
+    }
+
+    #[test]
+    fn test_multiple_custom_components() {
+        let options = MarkdownOptions {
+            components: MarkdownComponents::new()
+                .heading(TestCustomHeading)
+                .paragraph(TestCustomParagraph)
+                .link(TestCustomLink)
+                .strong(TestCustomStrong),
+        };
+
+        let content = render_markdown(
+            "# Title\n\nThis is a **bold** [link](https://example.com).",
+            Some(&options),
+        );
+
+        assert!(content.contains("🎯Title"));
+        assert!(content.contains("<p class=\"custom-paragraph\">"));
+        assert!(content.contains("<strong class=\"custom-strong\">💪bold</strong>"));
+        assert!(
+            content.contains("<a href=\"https://example.com\" class=\"custom-link\">🔗link</a>")
+        );
+    }
+
+    #[test]
+    fn test_nested_components() {
+        let options = MarkdownOptions {
+            components: MarkdownComponents::new()
+                .blockquote(TestCustomBlockquote)
+                .strong(TestCustomStrong)
+                .emphasis(TestCustomEmphasis)
+                .code(TestCustomCode),
+        };
+
+        let content = render_markdown(
+            "> This is a **bold** and *italic* with `code`",
+            Some(&options),
+        );
+        assert!(content.contains("<blockquote class=\"custom-blockquote\">📝"));
+        assert!(content.contains("<strong class=\"custom-strong\">💪bold</strong>"));
+        assert!(content.contains("<em class=\"custom-emphasis\">✨italic</em>"));
+        assert!(content.contains("<code class=\"custom-code\">💻code</code>"));
+        assert!(content.contains("</blockquote>"));
     }
 }
