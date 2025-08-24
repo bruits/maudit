@@ -5,7 +5,7 @@ use log::warn;
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use serde::de::DeserializeOwned;
 
-use super::components::{MarkdownComponents, LinkType};
+use super::components::{LinkType, ListType, MarkdownComponents, TableAlignment};
 
 use super::{highlight::CodeBlock, slugger, ContentEntry};
 
@@ -341,8 +341,13 @@ fn find_headings(events: &[Event]) -> Vec<InternalHeadingEvent> {
 pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> String {
     let mut slugger = slugger::Slugger::new();
     let mut html_output = String::new();
-    let mut parser_options = Options::empty();
-    parser_options.insert(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS);
+    let parser_options = Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
+        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_TASKLISTS
+        | Options::ENABLE_TABLES
+        | Options::ENABLE_GFM
+        | Options::ENABLE_MATH
+        | Options::ENABLE_FOOTNOTES;
 
     let mut code_block = None;
     let mut code_block_content = String::new();
@@ -367,6 +372,8 @@ pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> Stri
                     }
                 }
             }
+
+            // TODO: Handle this differently so it's compatible with the component system - erika, 2025-08-24
             Event::Start(Tag::CodeBlock(ref kind)) => {
                 if let CodeBlockKind::Fenced(ref fence) = kind {
                     let (block, begin) = CodeBlock::new(fence);
@@ -383,6 +390,7 @@ pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> Stri
                 code_block_content.clear();
                 events.push(Event::Html("</code></pre>\n".into()));
             }
+
             _ => {
                 events.push(event);
             }
@@ -597,6 +605,184 @@ fn transform_events_with_components<'a>(
                 if let Some(component) = &components.blockquote {
                     let kind_converted = kind.as_ref().map(|k| k.into());
                     let custom_html = component.render_end(kind_converted);
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // Handle hard breaks
+            Event::HardBreak => {
+                if let Some(component) = &components.hard_break {
+                    let custom_html = component.render();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // Handle horizontal rules (i.e. --- -> <hr />)
+            Event::Rule => {
+                if let Some(component) = &components.horizontal_rule {
+                    let custom_html = component.render();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // Handle lists
+            Event::Start(Tag::List(first_number)) => {
+                if let Some(component) = &components.list {
+                    let list_type = if first_number.is_some() {
+                        ListType::Ordered
+                    } else {
+                        ListType::Unordered
+                    };
+                    let custom_html = component.render_start(list_type, *first_number);
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+            Event::End(TagEnd::List(ordered)) => {
+                if let Some(component) = &components.list {
+                    let list_type = if *ordered {
+                        ListType::Ordered
+                    } else {
+                        ListType::Unordered
+                    };
+                    let custom_html = component.render_end(list_type);
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // Handle list items
+            Event::Start(Tag::Item) => {
+                if let Some(component) = &components.list_item {
+                    let custom_html = component.render_start();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+            Event::End(TagEnd::Item) => {
+                if let Some(component) = &components.list_item {
+                    let custom_html = component.render_end();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // Handle strikethrough
+            Event::Start(Tag::Strikethrough) => {
+                if let Some(component) = &components.strikethrough {
+                    let custom_html = component.render_start();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+            Event::End(TagEnd::Strikethrough) => {
+                if let Some(component) = &components.strikethrough {
+                    let custom_html = component.render_end();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // Handle task list markers
+            Event::TaskListMarker(checked) => {
+                if let Some(component) = &components.task_list_marker {
+                    let custom_html = component.render(*checked);
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // Handle tables
+            Event::Start(Tag::Table(alignments)) => {
+                if let Some(component) = &components.table {
+                    let alignment_vec: Vec<TableAlignment> = alignments
+                        .iter()
+                        .map(|a| match a {
+                            pulldown_cmark::Alignment::Left => TableAlignment::Left,
+                            pulldown_cmark::Alignment::Center => TableAlignment::Center,
+                            pulldown_cmark::Alignment::Right => TableAlignment::Right,
+                            pulldown_cmark::Alignment::None => TableAlignment::Left,
+                        })
+                        .collect();
+                    let custom_html = component.render_start(&alignment_vec);
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+            Event::End(TagEnd::Table) => {
+                if let Some(component) = &components.table {
+                    let custom_html = component.render_end();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // Handle table heads
+            Event::Start(Tag::TableHead) => {
+                if let Some(component) = &components.table_head {
+                    let custom_html = component.render_start();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+            Event::End(TagEnd::TableHead) => {
+                if let Some(component) = &components.table_head {
+                    let custom_html = component.render_end();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // Handle table rows
+            Event::Start(Tag::TableRow) => {
+                if let Some(component) = &components.table_row {
+                    let custom_html = component.render_start();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+            Event::End(TagEnd::TableRow) => {
+                if let Some(component) = &components.table_row {
+                    let custom_html = component.render_end();
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+
+            // Handle table cells
+            Event::Start(Tag::TableCell) => {
+                if let Some(component) = &components.table_cell {
+                    // For now, assume it's not a header and no specific alignment
+                    // TODO: Track context to determine if we're in a table head and column alignment
+                    let custom_html = component.render_start(false, None);
+                    transformed.push(Event::Html(custom_html.into()));
+                } else {
+                    transformed.push(event.clone());
+                }
+            }
+            Event::End(TagEnd::TableCell) => {
+                if let Some(component) = &components.table_cell {
+                    // TODO: Track context to determine if we're in a table head
+                    let custom_html = component.render_end(false);
                     transformed.push(Event::Html(custom_html.into()));
                 } else {
                     transformed.push(event.clone());
