@@ -37,5 +37,5 @@ pub struct NewsContent {
 }
 
 pub fn content_sources() -> ContentSources {
-    content_sources!["docs" => glob_markdown::<DocsContent>("content/docs/*.md"), "news" => glob_markdown::<NewsContent>("content/news/*.md")]
+    content_sources!["docs" => glob_markdown::<DocsContent>("content/docs/*.md", None), "news" => glob_markdown::<NewsContent>("content/news/*.md", None)]
 }

@@ -62,4 +62,4 @@ fn render(&self, ctx: &mut RouteContext) -> Markup {
 
 Tailwind can then be configured normally, through native CSS in Tailwind 4.0, or through a `tailwind.config.js` file in earlier versions.
 
-**Caution:** Tailwind CSS is a JavaScript-based tool, which means that Maudit needs to spawn a separate Node.js process to run it. This comes with a significant performance overhead and in most projects using it, Tailwind will account for more than 99% of the build time, even when using Tailwind 4.0.
+**Caution:** Tailwind CSS is a JavaScript-based tool, which means that Maudit needs to spawn a separate Node.js process to run it. This comes with a significant performance overhead and in most projects using it, Tailwind will account for more than 99% of the build time, even when using Tailwind 4.0+.

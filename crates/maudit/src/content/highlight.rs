@@ -76,6 +76,7 @@ impl CodeBlock {
     pub fn highlight(&self, content: &str) -> Result<String, Error> {
         let ss = get_syntax_set();
         let ts = get_theme_set();
+
         let syntax = ss
             .find_syntax_by_name(&self.meta.language)
             .or_else(|| ss.find_syntax_by_extension(&self.meta.language))

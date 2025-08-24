@@ -6,11 +6,20 @@ use std::{any::Any, path::PathBuf};
 use rustc_hash::FxHashMap;
 
 mod highlight;
-mod markdown;
+pub mod markdown;
 mod slugger;
 
 use crate::page::RouteParams;
-pub use markdown::*;
+pub use markdown::{
+    components::{
+        BlockQuoteKind, BlockquoteComponent, CodeComponent, EmphasisComponent, HardBreakComponent,
+        HeadingComponent, HorizontalRuleComponent, ImageComponent, LinkComponent, LinkType,
+        ListComponent, ListItemComponent, ListType, MarkdownComponents, ParagraphComponent,
+        StrikethroughComponent, StrongComponent, TableAlignment, TableCellComponent,
+        TableComponent, TableHeadComponent, TableRowComponent, TaskListMarkerComponent,
+    },
+    *,
+};
 
 /// Helps implement a struct as a Markdown content entry.
 ///
@@ -29,7 +38,7 @@ pub use markdown::*;
 ///   coronate(
 ///     routes![],
 ///     content_sources![
-///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
+///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md", None)
 ///     ],
 ///     BuildOptions::default(),
 ///   )
@@ -90,7 +99,7 @@ pub use maudit_macros::markdown_entry;
 ///   coronate(
 ///     routes![],
 ///     content_sources![
-///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
+///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md", None)
 ///     ],
 ///     BuildOptions::default(),
 ///   )
@@ -296,7 +305,7 @@ pub type Untyped = FxHashMap<String, String>;
 /// # }
 ///
 /// pub fn content_sources() -> ContentSources {
-///   content_sources!["docs" => glob_markdown::<ArticleContent>("content/docs/*.md")]
+///   content_sources!["docs" => glob_markdown::<ArticleContent>("content/docs/*.md", None)]
 /// }
 pub struct ContentSources(pub Vec<Box<dyn ContentSourceInternal>>);
 
