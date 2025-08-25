@@ -48,9 +48,9 @@ Our goal is to strike a balance between convenience and clarity. It shouldn't fe
 
 In general, if there's a compromise to be made, we prefer to optimize for developer experience over raw performance. However, we still aim to keep Maudit fast enough for most use cases.
 
-On a 2020 M1 MacBook Pro, [we've found that the final binary of a Maudit project can build a project with 4000 Markdown files in a little over 900ms](https://github.com/bruits/maudit/tree/main/crates/md-benchmark), which we consider quite reasonable.
+On a 2020 M1 MacBook Pro, [we've found that the final binary of a Maudit project can build a project with 4000 Markdown files in a little over 900ms](https://github.com/bruits/maudit/tree/main/benchmarks/md-benchmark), which we consider quite reasonable.
 
-[![Build Status](/01-performance.png)](https://github.com/bruits/maudit/tree/main/crates/md-benchmark)
+[![A graph showing the performance of Maudit building 250, 500, 1000, 2000 and 4000 pages. Respectively, it takes 55ms, 113ms, 253ms, 504ms and 922ms for the build to complete.](/01-performance.png)](https://github.com/bruits/maudit/tree/main/benchmarks/md-benchmark)
 
 As we add more features, it's possible that Maudit will become slower, but we'll monitor performance and ensure that, yeah, it's reasonably fast.
 

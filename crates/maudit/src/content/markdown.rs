@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use glob::glob as glob_fs;
 use log::warn;
-use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{html::push_html, CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use serde::de::DeserializeOwned;
 
 pub mod components;
@@ -223,6 +223,7 @@ where
             }
 
             // TODO: Prettier errors for serialization errors (e.g. missing fields)
+            // TODO: Support TOML frontmatters
             let mut parsed = serde_yml::from_str::<T>(&frontmatter).unwrap();
 
             let headings_internal = find_headings(&content_events);
@@ -263,48 +264,41 @@ where
     entries
 }
 
-fn get_text_from_events(parser_slice: &[Event]) -> String {
-    let mut title = String::new();
-
-    for event in parser_slice.iter() {
+fn get_text_from_events(events_slice: &[Event]) -> String {
+    events_slice.iter().fold(String::new(), |mut acc, event| {
         match event {
-            Event::Text(text) | Event::Code(text) => title += text,
-            _ => continue,
+            Event::Text(text) | Event::Code(text) => acc.push_str(text),
+            _ => {}
         }
-    }
-
-    title
+        acc
+    })
 }
 
 fn find_headings(events: &[Event]) -> Vec<InternalHeadingEvent> {
-    let mut heading_refs = vec![];
+    let mut headings = Vec::new();
 
     for (i, event) in events.iter().enumerate() {
         match event {
             Event::Start(Tag::Heading {
                 level, id, classes, ..
             }) => {
-                heading_refs.push(InternalHeadingEvent::new(
+                headings.push(InternalHeadingEvent::new(
                     i,
                     *level as u32,
-                    id.clone().map(String::from),
-                    &classes
-                        .iter()
-                        .map(|c| c.to_string())
-                        .collect::<Vec<String>>(),
+                    id.as_ref().map(|s| s.to_string()),
+                    &classes.iter().map(|c| c.to_string()).collect::<Vec<_>>(),
                 ));
             }
             Event::End(TagEnd::Heading { .. }) => {
-                heading_refs
-                    .last_mut()
-                    .expect("Heading end before start?")
-                    .end = i;
+                if let Some(heading) = headings.last_mut() {
+                    heading.end = i;
+                }
             }
-            _ => (),
+            _ => {}
         }
     }
 
-    heading_refs
+    headings
 }
 
 /// Render Markdown content to HTML with optional custom components.
@@ -355,55 +349,58 @@ pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> Stri
     let mut code_block = None;
     let mut code_block_content = String::new();
     let mut in_frontmatter = false;
-    let mut events = Vec::new();
+    let mut in_image = false;
+    let mut events = Parser::new_ext(content, parser_options).collect::<Vec<Event>>();
 
-    // Do a first pass to collect body events
-    for event in Parser::new_ext(content, parser_options) {
-        match event {
+    let options_with_components = options
+        .as_ref()
+        .filter(|o| o.components.has_any_components());
+
+    for i in 0..events.len() {
+        match &events[i] {
             Event::Start(Tag::MetadataBlock(_)) => {
                 in_frontmatter = true;
+                continue;
             }
             Event::End(TagEnd::MetadataBlock(_)) => {
                 in_frontmatter = false;
-            }
-            Event::Text(ref text) => {
-                if !in_frontmatter {
-                    if code_block.is_some() {
-                        code_block_content.push_str(text);
-                    } else {
-                        events.push(event);
-                    }
-                }
+                continue;
             }
 
             // TODO: Handle this differently so it's compatible with the component system - erika, 2025-08-24
-            Event::Start(Tag::CodeBlock(ref kind)) => {
-                if let CodeBlockKind::Fenced(ref fence) = kind {
-                    let (block, begin) = CodeBlock::new(fence);
-                    code_block = Some(block);
-                    events.push(Event::Html(begin.into()));
-                }
+            Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(ref fence))) => {
+                let (block, begin) = CodeBlock::new(fence);
+                code_block = Some(block);
+                events[i] = Event::Html(begin.into());
             }
+
             Event::End(TagEnd::CodeBlock) => {
                 if let Some(ref mut code_block) = code_block {
                     let html = code_block.highlight(&code_block_content);
-                    events.push(Event::Html(html.unwrap().into()));
+                    events[i] =
+                        Event::Html(format!("{}{}", html.unwrap(), "</code></pre>\n").into());
                 }
                 code_block = None;
                 code_block_content.clear();
-                events.push(Event::Html("</code></pre>\n".into()));
             }
 
-            _ => {
-                events.push(event);
+            // TODO: User should be able to replace the text component too perhaps, but it'd require merging the text events
+            Event::Text(ref text) => {
+                if !in_frontmatter {
+                    if in_image {
+                        // This seem to work to create "an empty event", but it's not ideal. Using `events.remove` is probably
+                        // more idiomatic, but it's also less efficient. Wonky situation.
+                        events[i] = Event::Html("".into());
+                    } else if code_block.is_some() {
+                        code_block_content.push_str(text);
+
+                        events[i] = Event::Html("".into());
+                    }
+                } else {
+                    events[i] = Event::Html("".into());
+                }
             }
-        }
-    }
 
-    let mut i = 0;
-
-    while i < events.len() {
-        match &events[i] {
             // Headings
             Event::Start(Tag::Heading {
                 level, id, classes, ..
@@ -420,20 +417,20 @@ pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> Stri
                 let heading_id = id.as_ref().map(|s| s.as_ref()).unwrap_or(&slug);
 
                 if let Some(component) = options.and_then(|opts| opts.components.heading.as_ref()) {
-                    // Use custom heading component
                     let classes_vec: Vec<&str> = classes.iter().map(|c| c.as_ref()).collect();
                     let custom_html =
                         component.render_start(*level as u8, Some(heading_id), &classes_vec);
                     events[i] = Event::Html(custom_html.into());
                 } else {
-                    // Default heading behavior with classes
-                    let anchor_start = format!(
-                        "<h{} id=\"{}\" class=\"{}\">",
-                        *level as u32,
-                        heading_id,
-                        classes.join(" ")
+                    events[i] = Event::Html(
+                        format!(
+                            "<{} id=\"{}\" class=\"{}\">",
+                            level,
+                            heading_id,
+                            classes.join(" ")
+                        )
+                        .into(),
                     );
-                    events[i] = Event::Html(anchor_start.into());
                 }
             }
             Event::End(TagEnd::Heading(level)) => {
@@ -441,16 +438,16 @@ pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> Stri
                     let custom_html = component.render_end(*level as u8);
                     events[i] = Event::Html(custom_html.into());
                 } else {
-                    // Default heading behavior: close heading
-                    let anchor_end = format!("</h{}>", *level as u32);
-                    events[i] = Event::Html(anchor_end.into());
+                    events[i] = Event::Html(format!("</h{}>", *level as u32).into());
                 }
             }
 
             // All other events pass through unchanged
             _ => {}
         }
-        if let Some(options) = options {
+
+        // Handle using components for all the different events
+        if let Some(options) = options_with_components {
             match &events[i] {
                 // Paragraphs
                 Event::Start(Tag::Paragraph) => {
@@ -466,7 +463,8 @@ pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> Stri
                     }
                 }
 
-                // Links
+                // Links, i.e [link text](url)
+                // TODO: Verify that everything works when using different types of link
                 Event::Start(Tag::Link {
                     link_type,
                     dest_url,
@@ -495,10 +493,12 @@ pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> Stri
                     }
                 }
 
-                // Images - special case that consumes multiple events
+                // Images, i.e ![alt text](url)
+                // TODO: Verify that everything works when using different types of images
                 Event::Start(Tag::Image {
                     dest_url, title, ..
                 }) => {
+                    in_image = true;
                     if let Some(component) = &options.components.image {
                         // For images, we need to get the alt text from content between start and end
                         let alt_text = if let Some(end_index) = find_matching_image_end(&events, i)
@@ -514,13 +514,14 @@ pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> Stri
                         };
                         let custom_html = component.render(dest_url.as_ref(), &alt_text, title_str);
                         events[i] = Event::Html(custom_html.into());
-
-                        // Skip to the end tag and remove intermediate events
-                        if let Some(end_index) = find_matching_image_end(&events, i) {
-                            // Remove all events between start and end (inclusive of end)
-                            events.drain(i + 1..=end_index);
-                        }
                     }
+                }
+
+                Event::End(TagEnd::Image) => {
+                    // Images are a bit weird, the alt text is part of the text between the start and end tags
+                    // despite in some syntax being actually part of the image tag itself. Perhaps something I'm just not
+                    // familiar with.
+                    in_image = false;
                 }
 
                 // Bold (strong)
@@ -724,30 +725,29 @@ pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> Stri
                 _ => {}
             }
         }
-
-        i += 1;
     }
 
-    pulldown_cmark::html::push_html(&mut html_output, events.into_iter());
+    events.retain(|e| match e {
+        Event::Text(content) | Event::Html(content) => !content.is_empty(),
+        _ => true,
+    });
+
+    push_html(&mut html_output, events.into_iter());
     html_output
 }
 
 fn find_matching_heading_end(events: &[Event], start_index: usize) -> Option<usize> {
-    for (i, event) in events.iter().enumerate().skip(start_index + 1) {
-        if matches!(event, Event::End(TagEnd::Heading(_))) {
-            return Some(i);
-        }
-    }
-    None
+    events[start_index + 1..]
+        .iter()
+        .position(|event| matches!(event, Event::End(TagEnd::Heading(_))))
+        .map(|offset| start_index + 1 + offset)
 }
 
 fn find_matching_image_end(events: &[Event], start_index: usize) -> Option<usize> {
-    for (i, event) in events.iter().enumerate().skip(start_index + 1) {
-        if matches!(event, Event::End(TagEnd::Image)) {
-            return Some(i);
-        }
-    }
-    None
+    events[start_index + 1..]
+        .iter()
+        .position(|event| matches!(event, Event::End(TagEnd::Image)))
+        .map(|offset| start_index + 1 + offset)
 }
 
 #[cfg(test)]
