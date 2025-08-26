@@ -1,9 +1,10 @@
 use std::{
+    env,
     fs::{self, remove_dir_all, File},
     io::{self, Write},
     path::{Path, PathBuf},
     str::FromStr,
-    time::SystemTime,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use crate::{
@@ -55,13 +56,21 @@ pub async fn build(
     let tmp_dir = dist_dir.join("_tmp");
     let static_dir = PathBuf::from_str(&options.static_dir)?;
 
-    // Rename current dist dir to old_dist
-    let old_dist_dir = dist_dir.join("../old_dist");
-    let _ = fs::rename(&dist_dir, &old_dist_dir);
+    let old_dist_tmp_dir = if options.clean_dist {
+        let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+        let num = (duration.as_secs() + duration.subsec_nanos() as u64) % 100000;
+        let new_dir_for_old_dist = env::temp_dir().join(format!("maudit_old_dist_{}", num));
+        let _ = fs::rename(&dist_dir, &new_dir_for_old_dist);
+        Some(new_dir_for_old_dist)
+    } else {
+        None
+    };
 
-    // In another thread, parallel, remove the old dist dir
+    let should_clear_dist = options.clean_dist;
     let clean_up_handle = tokio::spawn(async move {
-        let _ = fs::remove_dir_all(&old_dist_dir);
+        if should_clear_dist {
+            let _ = fs::remove_dir_all(old_dist_tmp_dir.unwrap());
+        }
     });
 
     fs::create_dir_all(&dist_dir)?;
@@ -111,6 +120,10 @@ pub async fn build(
     let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
 
     let mut page_count = 0;
+
+    // TODO: This is fully serial. Parallelizing it is trivial with Rayon and stuff, but it doesn't necessarily make it
+    // faster in all cases, making it sometimes even slower due to the overhead. It'd be great to investigate and benchmark
+    // this.
     for route in routes {
         let params_def = extract_params_from_raw_route(&route.route_raw());
         let route_type = get_route_type_from_route_params(&params_def);
