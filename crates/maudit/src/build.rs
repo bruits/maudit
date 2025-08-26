@@ -55,7 +55,15 @@ pub async fn build(
     let tmp_dir = dist_dir.join("_tmp");
     let static_dir = PathBuf::from_str(&options.static_dir)?;
 
-    let _ = fs::remove_dir_all(&dist_dir);
+    // Rename current dist dir to old_dist
+    let old_dist_dir = dist_dir.join("../old_dist");
+    let _ = fs::rename(&dist_dir, &old_dist_dir);
+
+    // In another thread, parallel, remove the old dist dir
+    let clean_up_handle = tokio::spawn(async move {
+        let _ = fs::remove_dir_all(&old_dist_dir);
+    });
+
     fs::create_dir_all(&dist_dir)?;
     fs::create_dir_all(&assets_dir)?;
 
@@ -313,6 +321,8 @@ pub async fn build(
 
     info!(target: "SKIP_FORMAT", "{}", "");
     info!(target: "build", "{}", format!("Build completed in {}", format_elapsed_time(build_start.elapsed(), &section_format_options).unwrap()).bold());
+
+    clean_up_handle.await.unwrap();
 
     Ok(build_metadata)
 }
