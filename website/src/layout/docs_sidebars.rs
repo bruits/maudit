@@ -82,7 +82,6 @@ pub fn right_sidebar(headings: &[MarkdownHeading]) -> Markup {
     html!(
         h2.text-lg.font-bold { "On This Page" }
         nav.sticky.top-8 {
-            // TODO: Implement this properly
             ul {
                 @for heading in html_headings {
                     (heading)

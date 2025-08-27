@@ -375,31 +375,36 @@ pub fn render_markdown(
                 continue;
             }
 
+            // TODO: Write an integration test for assets resolution - erika, 2025-08-27
             Event::Start(Tag::Image {
                 dest_url,
                 link_type,
                 id,
                 title,
             }) => {
-                // Check if dest_url is relative, check for starting with one or two dots
-                if !(dest_url.starts_with("./") || dest_url.starts_with("../")) {
-                    continue;
-                }
-
-                // Resolve the path of the image using path and dest_url
-                if let Some(path) = path {
-                    let resolved_path = path.parent().unwrap().join(dest_url.to_string());
-                    if let Some(ctx) = route_ctx.as_mut() {
-                        let image = ctx.assets.add_image(resolved_path);
-                        if let Some(image_url) = image.url() {
-                            events[i] = Event::Start(Tag::Image {
+                // TODO: Figure out a cleaner way to do this, it's a lot of if-lets and checks - erika, 2025-08-27
+                let new_event = if dest_url.starts_with("./") || dest_url.starts_with("../") {
+                    path.and_then(|p| p.parent())
+                        .and_then(|parent| {
+                            let resolved = parent.join(dest_url.to_string());
+                            route_ctx
+                                .as_mut()
+                                .and_then(|ctx| ctx.assets.add_image(resolved).url())
+                        })
+                        .map(|image_url| {
+                            Event::Start(Tag::Image {
                                 dest_url: image_url.into(),
                                 title: title.clone(),
                                 link_type: *link_type,
                                 id: id.clone(),
-                            });
-                        }
-                    }
+                            })
+                        })
+                } else {
+                    None
+                };
+
+                if let Some(event) = new_event {
+                    events[i] = event;
                 }
             }
 
