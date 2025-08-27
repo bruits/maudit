@@ -2543,7 +2543,6 @@ name = "md-benchmark"
 version = "0.1.0"
 dependencies = [
  "codspeed-divan-compat",
- "maud",
  "maudit",
 ]
 

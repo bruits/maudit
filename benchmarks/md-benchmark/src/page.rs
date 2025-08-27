@@ -1,4 +1,3 @@
-use maud::{html, PreEscaped};
 use maudit::{content::UntypedMarkdownContent, page::prelude::*};
 
 #[route("/[file]")]
@@ -26,7 +25,6 @@ impl Page<Params> for Article {
             .get_source::<UntypedMarkdownContent>("articles")
             .get_entry(params.file.as_str());
 
-        let content = PreEscaped(entry.render());
-        html!((content)).into()
+        entry.render().into()
     }
 }
