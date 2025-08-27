@@ -9,7 +9,7 @@ mod highlight;
 pub mod markdown;
 mod slugger;
 
-use crate::page::RouteParams;
+use crate::page::{RouteContext, RouteParams};
 pub use markdown::{
     components::{
         BlockQuoteKind, BlockquoteComponent, CodeComponent, EmphasisComponent, HardBreakComponent,
@@ -130,7 +130,7 @@ pub use maudit_macros::markdown_entry;
 ///      let params = ctx.params::<ArticleParams>();
 ///      let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///      let article = articles.get_entry(&params.article);
-///      article.render().into()
+///      article.render(ctx).into()
 ///   }
 ///
 ///   fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<ArticleParams> {
@@ -219,7 +219,7 @@ impl Content<'_> {
 ///    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
 ///      let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///      let article = articles.get_entry("my-article"); // returns a ContentEntry
-///      article.render().into()
+///      article.render(ctx).into()
 ///   }
 /// }
 /// ```
@@ -227,12 +227,16 @@ pub struct ContentEntry<T> {
     pub id: String,
     render: OptionalContentRenderFn,
     pub raw_content: Option<String>,
-    data_loader: Option<Box<dyn Fn() -> T + Send + Sync>>,
+    data_loader: OptionalDataLoadingFn<T>,
     cached_data: std::sync::OnceLock<T>,
     pub file_path: Option<PathBuf>,
 }
 
-type OptionalContentRenderFn = Option<Box<dyn Fn(&str) -> String + Send + Sync>>;
+type OptionalDataLoadingFn<T> =
+    Option<Box<dyn Fn(&mut crate::page::RouteContext) -> T + Send + Sync>>;
+
+type OptionalContentRenderFn =
+    Option<Box<dyn Fn(&str, &mut crate::page::RouteContext) -> String + Send + Sync>>;
 
 impl<T> ContentEntry<T> {
     pub fn new(
@@ -256,7 +260,7 @@ impl<T> ContentEntry<T> {
         id: String,
         render: OptionalContentRenderFn,
         raw_content: Option<String>,
-        data_loader: Box<dyn Fn() -> T + Send + Sync>,
+        data_loader: Box<dyn Fn(&mut crate::page::RouteContext) -> T + Send + Sync>,
         file_path: Option<PathBuf>,
     ) -> Self {
         Self {
@@ -269,18 +273,18 @@ impl<T> ContentEntry<T> {
         }
     }
 
-    pub fn data(&self) -> &T {
+    pub fn data(&self, ctx: &mut RouteContext) -> &T {
         self.cached_data.get_or_init(|| {
             if let Some(ref loader) = self.data_loader {
-                loader()
+                loader(ctx)
             } else {
                 panic!("No data loader available and no cached data")
             }
         })
     }
 
-    pub fn render(&self) -> String {
-        (self.render.as_ref().unwrap())(self.raw_content.as_ref().unwrap())
+    pub fn render(&self, ctx: &mut RouteContext) -> String {
+        (self.render.as_ref().unwrap())(self.raw_content.as_ref().unwrap(), ctx)
     }
 }
 

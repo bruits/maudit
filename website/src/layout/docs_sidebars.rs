@@ -9,7 +9,7 @@ pub fn left_sidebar(ctx: &mut RouteContext) -> Markup {
     let mut sections = std::collections::HashMap::new();
 
     for entry in content.entries.iter() {
-        if let Some(section) = &entry.data().section {
+        if let Some(section) = &entry.data(ctx).section {
             sections.entry(section).or_insert_with(Vec::new).push(entry);
         }
     }
@@ -43,7 +43,7 @@ pub fn left_sidebar(ctx: &mut RouteContext) -> Markup {
                         @let url = format!("/docs/{}", entry.id);
                         @let is_current_page = url == ctx.current_url;
                         li."border-l-2"."hover:border-brand-red"."pl-3"."py-1".(if is_current_page { "text-brand-red border-brand-red" } else { "border-borders" }) {
-                            a.block href=(format!("/docs/{}/", entry.id)) { (entry.data().title) } // TODO: Use type-safe routing
+                            a.block href=(format!("/docs/{}/", entry.id)) { (entry.data(ctx).title) } // TODO: Use type-safe routing
                         }
                     }
                 }
@@ -82,7 +82,6 @@ pub fn right_sidebar(headings: &[MarkdownHeading]) -> Markup {
     html!(
         h2.text-lg.font-bold { "On This Page" }
         nav.sticky.top-8 {
-            // TODO: Implement this properly
             ul {
                 @for heading in html_headings {
                     (heading)

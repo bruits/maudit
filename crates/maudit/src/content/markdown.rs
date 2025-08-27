@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use glob::glob as glob_fs;
 use log::warn;
@@ -8,6 +8,8 @@ use serde::de::DeserializeOwned;
 pub mod components;
 
 use components::{LinkType, ListType, MarkdownComponents, TableAlignment};
+
+use crate::{assets::Asset, page::RouteContext};
 
 use super::{highlight::CodeBlock, slugger, ContentEntry};
 
@@ -34,7 +36,7 @@ use super::{highlight::CodeBlock, slugger, ContentEntry};
 ///   fn render(&self, ctx: &mut RouteContext) -> Markup {
 ///     let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///     let article = articles.get_entry("my-article");
-///     let headings = article.data().get_headings(); // returns a Vec<MarkdownHeading>
+///     let headings = article.data(ctx).get_headings(); // returns a Vec<MarkdownHeading>
 ///     let toc = html! {
 ///       ul {
 ///         @for heading in headings {
@@ -46,7 +48,7 @@ use super::{highlight::CodeBlock, slugger, ContentEntry};
 ///     };
 ///     html! {
 ///       main {
-///         h1 { (article.data().title) }
+///         h1 { (article.data(ctx).title) }
 ///         nav { (toc) }
 ///       }
 ///     }
@@ -195,7 +197,7 @@ where
 
         // Clone content for the closure
         let content_clone = content.clone();
-        let data_loader = Box::new(move || {
+        let data_loader = Box::new(move |_: &mut RouteContext| {
             let mut slugger = slugger::Slugger::new();
 
             let mut options = Options::empty();
@@ -249,11 +251,12 @@ where
         // Perhaps not ideal, but I don't know better. We're at the "get it working" stage - erika, 2025-08-24
         // Ideally, we'd at least avoid the allocation here whenever `options` is None, not sure how to do that ergonomically
         let opts = options.clone();
+        let path = entry.clone();
 
         entries.push(ContentEntry::new_lazy(
             id,
-            Some(Box::new(move |content: &str| {
-                render_markdown(content, opts.as_deref())
+            Some(Box::new(move |content: &str, route_ctx| {
+                render_markdown(content, opts.as_deref(), Some(&path), Some(route_ctx))
             })),
             Some(content),
             data_loader,
@@ -335,7 +338,12 @@ fn find_headings(events: &[Event]) -> Vec<InternalHeadingEvent> {
 /// };
 /// let html = render_markdown(markdown, Some(&options));
 /// ```
-pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> String {
+pub fn render_markdown(
+    content: &str,
+    options: Option<&MarkdownOptions>,
+    path: Option<&Path>,
+    mut route_ctx: Option<&mut RouteContext>,
+) -> String {
     let mut slugger = slugger::Slugger::new();
     let mut html_output = String::new();
     let parser_options = Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
@@ -365,6 +373,39 @@ pub fn render_markdown(content: &str, options: Option<&MarkdownOptions>) -> Stri
             Event::End(TagEnd::MetadataBlock(_)) => {
                 in_frontmatter = false;
                 continue;
+            }
+
+            // TODO: Write an integration test for assets resolution - erika, 2025-08-27
+            Event::Start(Tag::Image {
+                dest_url,
+                link_type,
+                id,
+                title,
+            }) => {
+                // TODO: Figure out a cleaner way to do this, it's a lot of if-lets and checks - erika, 2025-08-27
+                let new_event = if dest_url.starts_with("./") || dest_url.starts_with("../") {
+                    path.and_then(|p| p.parent())
+                        .and_then(|parent| {
+                            let resolved = parent.join(dest_url.to_string());
+                            route_ctx
+                                .as_mut()
+                                .and_then(|ctx| ctx.assets.add_image(resolved).url())
+                        })
+                        .map(|image_url| {
+                            Event::Start(Tag::Image {
+                                dest_url: image_url.into(),
+                                title: title.clone(),
+                                link_type: *link_type,
+                                id: id.clone(),
+                            })
+                        })
+                } else {
+                    None
+                };
+
+                if let Some(event) = new_event {
+                    events[i] = event;
+                }
             }
 
             // TODO: Handle this differently so it's compatible with the component system - erika, 2025-08-24
@@ -764,7 +805,7 @@ This is a **bold** text.
 
 More content here."#;
 
-        let html = render_markdown(markdown, None);
+        let html = render_markdown(markdown, None, None, None);
 
         // Test basic markdown rendering
         assert!(html.contains("<h1"));
@@ -783,8 +824,8 @@ More content here."#;
         };
         let markdown = r#"# Hello, world!"#;
 
-        let html = render_markdown(markdown, Some(&options));
-        let default_html = render_markdown(markdown, None);
+        let html = render_markdown(markdown, Some(&options), None, None);
+        let default_html = render_markdown(markdown, None, None, None);
 
         // Should be the same as default rendering when no custom components are provided
         assert_eq!(html, default_html);
@@ -799,13 +840,14 @@ More content here."#;
 ### Another Level"#;
 
         // Render without any options
-        let html_no_options = render_markdown(markdown, None);
+        let html_no_options = render_markdown(markdown, None, None, None);
 
         // Render with options but no custom heading component
         let options_no_heading = MarkdownOptions {
             components: MarkdownComponents::new(),
         };
-        let html_with_empty_options = render_markdown(markdown, Some(&options_no_heading));
+        let html_with_empty_options =
+            render_markdown(markdown, Some(&options_no_heading), None, None);
 
         // Both should produce identical output
         assert_eq!(html_no_options, html_with_empty_options);
