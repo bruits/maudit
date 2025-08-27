@@ -13,25 +13,25 @@ impl Page for DocsIndex {
             .get_source::<DocsContent>("docs")
             .get_entry("index");
 
-        let headings = index_page.data().get_headings().clone();
+        let headings = index_page.data(ctx).get_headings().clone();
 
-        docs_layout(render_entry(index_page), ctx, &headings)
+        docs_layout(render_entry(index_page, ctx), ctx, &headings)
     }
 }
 
-fn render_entry(entry: &ContentEntry<DocsContent>) -> Markup {
+fn render_entry(entry: &ContentEntry<DocsContent>, ctx: &mut RouteContext) -> Markup {
     html! {
         section.mb-4.border-b."border-[#e9e9e7]".pb-2 {
-            @if let Some(section) = &entry.data().section {
+            @if let Some(section) = &entry.data(ctx).section {
                 p.text-sm.font-bold { (section) }
             }
-            h2.text-5xl.font-bold.mb-2 { (entry.data().title) }
-            @if let Some(description) = &entry.data().description {
+            h2.text-5xl.font-bold.mb-2 { (entry.data(ctx).title) }
+            @if let Some(description) = &entry.data(ctx).description {
                 h3.text-lg { (description) }
             }
         }
         section.prose."lg:prose-lg".max-w-none {
-            (PreEscaped(entry.render()))
+            (PreEscaped(entry.render(ctx)))
         }
     }
 }
@@ -60,7 +60,7 @@ impl Page<DocsPageParams> for DocsPage {
             .get_source::<DocsContent>("docs")
             .get_entry(&slug);
 
-        let headings = entry.data().get_headings().clone();
-        docs_layout(render_entry(entry), ctx, &headings)
+        let headings = entry.data(ctx).get_headings().clone();
+        docs_layout(render_entry(entry, ctx), ctx, &headings)
     }
 }

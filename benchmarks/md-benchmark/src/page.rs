@@ -25,6 +25,6 @@ impl Page<Params> for Article {
             .get_source::<UntypedMarkdownContent>("articles")
             .get_entry(params.file.as_str());
 
-        entry.render().into()
+        entry.render(ctx).into()
     }
 }

@@ -85,7 +85,7 @@ impl From<&[u8]> for RenderResult {
 ///         (logo)
 ///         ul {
 ///           @for entry in last_entries {
-///             li { (entry.data().title) }
+///             li { (entry.data(ctx).title) }
 ///           }
 ///         }
 ///       }

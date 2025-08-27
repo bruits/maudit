@@ -13,10 +13,7 @@ impl Page<RouteParams, Markup> for IndexPage {
         let examples = ctx.content.get_source::<ComponentExample>("examples");
         let example = examples.get_entry("showcase");
 
-        // The content is already rendered with the custom components
-        // when it was loaded via glob_markdown with options
-        let content_html = example.render();
-
+        let content_html = example.render(ctx);
         html! {
             (DOCTYPE)
             html lang="en" {

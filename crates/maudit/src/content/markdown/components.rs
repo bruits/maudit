@@ -619,7 +619,7 @@ mod tests {
             components: MarkdownComponents::new().heading(TestCustomHeading),
         };
 
-        let html = render_markdown("# Hello, world!", Some(&options));
+        let html = render_markdown("# Hello, world!", Some(&options), None, None);
         assert!(html.contains("🎯Hello, world!"));
     }
 
@@ -629,7 +629,7 @@ mod tests {
             components: MarkdownComponents::new().paragraph(TestCustomParagraph),
         };
 
-        let content = render_markdown("This is a paragraph.", Some(&options));
+        let content = render_markdown("This is a paragraph.", Some(&options), None, None);
         assert!(content.contains(
             "<p class=\"custom-paragraph\">This is a paragraph.</p><!-- end custom paragraph -->"
         ));
@@ -641,7 +641,7 @@ mod tests {
             components: MarkdownComponents::new().link(TestCustomLink),
         };
 
-        let content = render_markdown("[Example](https://example.com)", Some(&options));
+        let content = render_markdown("[Example](https://example.com)", Some(&options), None, None);
         assert!(
             content.contains("<a href=\"https://example.com\" class=\"custom-link\">🔗Example</a>")
         );
@@ -653,7 +653,7 @@ mod tests {
             components: MarkdownComponents::new().image(TestCustomImage),
         };
 
-        let content = render_markdown("![Alt text](image.jpg)", Some(&options));
+        let content = render_markdown("![Alt text](image.jpg)", Some(&options), None, None);
         assert!(
             content.contains("<img src=\"image.jpg\" alt=\"Alt text\" class=\"custom-image\" />📸")
         );
@@ -665,7 +665,7 @@ mod tests {
             components: MarkdownComponents::new().strong(TestCustomStrong),
         };
 
-        let content = render_markdown("**Bold text**", Some(&options));
+        let content = render_markdown("**Bold text**", Some(&options), None, None);
         assert!(content.contains("<strong class=\"custom-strong\">💪Bold text</strong>"));
     }
 
@@ -675,7 +675,7 @@ mod tests {
             components: MarkdownComponents::new().emphasis(TestCustomEmphasis),
         };
 
-        let content = render_markdown("*Italic text*", Some(&options));
+        let content = render_markdown("*Italic text*", Some(&options), None, None);
         assert!(content.contains("<em class=\"custom-emphasis\">✨Italic text</em>"));
     }
 
@@ -685,7 +685,7 @@ mod tests {
             components: MarkdownComponents::new().code(TestCustomCode),
         };
 
-        let content = render_markdown("`console.log('hello')`", Some(&options));
+        let content = render_markdown("`console.log('hello')`", Some(&options), None, None);
         assert!(content.contains("<code class=\"custom-code\">💻console.log('hello')</code>"));
     }
 
@@ -695,7 +695,7 @@ mod tests {
             components: MarkdownComponents::new().blockquote(TestCustomBlockquote),
         };
 
-        let content = render_markdown("> This is a quote", Some(&options));
+        let content = render_markdown("> This is a quote", Some(&options), None, None);
         assert!(content.contains("<blockquote class=\"custom-blockquote\">📝"));
         assert!(content.contains("</blockquote>"));
         assert!(content.contains("This is a quote"));
@@ -714,6 +714,8 @@ mod tests {
         let content = render_markdown(
             "# Title\n\nThis is a **bold** [link](https://example.com).",
             Some(&options),
+            None,
+            None,
         );
 
         assert!(content.contains("🎯Title"));
@@ -737,6 +739,8 @@ mod tests {
         let content = render_markdown(
             "> This is a **bold** and *italic* with `code`",
             Some(&options),
+            None,
+            None,
         );
         assert!(content.contains("<blockquote class=\"custom-blockquote\">📝"));
         assert!(content.contains("<strong class=\"custom-strong\">💪bold</strong>"));
@@ -866,7 +870,7 @@ mod tests {
         let options = MarkdownOptions {
             components: MarkdownComponents::new().hard_break(TestHardBreak),
         };
-        let content = render_markdown("Line 1  \nLine 2", Some(&options));
+        let content = render_markdown("Line 1  \nLine 2", Some(&options), None, None);
         assert!(content.contains("<br class=\"custom-break\" />"));
     }
 
@@ -875,7 +879,7 @@ mod tests {
         let options = MarkdownOptions {
             components: MarkdownComponents::new().horizontal_rule(TestHorizontalRule),
         };
-        let content = render_markdown("---", Some(&options));
+        let content = render_markdown("---", Some(&options), None, None);
         assert!(content.contains("<hr class=\"custom-rule\" />"));
     }
 
@@ -886,7 +890,12 @@ mod tests {
                 .list(TestList)
                 .list_item(TestListItem),
         };
-        let content = render_markdown("1. First\n2. Second\n\n- Bullet\n- Point", Some(&options));
+        let content = render_markdown(
+            "1. First\n2. Second\n\n- Bullet\n- Point",
+            Some(&options),
+            None,
+            None,
+        );
         assert!(content.contains("<ol class=\"custom-list\" start=\"1\">"));
         assert!(content.contains("<ul class=\"custom-list\">"));
         assert!(content.contains("<li class=\"custom-item\">"));
@@ -897,7 +906,7 @@ mod tests {
         let options = MarkdownOptions {
             components: MarkdownComponents::new().strikethrough(TestStrikethrough),
         };
-        let content = render_markdown("~~strikethrough~~", Some(&options));
+        let content = render_markdown("~~strikethrough~~", Some(&options), None, None);
         assert!(content.contains("<del class=\"custom-strike\">"));
     }
 
@@ -906,7 +915,7 @@ mod tests {
         let options = MarkdownOptions {
             components: MarkdownComponents::new().task_list_marker(TestTaskListMarker),
         };
-        let content = render_markdown("- [x] Done\n- [ ] Todo", Some(&options));
+        let content = render_markdown("- [x] Done\n- [ ] Todo", Some(&options), None, None);
         assert!(content.contains("<input type=\"checkbox\" checked class=\"custom-task\" />"));
         assert!(content.contains("<input type=\"checkbox\" class=\"custom-task\" />"));
     }
@@ -923,6 +932,8 @@ mod tests {
         let content = render_markdown(
             "| Header | Header |\n|--------|--------|\n| Cell   | Cell   |",
             Some(&options),
+            None,
+            None,
         );
         assert!(content.contains("<table class=\"custom-table\">"));
         assert!(content.contains("<thead class=\"custom-thead\">"));
