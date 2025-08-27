@@ -4,3 +4,6 @@ node_modules
 
 .DS_Store
 project.tar
+
+flamegraph.svg
+profile.json.gz
