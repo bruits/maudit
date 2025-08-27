@@ -43,7 +43,7 @@ pub struct BuildOptions {
     /// Whether to clean the output directory before building.
     ///
     /// At the speed Maudit operates at, not cleaning the output directory may offer a significant performance improvement at the cost of potentially serving stale content.
-    pub clean_dist: bool,
+    pub clean_output_dir: bool,
 }
 
 /// Provides default values for [`crate::coronate()`]. Designed to work for most projects.
@@ -69,7 +69,7 @@ impl Default for BuildOptions {
             assets_dir: "_maudit".to_string(),
             static_dir: "static".to_string(),
             tailwind_binary_path: "./node_modules/.bin/tailwindcss".to_string(),
-            clean_dist: true,
+            clean_output_dir: true,
         }
     }
 }

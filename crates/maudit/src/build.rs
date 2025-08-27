@@ -56,7 +56,7 @@ pub async fn build(
     let tmp_dir = dist_dir.join("_tmp");
     let static_dir = PathBuf::from_str(&options.static_dir)?;
 
-    let old_dist_tmp_dir = if options.clean_dist {
+    let old_dist_tmp_dir = if options.clean_output_dir {
         let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         let num = (duration.as_secs() + duration.subsec_nanos() as u64) % 100000;
         let new_dir_for_old_dist = env::temp_dir().join(format!("maudit_old_dist_{}", num));
@@ -66,7 +66,7 @@ pub async fn build(
         None
     };
 
-    let should_clear_dist = options.clean_dist;
+    let should_clear_dist = options.clean_output_dir;
     let clean_up_handle = tokio::spawn(async move {
         if should_clear_dist {
             let _ = fs::remove_dir_all(old_dist_tmp_dir.unwrap());
