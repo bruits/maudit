@@ -40,9 +40,9 @@ impl Page for Index {
 }
 ```
 
-That said, we hope to avoid as much boilerplate as possible, as such fancy macros are involved at times. But, we also want to ensure that the generated code is easy to understand. For instance, the `route` macro currently expand solely to the definition of a trait on the struct exposing the route entered.
+That said, we hope to avoid as much boilerplate as possible, as such fancy macros are involved at times. But, we're not much into magic either, so expanding those macros should still yield code that is easy to understand.
 
-Our goal is to strike a balance between convenience and clarity. It shouldn't feel like there's a lot of impossible to understand magic happening behind the scenes either.
+Our goal is to strike a balance between convenience and clarity. It shouldn't feel like there's a lot of impossible to understand weird code happening behind the scenes.
 
 ## Reasonably fast
 

@@ -1,5 +1,5 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![doc = include_str!("../../../README.md")]
+#![doc = include_str!("../README.md")]
 //!
 //! <div class="warning">
 //! You are currently reading Maudit API reference. For a more gentle introduction, please refer to our <a href="https://maudit.dev/docs">documentation</a>.

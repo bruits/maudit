@@ -78,7 +78,7 @@ fn main() {
 }
 ```
 
-In Maudit 0.3.0, code blocks do not unfortunately allow for custom components.
+In Maudit 0.3.0, code blocks do not unfortunately allow for custom components yet.
 
 ## Tables
 

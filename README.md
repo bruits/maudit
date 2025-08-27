@@ -1,4 +1,4 @@
-# Maudit <img align="right" valign="center" width="89" height="75"  src="./.github/assets/logo_light.svg#gh-dark-mode-only" alt="Logo of Maudit, a crudely crown" /> <img align="right" valign="center" width="89" height="75"  src="./.github/assets/logo.svg#gh-light-mode-only" alt="Logo of Maudit, a crudely crown" />
+# Maudit <img align="right" valign="center" width="89" height="75"  src="https://raw.githubusercontent.com/bruits/maudit/main/.github/assets/logo_light.svg#gh-dark-mode-only" alt="Logo of Maudit, a crudely crown" /> <img align="right" valign="center" width="89" height="75"  src="https://raw.githubusercontent.com/bruits/maudit/main/.github/assets/logo.svg#gh-light-mode-only" alt="Logo of Maudit, a crudely crown" />
 
 > A dire coronation, a situation where nobility, power, or status becomes inextricably tied to disastrous circumstances.
 
@@ -17,12 +17,14 @@ A library for generating static websites with Rust.
 
 📦 See the [crate](https://crates.io/crates/maudit) on Crates.io, and the [reference](https://docs.rs/maudit/latest/maudit/) on Docs.rs.
 
-🐛 [Report a bug](https://github.com/bruits/maudit/issues), please read our [contributing guidelines](#) and [code of conduct](#) first.
-
-🚨 [Report a security vulnerability](#), and be sure to review our [security policy](#).
+🐛 [Report a bug](https://github.com/bruits/maudit/issues), please read our [contributing guidelines](https://github.com/bruits/maudit/blob/main/CONTRIBUTING.md) and [code of conduct](https://github.com/bruits/maudit/blob/main/CODE_OF_CONDUCT.md) first.
 
 💬 Join the discussion on [Github](https://github.com/bruits/maudit/discussions) and [Discord](https://maudit.org/chat/), if you have any questions, ideas, or suggestions.
 
 ## Contributing
 
-Contributions are welcome! See our [Contributor Guide](CONTRIBUTING.md) for help getting started.
+Contributions are welcome! See our [Contributor Guide](https://github.com/bruits/maudit/blob/main/CONTRIBUTING.md) for help getting started.
+
+# License
+
+Maudit is licensed under [the MIT License](https://opensource.org/license/MIT). See [LICENSE](LICENSE) for details.

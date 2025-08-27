@@ -1,7 +1,10 @@
 [package]
 name = "maudit"
 description = "Library for generating static websites."
-version = "0.2.0"
+documentation = "https://docs.rs/maudit"
+homepage = "https://maudit.org"
+repository = "https://github.com/bruits/maudit"
+version = "0.3.1"
 license = "MIT"
 edition = "2021"
 
