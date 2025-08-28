@@ -4,7 +4,7 @@ description = "Library for generating static websites."
 documentation = "https://docs.rs/maudit"
 homepage = "https://maudit.org"
 repository = "https://github.com/bruits/maudit"
-version = "0.3.1"
+version = "0.3.2"
 license = "MIT"
 edition = "2021"
 
@@ -31,7 +31,7 @@ syntect = "5.0"
 lol_html = "2.1.0"
 slug = "0.1.6"
 
-maudit-macros = { path = "../maudit-macros", version = "0.2" }
+maudit-macros = { path = "../maudit-macros", version = "0.3" }
 log = { version = "0.4", features = ["kv"] }
 env_logger = "0.11.5"
 chrono = "0.4.39"
