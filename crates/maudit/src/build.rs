@@ -21,7 +21,7 @@ use crate::{
 };
 use colored::{ColoredString, Colorize};
 use log::{info, trace};
-use rolldown::{Bundler, BundlerOptions, InputItem};
+use rolldown::{Bundler, BundlerOptions, InputItem, ModuleType};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::assets::Asset;
@@ -302,11 +302,15 @@ pub async fn build(
             .collect::<Vec<InputItem>>();
 
         if !bundler_inputs.is_empty() {
+            let mut module_types_hashmap = FxHashMap::default();
+            module_types_hashmap.insert("woff".to_string(), ModuleType::Asset);
+            module_types_hashmap.insert("woff2".to_string(), ModuleType::Asset);
+
             let mut bundler = Bundler::new(BundlerOptions {
                 input: Some(bundler_inputs),
                 minify: Some(rolldown::RawMinifyOptions::Bool(true)),
                 dir: Some(assets_dir.to_string_lossy().to_string()),
-
+                module_types: Some(module_types_hashmap),
                 ..Default::default()
             });
 
