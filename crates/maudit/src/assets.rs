@@ -1,10 +1,7 @@
 use dyn_eq::DynEq;
-use log::info;
 use rustc_hash::FxHashSet;
 use std::hash::Hash;
 use std::path::Path;
-use std::process::Command;
-use std::time::SystemTime;
 use std::{fs, path::PathBuf};
 
 #[derive(Default)]
@@ -17,7 +14,6 @@ pub struct PageAssets {
     pub(crate) included_scripts: Vec<Script>,
 
     pub(crate) assets_dir: PathBuf,
-    pub(crate) tailwind_path: PathBuf,
 }
 
 impl PageAssets {
@@ -100,17 +96,16 @@ impl PageAssets {
     /// The style will not automatically be included in the page, but can be included through the `.url()` method on the returned `Style` object.
     ///
     /// Subsequent calls to this function using the same path will return the same style, as such, the value returned by this function can be cloned and used multiple times without issue.
-    pub fn add_style<P>(&mut self, style_path: P, tailwind: bool) -> Style
+    pub fn add_style<P>(&mut self, style_path: P, options: Option<StyleOptions>) -> Style
     where
         P: Into<PathBuf>,
     {
         let path = style_path.into();
         let style = Style {
             path: path.clone(),
-            tailwind,
             assets_dir: self.assets_dir.clone(),
-            tailwind_path: self.tailwind_path.clone(),
             hash: calculate_hash(&path),
+            tailwind: options.as_ref().is_some_and(|opts| opts.tailwind),
         };
 
         self.styles.insert(style.clone());
@@ -123,17 +118,16 @@ impl PageAssets {
     /// This method will automatically include the style in the `<head>` of the page, if it exists. If the page does not include a `<head>` tag, at this time this method will silently fail.
     ///
     /// Subsequent calls to this function using the same path will result in the same style being included multiple times.
-    pub fn include_style<P>(&mut self, style_path: P, tailwind: bool)
+    pub fn include_style<P>(&mut self, style_path: P, options: Option<StyleOptions>)
     where
         P: Into<PathBuf>,
     {
         let path = style_path.into();
         let style = Style {
             path: path.clone(),
-            tailwind,
             assets_dir: self.assets_dir.clone(),
-            tailwind_path: self.tailwind_path.clone(),
             hash: calculate_hash(&path),
+            tailwind: options.as_ref().is_some_and(|opts| opts.tailwind),
         };
 
         self.styles.insert(style.clone());
@@ -272,13 +266,17 @@ impl Asset for Script {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
+pub struct StyleOptions {
+    pub tailwind: bool,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct Style {
     pub path: PathBuf,
-    pub(crate) tailwind: bool,
     pub(crate) assets_dir: PathBuf,
-    pub(crate) tailwind_path: PathBuf,
     pub(crate) hash: String,
+    pub(crate) tailwind: bool,
 }
 
 impl InternalAsset for Style {
@@ -305,27 +303,7 @@ impl Asset for Style {
         self.hash.clone()
     }
 
-    fn process(&self, _: &Path, tmp_dir: &Path) -> Option<String> {
-        // TODO: Detect tailwind automatically
-        if self.tailwind {
-            let tmp_path = tmp_dir.join(self.path.file_name().unwrap());
-            let tmp_path_str = tmp_path.to_str().unwrap().to_string();
-
-            let start_tailwind = SystemTime::now();
-            let tailwind_output = Command::new(self.tailwind_path.clone())
-                .args(["--input", self.path.to_str().unwrap()])
-                .args(["--output", &tmp_path_str])
-                .arg("--minify") // TODO: Allow disabling minification
-                .output()
-                .expect("failed to execute process");
-
-            info!("Tailwind took {:?}", start_tailwind.elapsed().unwrap());
-
-            if tailwind_output.status.success() {
-                return Some(tmp_path_str);
-            }
-        }
-
+    fn process(&self, _: &Path, _: &Path) -> Option<String> {
         None
     }
 }
@@ -351,11 +329,9 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = PageAssets {
             assets_dir: PathBuf::from("assets"),
-            tailwind_path: PathBuf::from("tailwind"),
             ..Default::default()
         };
-
-        page_assets.add_style(temp_dir.join("style.css"), false);
+        page_assets.add_style(temp_dir.join("style.css"), None);
 
         assert!(page_assets.styles.len() == 1);
     }
@@ -365,11 +341,10 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = PageAssets {
             assets_dir: PathBuf::from("assets"),
-            tailwind_path: PathBuf::from("tailwind"),
             ..Default::default()
         };
 
-        page_assets.include_style(temp_dir.join("style.css"), false);
+        page_assets.include_style(temp_dir.join("style.css"), None);
 
         assert!(page_assets.styles.len() == 1);
         assert!(page_assets.included_styles.len() == 1);
@@ -380,7 +355,6 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = PageAssets {
             assets_dir: PathBuf::from("assets"),
-            tailwind_path: PathBuf::from("tailwind"),
             ..Default::default()
         };
 
@@ -393,7 +367,6 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = PageAssets {
             assets_dir: PathBuf::from("assets"),
-            tailwind_path: PathBuf::from("tailwind"),
             ..Default::default()
         };
 
@@ -408,7 +381,6 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = PageAssets {
             assets_dir: PathBuf::from("assets"),
-            tailwind_path: PathBuf::from("tailwind"),
             ..Default::default()
         };
 
@@ -421,7 +393,6 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = PageAssets {
             assets_dir: PathBuf::from("assets"),
-            tailwind_path: PathBuf::from("tailwind"),
             ..Default::default()
         };
 
@@ -431,7 +402,7 @@ mod tests {
         let script = page_assets.add_script(temp_dir.join("script.js"));
         assert_eq!(script.url().unwrap().chars().next(), Some('/'));
 
-        let style = page_assets.add_style(temp_dir.join("style.css"), false);
+        let style = page_assets.add_style(temp_dir.join("style.css"), None);
         assert_eq!(style.url().unwrap().chars().next(), Some('/'));
     }
 
@@ -440,7 +411,6 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = PageAssets {
             assets_dir: PathBuf::from("assets"),
-            tailwind_path: PathBuf::from("tailwind"),
             ..Default::default()
         };
 
@@ -452,7 +422,7 @@ mod tests {
         let script_hash = script.hash.clone();
         assert!(script.url().unwrap().contains(&script_hash));
 
-        let style = page_assets.add_style(temp_dir.join("style.css"), false);
+        let style = page_assets.add_style(temp_dir.join("style.css"), None);
         let style_hash = style.hash.clone();
         assert!(style.url().unwrap().contains(&style_hash));
     }
@@ -462,7 +432,6 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = PageAssets {
             assets_dir: PathBuf::from("assets"),
-            tailwind_path: PathBuf::from("tailwind"),
             ..Default::default()
         };
 
@@ -474,7 +443,7 @@ mod tests {
         let script_hash = script.hash.clone();
         assert!(script.build_path().to_string_lossy().contains(&script_hash));
 
-        let style = page_assets.add_style(temp_dir.join("style.css"), false);
+        let style = page_assets.add_style(temp_dir.join("style.css"), None);
         let style_hash = style.hash.clone();
         assert!(style.build_path().to_string_lossy().contains(&style_hash));
     }

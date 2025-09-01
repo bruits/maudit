@@ -1,9 +1,12 @@
+use core::panic;
 use std::{
     env,
     fs::{self, remove_dir_all, File},
     io::{self, Write},
     path::{Path, PathBuf},
+    process::Command,
     str::FromStr,
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -21,7 +24,11 @@ use crate::{
 };
 use colored::{ColoredString, Colorize};
 use log::{info, trace};
-use rolldown::{Bundler, BundlerOptions, InputItem, ModuleType};
+use oxc_sourcemap::SourceMap;
+use rolldown::{
+    plugin::{HookUsage, Plugin},
+    Bundler, BundlerOptions, InputItem, ModuleType,
+};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::assets::Asset;
@@ -31,6 +38,91 @@ use lol_html::{element, rewrite_str, RewriteStrSettings};
 
 pub mod metadata;
 pub mod options;
+
+#[derive(Debug)]
+struct TailwindPlugin {
+    tailwind_path: Option<String>,
+    tailwind_entries: Vec<PathBuf>,
+}
+
+impl Plugin for TailwindPlugin {
+    fn name(&self) -> std::borrow::Cow<'static, str> {
+        "builtin:tailwind".into()
+    }
+
+    fn register_hook_usage(&self) -> rolldown::plugin::HookUsage {
+        HookUsage::Transform
+    }
+
+    async fn transform(
+        &self,
+        _ctx: rolldown::plugin::SharedTransformPluginContext,
+        args: &rolldown::plugin::HookTransformArgs<'_>,
+    ) -> rolldown::plugin::HookTransformReturn {
+        if *args.module_type != ModuleType::Css {
+            return Ok(None);
+        }
+
+        if self
+            .tailwind_entries
+            .iter()
+            .any(|entry| entry.canonicalize().unwrap().to_string_lossy() == args.id)
+        {
+            let tailwind_path = self.tailwind_path.as_deref().unwrap_or("tailwindcss");
+            let start_tailwind = SystemTime::now();
+            let tailwind_output =
+                Command::new(tailwind_path)
+                    .args(["--input", args.id])
+                    .arg("--minify") // TODO: Allow disabling minification
+                    .arg("--map") // TODO: Allow disabling source maps
+                    .output()
+                    .unwrap_or_else(|e| {
+                        // TODO: Return a proper error instead of panicking
+                        panic!(
+                            "Failed to execute Tailwind CSS command, is it installed and is the path to its binary correct?\nCommand: '{}', Args: ['--input', '{}', '--minify', '--map']. Error: {}",
+                            tailwind_path,
+                            args.id,
+                            e
+                        )
+            });
+
+            info!("Tailwind took {:?}", start_tailwind.elapsed().unwrap());
+
+            if !tailwind_output.status.success() {
+                let stderr = String::from_utf8_lossy(&tailwind_output.stderr);
+                let error_message = format!(
+                    "Tailwind CSS process failed with status {}: {}",
+                    tailwind_output.status, stderr
+                );
+                panic!("{}", error_message);
+            }
+
+            let output = String::from_utf8_lossy(&tailwind_output.stdout);
+            let (code, map) = if let Some((code, map)) = output.split_once("/*# sourceMappingURL") {
+                (code.to_string(), Some(map.to_string()))
+            } else {
+                (output.to_string(), None)
+            };
+
+            if let Some(map) = map {
+                let source_map = SourceMap::from_json_string(&map).ok();
+
+                return Ok(Some(rolldown::plugin::HookTransformOutput {
+                    code: Some(code),
+                    map: source_map,
+                    ..Default::default()
+                }));
+            }
+
+            return Ok(Some(rolldown::plugin::HookTransformOutput {
+                code: Some(code),
+                ..Default::default()
+            }));
+        }
+
+        Ok(None)
+    }
+}
 
 pub fn execute_build(
     routes: &[&dyn FullPage],
@@ -132,7 +224,6 @@ pub async fn build(
                 let route_start = SystemTime::now();
                 let mut page_assets = assets::PageAssets {
                     assets_dir: options.assets_dir.clone().into(),
-                    tailwind_path: options.tailwind_binary_path.clone().into(),
                     ..Default::default()
                 };
 
@@ -190,7 +281,6 @@ pub async fn build(
                 for params in routes {
                     let mut pages_assets = assets::PageAssets {
                         assets_dir: options.assets_dir.clone().into(),
-                        tailwind_path: options.tailwind_binary_path.clone().into(),
                         ..Default::default()
                     };
                     let route_start = SystemTime::now();
@@ -306,13 +396,29 @@ pub async fn build(
             module_types_hashmap.insert("woff".to_string(), ModuleType::Asset);
             module_types_hashmap.insert("woff2".to_string(), ModuleType::Asset);
 
-            let mut bundler = Bundler::new(BundlerOptions {
-                input: Some(bundler_inputs),
-                minify: Some(rolldown::RawMinifyOptions::Bool(true)),
-                dir: Some(assets_dir.to_string_lossy().to_string()),
-                module_types: Some(module_types_hashmap),
-                ..Default::default()
-            });
+            let mut bundler = Bundler::with_plugins(
+                BundlerOptions {
+                    input: Some(bundler_inputs),
+                    minify: Some(rolldown::RawMinifyOptions::Bool(true)),
+                    dir: Some(assets_dir.to_string_lossy().to_string()),
+                    module_types: Some(module_types_hashmap),
+
+                    ..Default::default()
+                },
+                vec![Arc::new(TailwindPlugin {
+                    tailwind_path: Some(options.tailwind_binary_path.clone()),
+                    tailwind_entries: build_pages_styles
+                        .iter()
+                        .filter_map(|style| {
+                            if style.tailwind {
+                                Some(style.path().clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<PathBuf>>(),
+                })],
+            );
 
             let _result = bundler.write().await.unwrap();
 

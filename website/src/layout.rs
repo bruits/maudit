@@ -8,6 +8,7 @@ pub use header::header;
 use maudit::content::MarkdownHeading;
 use maudit::maud::generator;
 use maudit::page::{RenderResult, RouteContext};
+use maudit::StyleOptions;
 
 pub fn docs_layout(
     main: Markup,
@@ -40,7 +41,8 @@ pub fn layout(
     licenses: bool,
     ctx: &mut RouteContext,
 ) -> RenderResult {
-    ctx.assets.include_style("assets/prin.css", true);
+    ctx.assets
+        .include_style("assets/prin.css", Some(StyleOptions { tailwind: true }));
 
     html! {
         (DOCTYPE)

@@ -1,4 +1,7 @@
-use maudit::page::{prelude::*, DynamicRouteContext};
+use maudit::{
+    page::{prelude::*, DynamicRouteContext},
+    StyleOptions,
+};
 
 use maud::html;
 
@@ -18,7 +21,8 @@ impl Page<Params> for DynamicExample {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let params = ctx.params::<Params>();
         let image = ctx.assets.add_image("data/social-card.png");
-        ctx.assets.include_style("data/tailwind.css", true);
+        ctx.assets
+            .include_style("data/tailwind.css", Some(StyleOptions { tailwind: true }));
 
         html! {
             head {
