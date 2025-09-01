@@ -16,7 +16,7 @@ impl Render for Style {
 impl Render for Script {
     fn render(&self) -> Markup {
         html! {
-            script src=(self.url().unwrap()) r#type="module" {}
+            script src=(self.url().unwrap()) type="module" {}
         }
     }
 }
