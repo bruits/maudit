@@ -152,14 +152,28 @@ pub trait Asset: DynEq + InternalAsset + Sync + Send {
         String::new()
     }
 
-    fn final_file_name(&self) -> String {
-        // TODO: Can we get this from Rolldown?
-        let file_stem = self.path().file_stem().unwrap().to_str().unwrap();
-        let extension = self
-            .path()
+    // TODO: I don't like these next two methods for scripts and styles, we should get this from Rolldown somehow, but I don't know how.
+    // Our architecture is such that bundling runs after pages, so we can't know the final extension until then. We can't, and I don't want
+    // to make it so we get assets beforehand because it'd make it less convenient and essentially cause us to act like a bundling framework.
+    //
+    // Perhaps it should be done as a post-processing step, like includes, but that'd require moving route finalization to after bundling,
+    // which I'm not sure I want to do either. Plus, it'd be pretty slow if you have a layout on every page that includes a style/script (a fairly common case).
+    //
+    // An additional benefit would with that would also be to be able to avoid generating hashes for these files, but that's a smaller win.
+    //
+    // I don't know! - erika, 2025-09-01
+
+    fn final_extension(&self) -> String {
+        self.path()
             .extension()
             .map(|ext| ext.to_str().unwrap())
-            .unwrap_or("");
+            .unwrap_or_default()
+            .to_owned()
+    }
+
+    fn final_file_name(&self) -> String {
+        let file_stem = self.path().file_stem().unwrap().to_str().unwrap();
+        let extension = self.final_extension();
 
         if extension.is_empty() {
             format!("{}.{}", file_stem, self.hash())
@@ -264,6 +278,20 @@ impl Asset for Script {
 
     fn hash(&self) -> String {
         self.hash.clone()
+    }
+
+    fn final_extension(&self) -> String {
+        let current_extension = self
+            .path()
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or_default();
+
+        match current_extension {
+            "ts" => "js",
+            ext => ext,
+        }
+        .to_string()
     }
 }
 

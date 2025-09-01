@@ -376,14 +376,7 @@ pub async fn build(
                 name: Some(
                     script
                         .final_file_name()
-                        .strip_suffix(&format!(
-                            ".{}",
-                            script
-                                .path()
-                                .extension()
-                                .map(|ext| ext.to_str().unwrap())
-                                .unwrap_or("")
-                        ))
+                        .strip_suffix(&format!(".{}", script.final_extension()))
                         .unwrap_or(&script.final_file_name())
                         .to_string(),
                 ),
@@ -538,7 +531,7 @@ fn finish_route(
                     for script in included_scripts {
                         el.append(
                             &format!(
-                                "<script src=\"{}\"></script>",
+                                "<script src=\"{}\" type=\"module\"></script>",
                                 script.url().unwrap_or_else(|| panic!(
                                     "Failed to get URL for script: {:?}. This should not happen, please report this issue.",
                                     script.path()
