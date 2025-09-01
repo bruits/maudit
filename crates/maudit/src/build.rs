@@ -41,7 +41,7 @@ pub mod options;
 
 #[derive(Debug)]
 struct TailwindPlugin {
-    tailwind_path: Option<String>,
+    tailwind_path: String,
     tailwind_entries: Vec<PathBuf>,
 }
 
@@ -68,10 +68,9 @@ impl Plugin for TailwindPlugin {
             .iter()
             .any(|entry| entry.canonicalize().unwrap().to_string_lossy() == args.id)
         {
-            let tailwind_path = self.tailwind_path.as_deref().unwrap_or("tailwindcss");
             let start_tailwind = SystemTime::now();
             let tailwind_output =
-                Command::new(tailwind_path)
+                Command::new(&self.tailwind_path)
                     .args(["--input", args.id])
                     .arg("--minify") // TODO: Allow disabling minification
                     .arg("--map") // TODO: Allow disabling source maps
@@ -80,13 +79,11 @@ impl Plugin for TailwindPlugin {
                         // TODO: Return a proper error instead of panicking
                         panic!(
                             "Failed to execute Tailwind CSS command, is it installed and is the path to its binary correct?\nCommand: '{}', Args: ['--input', '{}', '--minify', '--map']. Error: {}",
-                            tailwind_path,
+                            &self.tailwind_path,
                             args.id,
                             e
                         )
             });
-
-            info!("Tailwind took {:?}", start_tailwind.elapsed().unwrap());
 
             if !tailwind_output.status.success() {
                 let stderr = String::from_utf8_lossy(&tailwind_output.stderr);
@@ -96,6 +93,8 @@ impl Plugin for TailwindPlugin {
                 );
                 panic!("{}", error_message);
             }
+
+            info!("Tailwind took {:?}", start_tailwind.elapsed().unwrap());
 
             let output = String::from_utf8_lossy(&tailwind_output.stdout);
             let (code, map) = if let Some((code, map)) = output.split_once("/*# sourceMappingURL") {
@@ -399,7 +398,7 @@ pub async fn build(
                     ..Default::default()
                 },
                 vec![Arc::new(TailwindPlugin {
-                    tailwind_path: Some(options.tailwind_binary_path.clone()),
+                    tailwind_path: options.tailwind_binary_path.clone(),
                     tailwind_entries: build_pages_styles
                         .iter()
                         .filter_map(|style| {

@@ -1,4 +1,4 @@
-use maudit::{page::prelude::*, StyleOptions};
+use maudit::page::prelude::*;
 
 use maud::html;
 
@@ -13,7 +13,7 @@ impl Page for Index {
         let script = ctx.assets.add_script("data/some_other_script.js");
         let style = ctx
             .assets
-            .add_style("data/tailwind.css", Some(StyleOptions { tailwind: true }));
+            .add_style_with_options("data/tailwind.css", StyleOptions { tailwind: true });
 
         let link_to_first_dynamic =
             get_page_url(&DynamicExample, &DynamicExampleParams { page: 1 });

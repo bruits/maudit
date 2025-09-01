@@ -260,9 +260,10 @@ pub mod prelude {
     pub use super::{
         get_page_url, DynamicRouteContext, Page, RenderResult, RouteContext, RouteParams,
     };
+    // TODO: Remove this internal re-export when possible
     #[doc(hidden)]
     pub use super::{FullPage, InternalPage};
-    pub use crate::assets::Asset;
+    pub use crate::assets::{Asset, Image, Style, StyleOptions};
     pub use crate::content::MarkdownContent;
     pub use maudit_macros::{route, Params};
 }

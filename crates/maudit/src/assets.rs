@@ -17,7 +17,7 @@ pub struct PageAssets {
 }
 
 impl PageAssets {
-    /// Add an image to the page assets, causing the file to be created in the output directory.
+    /// Add an image to the page assets, causing the file to be created in the output directory. The image is resolved relative to the current working directory.
     ///
     /// The image will not automatically be included in the page, but can be included through the `.url()` method on the returned `Image` object.
     ///
@@ -49,7 +49,7 @@ impl PageAssets {
         *image
     }
 
-    /// Add a script to the page assets, causing the file to be created in the output directory.
+    /// Add a script to the page assets, causing the file to be created in the output directory. The script is resolved relative to the current working directory.
     ///
     /// The script will not automatically be included in the page, but can be included through the `.url()` method on the returned `Script` object.
     /// Alternatively, a script can be included automatically using the [PageAssets::include_script] method instead.
@@ -71,7 +71,7 @@ impl PageAssets {
         script
     }
 
-    /// Include a script in the page
+    /// Include a script in the page. The script is resolved relative to the current working directory.
     ///
     /// This method will automatically include the script in the `<head>` of the page, if it exists. If the page does not include a `<head>` tag, at this time this method will silently fail.
     ///
@@ -91,12 +91,25 @@ impl PageAssets {
         self.included_scripts.push(script);
     }
 
-    /// Add a style to the page assets, causing the file to be created in the output directory.
+    /// Add a style to the page assets, causing the file to be created in the output directory. The style is resolved relative to the current working directory.
+    ///
+    /// The style will not automatically be included in the page, but can be included through the `.url()` method on the returned `Style` object.
+    /// Alternatively, a style can be included automatically using the [PageAssets::include_style] method instead.
+    ///
+    /// Subsequent calls to this method using the same path will return the same style, as such, the value returned by this method can be cloned and used multiple times without issue. this method is equivalent to calling `add_style_with_options` with the default `StyleOptions` and is purely provided for convenience.
+    pub fn add_style<P>(&mut self, style_path: P) -> Style
+    where
+        P: Into<PathBuf>,
+    {
+        self.add_style_with_options(style_path, StyleOptions::default())
+    }
+
+    /// Add a style to the page assets, causing the file to be created in the output directory. The style is resolved relative to the current working directory.
     ///
     /// The style will not automatically be included in the page, but can be included through the `.url()` method on the returned `Style` object.
     ///
-    /// Subsequent calls to this function using the same path will return the same style, as such, the value returned by this function can be cloned and used multiple times without issue.
-    pub fn add_style<P>(&mut self, style_path: P, options: Option<StyleOptions>) -> Style
+    /// Subsequent calls to this method using the same path will return the same style, as such, the value returned by this method can be cloned and used multiple times without issue.
+    pub fn add_style_with_options<P>(&mut self, style_path: P, options: StyleOptions) -> Style
     where
         P: Into<PathBuf>,
     {
@@ -105,7 +118,7 @@ impl PageAssets {
             path: path.clone(),
             assets_dir: self.assets_dir.clone(),
             hash: calculate_hash(&path),
-            tailwind: options.as_ref().is_some_and(|opts| opts.tailwind),
+            tailwind: options.tailwind,
         };
 
         self.styles.insert(style.clone());
@@ -117,8 +130,20 @@ impl PageAssets {
     ///
     /// This method will automatically include the style in the `<head>` of the page, if it exists. If the page does not include a `<head>` tag, at this time this method will silently fail.
     ///
-    /// Subsequent calls to this function using the same path will result in the same style being included multiple times.
-    pub fn include_style<P>(&mut self, style_path: P, options: Option<StyleOptions>)
+    /// Subsequent calls to this method using the same path will result in the same style being included multiple times. This method is equivalent to calling `include_style_with_options` with the default `StyleOptions` and is purely provided for convenience.
+    pub fn include_style<P>(&mut self, style_path: P)
+    where
+        P: Into<PathBuf>,
+    {
+        self.include_style_with_options(style_path, StyleOptions::default())
+    }
+
+    /// Include a style in the page
+    ///
+    /// This method will automatically include the style in the `<head>` of the page, if it exists. If the page does not include a `<head>` tag, at this time this method will silently fail.
+    ///
+    /// Subsequent calls to this method using the same path will result in the same style being included multiple times.
+    pub fn include_style_with_options<P>(&mut self, style_path: P, options: StyleOptions)
     where
         P: Into<PathBuf>,
     {
@@ -127,7 +152,7 @@ impl PageAssets {
             path: path.clone(),
             assets_dir: self.assets_dir.clone(),
             hash: calculate_hash(&path),
-            tailwind: options.as_ref().is_some_and(|opts| opts.tailwind),
+            tailwind: options.tailwind,
         };
 
         self.styles.insert(style.clone());
@@ -295,7 +320,7 @@ impl Asset for Script {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Default)]
 pub struct StyleOptions {
     pub tailwind: bool,
 }
@@ -361,7 +386,7 @@ mod tests {
             assets_dir: PathBuf::from("assets"),
             ..Default::default()
         };
-        page_assets.add_style(temp_dir.join("style.css"), None);
+        page_assets.add_style(temp_dir.join("style.css"));
 
         assert!(page_assets.styles.len() == 1);
     }
@@ -374,7 +399,7 @@ mod tests {
             ..Default::default()
         };
 
-        page_assets.include_style(temp_dir.join("style.css"), None);
+        page_assets.include_style(temp_dir.join("style.css"));
 
         assert!(page_assets.styles.len() == 1);
         assert!(page_assets.included_styles.len() == 1);
@@ -432,7 +457,7 @@ mod tests {
         let script = page_assets.add_script(temp_dir.join("script.js"));
         assert_eq!(script.url().unwrap().chars().next(), Some('/'));
 
-        let style = page_assets.add_style(temp_dir.join("style.css"), None);
+        let style = page_assets.add_style(temp_dir.join("style.css"));
         assert_eq!(style.url().unwrap().chars().next(), Some('/'));
     }
 
@@ -452,7 +477,7 @@ mod tests {
         let script_hash = script.hash.clone();
         assert!(script.url().unwrap().contains(&script_hash));
 
-        let style = page_assets.add_style(temp_dir.join("style.css"), None);
+        let style = page_assets.add_style(temp_dir.join("style.css"));
         let style_hash = style.hash.clone();
         assert!(style.url().unwrap().contains(&style_hash));
     }
@@ -473,7 +498,7 @@ mod tests {
         let script_hash = script.hash.clone();
         assert!(script.build_path().to_string_lossy().contains(&script_hash));
 
-        let style = page_assets.add_style(temp_dir.join("style.css"), None);
+        let style = page_assets.add_style(temp_dir.join("style.css"));
         let style_hash = style.hash.clone();
         assert!(style.build_path().to_string_lossy().contains(&style_hash));
     }

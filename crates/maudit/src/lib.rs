@@ -6,8 +6,7 @@
 //! </div>
 
 // Modules the end-user will interact directly or indirectly with
-mod assets;
-pub use assets::StyleOptions;
+pub mod assets;
 pub mod content;
 pub mod errors;
 pub mod page;
