@@ -5,6 +5,7 @@ mod header;
 use docs_sidebars::{left_sidebar, right_sidebar};
 
 pub use header::header;
+use maudit::assets::StyleOptions;
 use maudit::content::MarkdownHeading;
 use maudit::maud::generator;
 use maudit::page::{RenderResult, RouteContext};
@@ -40,7 +41,8 @@ pub fn layout(
     licenses: bool,
     ctx: &mut RouteContext,
 ) -> RenderResult {
-    ctx.assets.include_style("assets/prin.css", true);
+    ctx.assets
+        .include_style_with_options("assets/prin.css", StyleOptions { tailwind: true });
 
     html! {
         (DOCTYPE)

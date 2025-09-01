@@ -39,6 +39,9 @@ pub struct BuildOptions {
     pub output_dir: String,
     pub assets_dir: String,
     pub static_dir: String,
+    /// Path to [the TailwindCSS CLI binary](https://tailwindcss.com/docs/installation/tailwind-cli). By default `tailwindcss`, which assumes you've installed it globally (for example, through Homebrew) and that it is in your `PATH`.
+    ///
+    /// This is commonly set to `./node_modules/.bin/tailwindcss` or similar, in order to use a locally installed version.
     pub tailwind_binary_path: String,
     /// Whether to clean the output directory before building.
     ///
@@ -68,7 +71,7 @@ impl Default for BuildOptions {
             output_dir: "dist".to_string(),
             assets_dir: "_maudit".to_string(),
             static_dir: "static".to_string(),
-            tailwind_binary_path: "./node_modules/.bin/tailwindcss".to_string(),
+            tailwind_binary_path: "tailwindcss".to_string(),
             clean_output_dir: true,
         }
     }

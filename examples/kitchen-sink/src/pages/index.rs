@@ -11,7 +11,9 @@ impl Page for Index {
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
         let image = ctx.assets.add_image("data/logo.svg");
         let script = ctx.assets.add_script("data/some_other_script.js");
-        let style = ctx.assets.add_style("data/tailwind.css", true);
+        let style = ctx
+            .assets
+            .add_style_with_options("data/tailwind.css", StyleOptions { tailwind: true });
 
         let link_to_first_dynamic =
             get_page_url(&DynamicExample, &DynamicExampleParams { page: 1 });
