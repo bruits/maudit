@@ -153,6 +153,7 @@ pub trait Asset: DynEq + InternalAsset + Sync + Send {
     }
 
     fn final_file_name(&self) -> String {
+        // TODO: Can we get this from Rolldown?
         let file_stem = self.path().file_stem().unwrap().to_str().unwrap();
         let extension = self
             .path()
@@ -171,6 +172,7 @@ pub trait Asset: DynEq + InternalAsset + Sync + Send {
 fn calculate_hash(path: &PathBuf) -> String {
     let content = fs::read(path).unwrap();
 
+    // TODO: Consider using xxhash for both performance and to match Rolldown's hashing
     let mut hasher = blake3::Hasher::new();
     hasher.update(&content);
     hasher.update(path.to_string_lossy().as_bytes());
