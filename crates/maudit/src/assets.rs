@@ -417,4 +417,195 @@ mod tests {
         let style_hash = style.hash.clone();
         assert!(style.build_path().to_string_lossy().contains(&style_hash));
     }
+
+    #[test]
+    fn test_image_hash_different_options() {
+        let temp_dir = setup_temp_dir();
+        let image_path = temp_dir.join("image.png");
+
+        // Create a simple test PNG (1x1 transparent pixel)
+        let png_data = [
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
+            0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0B, 0x49, 0x44, 0x41, 0x54, 0x78,
+            0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+            0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ];
+        std::fs::write(&image_path, png_data).unwrap();
+
+        let mut page_assets = PageAssets {
+            assets_dir: PathBuf::from("assets"),
+            ..Default::default()
+        };
+
+        // Test that different options produce different hashes
+        let image_default = page_assets.add_image(&image_path);
+        let image_webp = page_assets.add_image_with_options(
+            &image_path,
+            ImageOptions {
+                format: Some(ImageFormat::Webp),
+                ..Default::default()
+            },
+        );
+        let image_resized = page_assets.add_image_with_options(
+            &image_path,
+            ImageOptions {
+                width: Some(100),
+                height: Some(100),
+                ..Default::default()
+            },
+        );
+        let image_combined = page_assets.add_image_with_options(
+            &image_path,
+            ImageOptions {
+                width: Some(100),
+                height: Some(100),
+                format: Some(ImageFormat::Webp),
+            },
+        );
+
+        // All hashes should be different
+        let hashes = [
+            &image_default.hash,
+            &image_webp.hash,
+            &image_resized.hash,
+            &image_combined.hash,
+        ];
+
+        for (i, hash1) in hashes.iter().enumerate() {
+            for (j, hash2) in hashes.iter().enumerate() {
+                if i != j {
+                    assert_ne!(
+                        hash1, hash2,
+                        "Hashes should be different for different options"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_image_hash_same_options() {
+        let temp_dir = setup_temp_dir();
+        let image_path = temp_dir.join("image.png");
+
+        // Create a simple test PNG (1x1 transparent pixel)
+        let png_data = [
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
+            0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0B, 0x49, 0x44, 0x41, 0x54, 0x78,
+            0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+            0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ];
+        std::fs::write(&image_path, png_data).unwrap();
+
+        let mut page_assets = PageAssets {
+            assets_dir: PathBuf::from("assets"),
+            ..Default::default()
+        };
+
+        // Same options should produce same hash
+        let image1 = page_assets.add_image_with_options(
+            &image_path,
+            ImageOptions {
+                width: Some(200),
+                height: Some(150),
+                format: Some(ImageFormat::Jpeg),
+            },
+        );
+
+        let image2 = page_assets.add_image_with_options(
+            &image_path,
+            ImageOptions {
+                width: Some(200),
+                height: Some(150),
+                format: Some(ImageFormat::Jpeg),
+            },
+        );
+
+        assert_eq!(
+            image1.hash, image2.hash,
+            "Same options should produce same hash"
+        );
+    }
+
+    #[test]
+    fn test_style_hash_different_options() {
+        let temp_dir = setup_temp_dir();
+        let style_path = temp_dir.join("style.css");
+
+        let mut page_assets = PageAssets {
+            assets_dir: PathBuf::from("assets"),
+            ..Default::default()
+        };
+
+        // Test that different tailwind options produce different hashes
+        let style_default = page_assets.add_style(&style_path);
+        let style_tailwind =
+            page_assets.add_style_with_options(&style_path, StyleOptions { tailwind: true });
+
+        assert_ne!(
+            style_default.hash, style_tailwind.hash,
+            "Different tailwind options should produce different hashes"
+        );
+    }
+
+    #[test]
+    fn test_hash_includes_path() {
+        let temp_dir = setup_temp_dir();
+
+        // Create two identical files with different paths
+        let content = "body { background: blue; }";
+        let style1_path = temp_dir.join("style1.css");
+        let style2_path = temp_dir.join("style2.css");
+
+        std::fs::write(&style1_path, content).unwrap();
+        std::fs::write(&style2_path, content).unwrap();
+
+        let mut page_assets = PageAssets {
+            assets_dir: PathBuf::from("assets"),
+            ..Default::default()
+        };
+
+        let style1 = page_assets.add_style(&style1_path);
+        let style2 = page_assets.add_style(&style2_path);
+
+        assert_ne!(
+            style1.hash, style2.hash,
+            "Different paths should produce different hashes even with same content"
+        );
+    }
+
+    #[test]
+    fn test_hash_includes_content() {
+        let temp_dir = setup_temp_dir();
+        let style_path = temp_dir.join("dynamic_style.css");
+
+        let mut page_assets = PageAssets {
+            assets_dir: PathBuf::from("assets"),
+            ..Default::default()
+        };
+
+        // Write first content and get hash
+        std::fs::write(&style_path, "body { background: red; }").unwrap();
+        let style1 = page_assets.add_style(&style_path);
+        let hash1 = style1.hash.clone();
+
+        // Write different content and get new hash
+        std::fs::write(&style_path, "body { background: green; }").unwrap();
+        let style2 = Style {
+            path: style_path.clone(),
+            assets_dir: PathBuf::from("assets"),
+            hash: calculate_hash(
+                &style_path,
+                Some(HashConfig::Style(&StyleOptions::default())),
+            ),
+            tailwind: false,
+        };
+
+        assert_ne!(
+            hash1, style2.hash,
+            "Different content should produce different hashes"
+        );
+    }
 }
