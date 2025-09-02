@@ -32,6 +32,9 @@ lol_html = "2.1.0"
 slug = "0.1.6"
 image = "0.25.6"
 webp = "0.3.1"
+oxipng = "9.1.5"
+thumbhash = "0.1.0"
+base64 = "0.22.1"
 
 maudit-macros = { path = "../maudit-macros", version = "0.3" }
 log = { version = "0.4", features = ["kv"] }
@@ -44,6 +47,3 @@ thiserror = "2.0.9"
 blake3 = "1.8.2"
 oxc_sourcemap = "4.1.0"
 rayon = "1.11.0"
-thumbhash = "0.1.0"
-base64 = "0.22.1"
-oxipng = "9.1.5"
