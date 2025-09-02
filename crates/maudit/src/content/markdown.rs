@@ -2,7 +2,7 @@ use std::{path::Path, sync::Arc};
 
 use glob::glob as glob_fs;
 use log::warn;
-use pulldown_cmark::{html::push_html, CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd, html::push_html};
 use serde::de::DeserializeOwned;
 
 pub mod components;
@@ -11,7 +11,7 @@ use components::{LinkType, ListType, MarkdownComponents, TableAlignment};
 
 use crate::{assets::Asset, page::RouteContext};
 
-use super::{highlight::CodeBlock, slugger, ContentEntry};
+use super::{ContentEntry, highlight::CodeBlock, slugger};
 
 /// Represents a Markdown heading.
 ///
@@ -185,11 +185,11 @@ where
     for entry in glob_fs(pattern).unwrap() {
         let entry = entry.unwrap();
 
-        if let Some(extension) = entry.extension() {
-            if extension != "md" {
-                warn!("Other file types than Markdown are not supported yet");
-                continue;
-            }
+        if let Some(extension) = entry.extension()
+            && extension != "md"
+        {
+            warn!("Other file types than Markdown are not supported yet");
+            continue;
         }
 
         let id = entry.file_stem().unwrap().to_str().unwrap().to_string();
@@ -361,7 +361,7 @@ pub fn render_markdown(
             }
 
             // TODO: Handle this differently so it's compatible with the component system - erika, 2025-08-24
-            Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(ref fence))) => {
+            Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(fence))) => {
                 let (block, begin) = CodeBlock::new(fence);
                 code_block = Some(block);
                 events[i] = Event::Html(begin.into());
@@ -378,7 +378,7 @@ pub fn render_markdown(
             }
 
             // TODO: User should be able to replace the text component too perhaps, but it'd require merging the text events
-            Event::Text(ref text) => {
+            Event::Text(text) => {
                 if !in_frontmatter {
                     if in_image {
                         // This seem to work to create "an empty event", but it's not ideal. Using `events.remove` is probably

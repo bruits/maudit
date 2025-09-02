@@ -17,6 +17,9 @@ importers:
       tailwindcss:
         specifier: ^4.0.0
         version: 4.0.0
+      thumbhash:
+        specifier: ^0.1.1
+        version: 0.1.1
 
 packages:
 
@@ -327,6 +330,9 @@ packages:
     resolution: {integrity: sha512-GNzQvQTOIP6RyTfE2Qxb8ZVlNmw0n88vp1szwWRimP02mnTsx3Wtn5qRdqY9w2XduFNUgvOwhNnQsjwCp+kqaQ==}
     engines: {node: '>=6'}
 
+  thumbhash@0.1.1:
+    resolution: {integrity: sha512-kH5pKeIIBPQXAOni2AiY/Cu/NKdkFREdpH+TLdM0g6WA7RriCv0kPLgP731ady67MhTAqrVG/4mnEeibVuCJcg==}
+
   to-regex-range@5.0.1:
     resolution: {integrity: sha512-65P7iz6X5yEr1cwcgvQxbbIw7Uk3gOy5dIdtZ4rDveLqhrdJP+Li/Hx6tyK0NEb+2GCyneCMJiGqrADCSNk8sQ==}
     engines: {node: '>=8.0'}
@@ -569,6 +575,8 @@ snapshots:
   tailwindcss@4.0.0: {}
 
   tapable@2.2.1: {}
+
+  thumbhash@0.1.1: {}
 
   to-regex-range@5.0.1:
     dependencies:

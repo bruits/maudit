@@ -1,7 +1,7 @@
 use core::panic;
 use std::{
     env,
-    fs::{self, remove_dir_all, File},
+    fs::{self, File, remove_dir_all},
     io::{self, Write},
     path::{Path, PathBuf},
     process::Command,
@@ -11,31 +11,33 @@ use std::{
 };
 
 use crate::{
-    assets,
+    BuildOptions, BuildOutput,
+    assets::{self},
     content::{Content, ContentSources},
     errors::BuildError,
     logging::print_title,
     page::{DynamicRouteContext, FullPage, RenderResult, RouteContext, RouteParams, RouteType},
     route::{
-        extract_params_from_raw_route, get_route_file_path, get_route_type_from_route_params,
-        get_route_url, ParameterDef,
+        ParameterDef, extract_params_from_raw_route, get_route_file_path,
+        get_route_type_from_route_params, get_route_url,
     },
-    BuildOptions, BuildOutput,
 };
 use colored::{ColoredString, Colorize};
 use log::{info, trace};
 use oxc_sourcemap::SourceMap;
 use rolldown::{
-    plugin::{HookUsage, Plugin},
     Bundler, BundlerOptions, InputItem, ModuleType,
+    plugin::{HookUsage, Plugin},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::assets::Asset;
-use crate::logging::{format_elapsed_time, FormatElapsedTimeOptions};
+use crate::logging::{FormatElapsedTimeOptions, format_elapsed_time};
 
-use lol_html::{element, rewrite_str, RewriteStrSettings};
+use lol_html::{RewriteStrSettings, element, rewrite_str};
+use rayon::prelude::*;
 
+pub mod images;
 pub mod metadata;
 pub mod options;
 
@@ -175,10 +177,10 @@ pub async fn build(
         let source_start = SystemTime::now();
         source.init();
 
-        info!(target: "build", "{} initialized in {}", source.get_name(), format_elapsed_time(source_start.elapsed(), &FormatElapsedTimeOptions::default()).unwrap());
+        info!(target: "content", "{} initialized in {}", source.get_name(), format_elapsed_time(source_start.elapsed(), &FormatElapsedTimeOptions::default()).unwrap());
     });
 
-    info!(target: "build", "{}", format!("Content sources initialized in {}", format_elapsed_time(
+    info!(target: "content", "{}", format!("Content sources initialized in {}", format_elapsed_time(
         content_sources_start.elapsed(),
         &FormatElapsedTimeOptions::default(),
     ).unwrap()).bold());
@@ -206,7 +208,8 @@ pub async fn build(
         ..Default::default()
     };
 
-    let mut build_pages_assets: FxHashSet<Box<dyn Asset>> = FxHashSet::default();
+    #[allow(clippy::mutable_key_type)] // Image's Hash does not depend on mutable fields
+    let mut build_pages_images: FxHashSet<assets::Image> = FxHashSet::default();
     let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
     let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
 
@@ -248,9 +251,9 @@ pub async fn build(
                     route.route_raw(),
                 )?;
 
-                info!(target: "build", "{} -> {} {}", get_route_url(&route.route_raw(), &params_def, &params), file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap());
+                info!(target: "pages", "{} -> {} {}", get_route_url(&route.route_raw(), &params_def, &params), file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap());
 
-                build_pages_assets.extend(page_assets.assets);
+                build_pages_images.extend(page_assets.images);
                 build_pages_scripts.extend(page_assets.scripts);
                 build_pages_styles.extend(page_assets.styles);
 
@@ -310,9 +313,9 @@ pub async fn build(
                         route.route_raw(),
                     )?;
 
-                    info!(target: "build", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap());
+                    info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap());
 
-                    build_pages_assets.extend(pages_assets.assets);
+                    build_pages_images.extend(pages_assets.images);
                     build_pages_scripts.extend(pages_assets.scripts);
                     build_pages_styles.extend(pages_assets.styles);
 
@@ -322,49 +325,30 @@ pub async fn build(
         }
     }
 
-    info!(target: "build", "{}", format!("generated {} pages in {}", page_count,  format_elapsed_time(pages_start.elapsed(), &section_format_options).unwrap()).bold());
+    info!(target: "pages", "{}", format!("generated {} pages in {}", page_count,  format_elapsed_time(pages_start.elapsed(), &section_format_options).unwrap()).bold());
 
-    if !build_pages_assets.is_empty()
-        || !build_pages_styles.is_empty()
-        || !build_pages_scripts.is_empty()
-    {
+    if !build_pages_styles.is_empty() || !build_pages_scripts.is_empty() {
         let assets_start = SystemTime::now();
         print_title("generating assets");
 
-        build_pages_assets.iter().for_each(|asset| {
-            asset.process(&assets_dir, &tmp_dir);
-
-            // TODO: Add outputted assets to build_metadata, might need dedicated fs methods for this
-        });
-
         let css_inputs = build_pages_styles
             .iter()
-            .map(|style| {
-                let processed_path = style.process(&assets_dir, &tmp_dir);
-
-                InputItem {
-                    name: Some(
-                        style
-                            .final_file_name()
-                            .strip_suffix(&format!(
-                                ".{}",
-                                style
-                                    .path()
-                                    .extension()
-                                    .map(|ext| ext.to_str().unwrap())
-                                    .unwrap_or("")
-                            ))
-                            .unwrap_or(&style.final_file_name())
-                            .to_string(),
-                    ),
-                    import: {
-                        if let Some(processed_path) = processed_path {
-                            processed_path
-                        } else {
-                            style.path().to_string_lossy().to_string()
-                        }
-                    },
-                }
+            .map(|style| InputItem {
+                name: Some(
+                    style
+                        .final_file_name()
+                        .strip_suffix(&format!(
+                            ".{}",
+                            style
+                                .path()
+                                .extension()
+                                .map(|ext| ext.to_str().unwrap())
+                                .unwrap_or("")
+                        ))
+                        .unwrap_or(&style.final_file_name())
+                        .to_string(),
+                ),
+                import: { style.path().to_string_lossy().to_string() },
             })
             .collect::<Vec<InputItem>>();
 
@@ -418,6 +402,32 @@ pub async fn build(
         }
 
         info!(target: "build", "{}", format!("Assets generated in {}", format_elapsed_time(assets_start.elapsed(), &section_format_options).unwrap()).bold());
+    }
+
+    if !build_pages_images.is_empty() {
+        print_title("processing images");
+
+        let start_time = SystemTime::now();
+        build_pages_images.par_iter().for_each(|image| {
+            let start_process = SystemTime::now();
+            let dest_path = assets_dir.join(image.final_file_name());
+            if let Some(image_options) = &image.options {
+                images::process_image(image, &dest_path, image_options);
+            } else if !dest_path.exists() {
+                // TODO: Check if copying should be done in this parallel iterator, I/O doesn't benefit from parallelism so having those tasks here might just be slowing processing
+                fs::copy(image.path(), &dest_path).unwrap_or_else(|e| {
+                    panic!(
+                        "Failed to copy image from {} to {}: {}",
+                        image.path().to_string_lossy(),
+                        dest_path.to_string_lossy(),
+                        e
+                    )
+                });
+            }
+            info!(target: "assets", "{} -> {} {}", image.path().to_string_lossy(), dest_path.to_string_lossy().dimmed(), format_elapsed_time(start_process.elapsed(), &route_format_options).unwrap().dimmed());
+        });
+
+        info!(target: "assets", "{}", format!("Images processed in {}", format_elapsed_time(start_time.elapsed(), &section_format_options).unwrap()).bold());
     }
 
     // Check if static directory exists
