@@ -197,56 +197,8 @@ where
 
         // Clone content for the closure
         let content_clone = content.clone();
-        let data_loader = Box::new(move |_: &mut RouteContext| {
-            let mut slugger = slugger::Slugger::new();
-
-            let mut options = Options::empty();
-            options.insert(
-                Options::ENABLE_YAML_STYLE_METADATA_BLOCKS | Options::ENABLE_HEADING_ATTRIBUTES,
-            );
-
-            let mut frontmatter = String::new();
-            let mut in_frontmatter = false;
-
-            let mut content_events = Vec::new();
-            for (event, _) in Parser::new_ext(&content_clone, options).into_offset_iter() {
-                match event {
-                    Event::Start(Tag::MetadataBlock(_)) => in_frontmatter = true,
-                    Event::End(TagEnd::MetadataBlock(_)) => in_frontmatter = false,
-                    Event::Text(ref text) => {
-                        if in_frontmatter {
-                            frontmatter.push_str(text);
-                        } else {
-                            content_events.push(event);
-                        }
-                    }
-                    _ => content_events.push(event),
-                }
-            }
-
-            // TODO: Prettier errors for serialization errors (e.g. missing fields)
-            // TODO: Support TOML frontmatters
-            let mut parsed = serde_yml::from_str::<T>(&frontmatter).unwrap();
-
-            let headings_internal = find_headings(&content_events);
-
-            let mut headings = vec![];
-            for heading in headings_internal {
-                let heading_content =
-                    get_text_from_events(&content_events[heading.start..heading.end]);
-                let slug: String = slugger.slugify(&heading_content);
-
-                headings.push(MarkdownHeading {
-                    title: heading_content,
-                    id: heading.id.unwrap_or(slug),
-                    level: heading.level as u8,
-                    classes: heading.classes,
-                });
-            }
-
-            parsed.set_headings(headings);
-            parsed
-        });
+        let data_loader =
+            Box::new(move |_: &mut RouteContext| parse_markdown_with_frontmatter(&content_clone));
 
         // Perhaps not ideal, but I don't know better. We're at the "get it working" stage - erika, 2025-08-24
         // Ideally, we'd at least avoid the allocation here whenever `options` is None, not sure how to do that ergonomically
@@ -775,6 +727,87 @@ pub fn render_markdown(
 
     push_html(&mut html_output, events.into_iter());
     html_output
+}
+
+/// Parse Markdown content with frontmatter and extract headings.
+///
+/// This function extracts YAML frontmatter from markdown content, deserializes it into the specified type,
+/// and automatically populates the headings for table of contents generation.
+///
+/// ## Example
+/// ```rs
+/// use maudit::content::{parse_markdown_with_frontmatter, markdown_entry};
+///
+/// #[markdown_entry]
+/// pub struct ArticleContent {
+///     pub title: String,
+///     pub description: String,
+/// }
+///
+/// let markdown = r#"---
+/// title: "My Article"
+/// description: "A great article"
+/// ---
+///
+/// # Introduction
+///
+/// This is the content.
+/// "#;
+///
+/// let parsed: ArticleContent = parse_markdown_with_frontmatter(markdown);
+/// assert_eq!(parsed.title, "My Article");
+/// assert_eq!(parsed.get_headings().len(), 1);
+/// ```
+pub fn parse_markdown_with_frontmatter<T>(content: &str) -> T
+where
+    T: DeserializeOwned + MarkdownContent + InternalMarkdownContent,
+{
+    let mut slugger = slugger::Slugger::new();
+
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS | Options::ENABLE_HEADING_ATTRIBUTES);
+
+    let mut frontmatter = String::new();
+    let mut in_frontmatter = false;
+
+    let mut content_events = Vec::new();
+    for (event, _) in Parser::new_ext(content, options).into_offset_iter() {
+        match event {
+            Event::Start(Tag::MetadataBlock(_)) => in_frontmatter = true,
+            Event::End(TagEnd::MetadataBlock(_)) => in_frontmatter = false,
+            Event::Text(ref text) => {
+                if in_frontmatter {
+                    frontmatter.push_str(text);
+                } else {
+                    content_events.push(event);
+                }
+            }
+            _ => content_events.push(event),
+        }
+    }
+
+    // TODO: Prettier errors for serialization errors (e.g. missing fields)
+    // TODO: Support TOML frontmatters
+    let mut parsed = serde_yml::from_str::<T>(&frontmatter)
+        .unwrap_or_else(|e| panic!("Failed to parse YAML frontmatter: {}, {}", e, frontmatter));
+
+    let headings_internal = find_headings(&content_events);
+
+    let mut headings = vec![];
+    for heading in headings_internal {
+        let heading_content = get_text_from_events(&content_events[heading.start..heading.end]);
+        let slug: String = slugger.slugify(&heading_content);
+
+        headings.push(MarkdownHeading {
+            title: heading_content,
+            id: heading.id.unwrap_or(slug),
+            level: heading.level as u8,
+            classes: heading.classes,
+        });
+    }
+
+    parsed.set_headings(headings);
+    parsed
 }
 
 fn find_matching_heading_end(events: &[Event], start_index: usize) -> Option<usize> {
