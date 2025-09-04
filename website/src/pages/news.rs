@@ -81,17 +81,19 @@ impl Page for NewsIndex {
 #[route("/news/[slug]")]
 pub struct NewsPage;
 
-#[derive(Params)]
+#[derive(Params, Clone)]
 struct NewsPageParams {
     slug: String,
 }
 
 impl Page<NewsPageParams> for NewsPage {
-    fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<NewsPageParams> {
+    fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<Route<NewsPageParams>> {
         let content = ctx.content.get_source::<NewsContent>("news");
 
-        content.into_params(|entry| NewsPageParams {
-            slug: entry.id.clone(),
+        content.into_routes(|entry| {
+            Route::from_params(NewsPageParams {
+                slug: entry.id.clone(),
+            })
         })
     }
 
