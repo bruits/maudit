@@ -60,6 +60,8 @@ impl From<&[u8]> for RenderResult {
     }
 }
 
+pub type Routes<Params = RouteParams, Props = ()> = Vec<Route<Params, Props>>;
+
 /// Represents a route with its parameters and associated props
 #[derive(Debug, Clone)]
 pub struct Route<Params = RouteParams, Props = ()>
@@ -216,8 +218,13 @@ impl RouteContext<'_> {
         T::from(self.raw_params.clone())
     }
 
-    pub fn typed_props<T: 'static>(&self) -> &T {
-        self.props.downcast_ref::<T>().expect("Props type mismatch")
+    pub fn props<T: 'static>(&self) -> &T {
+        self.props.downcast_ref::<T>().unwrap_or_else(|| {
+            panic!(
+                "Props type mismatch: expected {}",
+                std::any::type_name::<T>()
+            )
+        })
     }
 }
 
@@ -376,7 +383,7 @@ pub mod prelude {
     //! ```
     pub use super::{
         DynamicRouteContext, Page, PaginationMeta, RenderResult, Route, RouteContext, RouteParams,
-        get_page_slice, get_page_url, paginate_content,
+        Routes, get_page_slice, get_page_url, paginate_content,
     };
     // TODO: Remove this internal re-export when possible
     #[doc(hidden)]
