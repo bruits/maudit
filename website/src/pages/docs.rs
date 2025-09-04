@@ -48,9 +48,11 @@ impl Page<DocsPageParams> for DocsPage {
     fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<Route<DocsPageParams>> {
         let content = ctx.content.get_source::<DocsContent>("docs");
 
-        content.into_routes(|entry| Route::from_params(DocsPageParams {
-            slug: entry.id.clone(),
-        }))
+        content.into_routes(|entry| {
+            Route::from_params(DocsPageParams {
+                slug: entry.id.clone(),
+            })
+        })
     }
 
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {
