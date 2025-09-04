@@ -39,18 +39,18 @@ fn render_entry(entry: &ContentEntry<DocsContent>, ctx: &mut RouteContext) -> Ma
 #[route("/docs/[slug]")]
 pub struct DocsPage;
 
-#[derive(Params)]
+#[derive(Params, Clone)]
 struct DocsPageParams {
     slug: String,
 }
 
 impl Page<DocsPageParams> for DocsPage {
-    fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<DocsPageParams> {
+    fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<Route<DocsPageParams>> {
         let content = ctx.content.get_source::<DocsContent>("docs");
 
-        content.into_params(|entry| DocsPageParams {
+        content.into_routes(|entry| Route::from_params(DocsPageParams {
             slug: entry.id.clone(),
-        })
+        }))
     }
 
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {

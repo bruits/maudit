@@ -16,7 +16,7 @@ impl Page for Index {
             .add_style_with_options("data/tailwind.css", StyleOptions { tailwind: true });
 
         let link_to_first_dynamic =
-            get_page_url(&DynamicExample, &DynamicExampleParams { page: 1 });
+            get_page_url(&DynamicExample, DynamicExampleParams { page: 1 });
 
         html! {
             head {

@@ -5,6 +5,7 @@ use crate::assets::PageAssets;
 use crate::content::Content;
 use crate::route::{extract_params_from_raw_route, get_route_url, guess_if_route_is_endpoint};
 use rustc_hash::FxHashMap;
+use std::any::Any;
 
 /// Represents the result of a page render, can be either text or raw bytes.
 ///
@@ -59,6 +60,115 @@ impl From<&[u8]> for RenderResult {
     }
 }
 
+/// Represents a route with its parameters and associated props
+#[derive(Debug, Clone)]
+pub struct Route<Params = RouteParams, Props = ()>
+where
+    Params: Into<RouteParams> + Clone,
+    Props: Clone,
+{
+    pub params: Params,
+    pub props: Props,
+}
+
+impl<Params, Props> Route<Params, Props>
+where
+    Params: Into<RouteParams> + Clone,
+    Props: Clone,
+{
+    pub fn new(params: Params, props: Props) -> Self {
+        Self { params, props }
+    }
+}
+
+impl<Params> Route<Params, ()>
+where
+    Params: Into<RouteParams> + Clone,
+{
+    pub fn from_params(params: Params) -> Self {
+        Self { params, props: () }
+    }
+}
+
+/// Pagination metadata for routes
+#[derive(Debug, Clone)]
+pub struct PaginationMeta {
+    pub page: usize,
+    pub per_page: usize,
+    pub total_items: usize,
+    pub total_pages: usize,
+    pub has_next: bool,
+    pub has_prev: bool,
+    pub next_page: Option<usize>,
+    pub prev_page: Option<usize>,
+    pub start_index: usize,
+    pub end_index: usize,
+}
+
+impl PaginationMeta {
+    pub fn new(page: usize, per_page: usize, total_items: usize) -> Self {
+        let total_pages = if total_items == 0 {
+            1
+        } else {
+            total_items.div_ceil(per_page)
+        };
+        let start_index = page * per_page;
+        let end_index = ((page + 1) * per_page).min(total_items);
+
+        Self {
+            page,
+            per_page,
+            total_items,
+            total_pages,
+            has_next: page < total_pages - 1,
+            has_prev: page > 0,
+            next_page: if page < total_pages - 1 {
+                Some(page + 1)
+            } else {
+                None
+            },
+            prev_page: if page > 0 { Some(page - 1) } else { None },
+            start_index,
+            end_index,
+        }
+    }
+}
+
+/// Helper function to create paginated routes from a content source
+pub fn paginate_content<T, Params>(
+    entries: &[crate::content::ContentEntry<T>],
+    per_page: usize,
+    mut params_fn: impl FnMut(usize) -> Params,
+) -> Vec<Route<Params, PaginationMeta>>
+where
+    Params: Into<RouteParams> + Clone,
+{
+    if entries.is_empty() {
+        return vec![];
+    }
+
+    let total_items = entries.len();
+    let total_pages = total_items.div_ceil(per_page);
+    let mut routes = Vec::new();
+
+    for page in 0..total_pages {
+        let params = params_fn(page);
+        let props = PaginationMeta::new(page, per_page, total_items);
+
+        routes.push(Route::new(params, props));
+    }
+
+    routes
+}
+
+/// Helper to get paginated slice from content entries
+pub fn get_page_slice<'a, T>(
+    entries: &'a [crate::content::ContentEntry<T>],
+    pagination: &'a PaginationMeta,
+) -> &'a [crate::content::ContentEntry<T>] {
+    &entries[pagination.start_index..pagination.end_index]
+}
+
 /// Allows to access various data and assets in a [`Page`] implementation.
 ///
 /// ## Example
@@ -94,6 +204,7 @@ impl From<&[u8]> for RenderResult {
 /// }
 pub struct RouteContext<'a> {
     pub raw_params: &'a RouteParams,
+    pub props: &'a dyn Any,
     pub content: &'a Content<'a>,
     pub assets: &'a mut PageAssets,
     pub current_url: String,
@@ -105,6 +216,10 @@ impl RouteContext<'_> {
         T: From<RouteParams>,
     {
         T::from(self.raw_params.clone())
+    }
+
+    pub fn typed_props<T: 'static>(&self) -> &T {
+        self.props.downcast_ref::<T>().expect("Props type mismatch")
     }
 }
 
@@ -167,12 +282,13 @@ pub struct DynamicRouteContext<'a> {
 ///   }
 /// }
 /// ```
-pub trait Page<P = RouteParams, T = RenderResult>
+pub trait Page<Params = RouteParams, Props = (), T = RenderResult>
 where
-    P: Into<RouteParams>,
+    Params: Into<RouteParams> + Clone,
+    Props: Clone + 'static,
     T: Into<RenderResult>,
 {
-    fn routes(&self, _ctx: &mut DynamicRouteContext) -> Vec<P> {
+    fn routes(&self, _ctx: &mut DynamicRouteContext) -> Vec<Route<Params, Props>> {
         Vec::new()
     }
     fn render(&self, ctx: &mut RouteContext) -> T;
@@ -237,7 +353,7 @@ pub trait InternalPage {
 /// We expose it because [`maudit_macros::route`] implements it for the user behind the scenes.
 pub trait FullPage: InternalPage + Sync {
     fn render_internal(&self, ctx: &mut RouteContext) -> RenderResult;
-    fn routes_internal(&self, context: &mut DynamicRouteContext) -> Vec<RouteParams>;
+    fn routes_internal(&self, context: &mut DynamicRouteContext) -> Vec<(RouteParams, Box<dyn Any + Send + Sync>)>;
 }
 
 pub fn get_page_url<T: Into<RouteParams>>(route: &impl FullPage, params: T) -> String {
@@ -258,12 +374,13 @@ pub mod prelude {
     //! use maudit::page::prelude::*;
     //! ```
     pub use super::{
-        get_page_url, DynamicRouteContext, Page, RenderResult, RouteContext, RouteParams,
+        DynamicRouteContext, Page, PaginationMeta, RenderResult, Route, RouteContext, RouteParams, 
+        get_page_url, get_page_slice, paginate_content,
     };
     // TODO: Remove this internal re-export when possible
     #[doc(hidden)]
     pub use super::{FullPage, InternalPage};
     pub use crate::assets::{Asset, Image, Style, StyleOptions};
     pub use crate::content::MarkdownContent;
-    pub use maudit_macros::{route, Params};
+    pub use maudit_macros::{Params, route};
 }

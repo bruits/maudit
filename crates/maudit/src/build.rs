@@ -234,6 +234,7 @@ pub async fn build(
                 let mut content = Content::new(&content_sources.0);
                 let mut ctx = RouteContext {
                     raw_params: &params,
+                    props: &(), // Static routes have no props
                     content: &mut content,
                     assets: &mut page_assets,
                     current_url: String::new(), // TODO
@@ -280,7 +281,7 @@ pub async fn build(
                     info!(target: "build", "{}", route.route_raw().to_string().bold());
                 }
 
-                for params in routes {
+                for (params, props) in routes {
                     let mut pages_assets = assets::PageAssets {
                         assets_dir: options.assets_dir.clone().into(),
                         ..Default::default()
@@ -289,6 +290,7 @@ pub async fn build(
                     let mut content = Content::new(&content_sources.0);
                     let mut ctx = RouteContext {
                         raw_params: &params,
+                        props: props.as_ref(),
                         content: &mut content,
                         assets: &mut pages_assets,
                         current_url: String::new(), // TODO

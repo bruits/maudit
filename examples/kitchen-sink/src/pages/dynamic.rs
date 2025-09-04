@@ -5,14 +5,14 @@ use maud::html;
 #[route("/[page]")]
 pub struct DynamicExample;
 
-#[derive(Params)]
+#[derive(Params, Clone)]
 pub struct Params {
     pub page: u128,
 }
 
 impl Page<Params> for DynamicExample {
-    fn routes(&self, _: &mut DynamicRouteContext) -> Vec<Params> {
-        (0..1).map(|i| Params { page: i }).collect()
+    fn routes(&self, _: &mut DynamicRouteContext) -> Vec<Route<Params>> {
+        (0..1).map(|i| Route::from_params(Params { page: i })).collect()
     }
 
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {

@@ -83,7 +83,7 @@ macro_rules! archetypes {
                                 blog_entry_render(ctx, $name, stringify!($ident)).into()
                             }
 
-                            fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<BlogEntryParams> {
+                            fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<Route<BlogEntryParams>> {
                                 blog_entry_routes(ctx, stringify!($ident))
                             }
                         }
