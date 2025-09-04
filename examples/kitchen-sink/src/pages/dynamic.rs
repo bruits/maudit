@@ -5,7 +5,7 @@ use maud::html;
 #[route("/[page]")]
 pub struct DynamicExample;
 
-#[derive(Params)]
+#[derive(Params, Clone)]
 pub struct Params {
     pub page: u128,
 }

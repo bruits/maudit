@@ -204,6 +204,7 @@ pub fn get_page_slice<'a, T>(
 /// }
 pub struct RouteContext<'a> {
     pub raw_params: &'a RouteParams,
+    pub params: &'a dyn Any,
     pub props: &'a dyn Any,
     pub content: &'a Content<'a>,
     pub assets: &'a mut PageAssets,
@@ -211,20 +212,30 @@ pub struct RouteContext<'a> {
 }
 
 impl RouteContext<'_> {
-    pub fn params<T>(&self) -> T
-    where
-        T: From<RouteParams>,
-    {
-        T::from(self.raw_params.clone())
+    pub fn params<T: 'static + Clone>(&self) -> T {
+        self.params
+            .downcast_ref::<T>()
+            .unwrap_or_else(|| panic!("Params type mismatch: got {}", std::any::type_name::<T>()))
+            .clone()
     }
 
-    pub fn props<T: 'static>(&self) -> &T {
-        self.props.downcast_ref::<T>().unwrap_or_else(|| {
-            panic!(
-                "Props type mismatch: expected {}",
-                std::any::type_name::<T>()
-            )
-        })
+    pub fn props<T: 'static + Clone>(&self) -> T {
+        self.props
+            .downcast_ref::<T>()
+            .unwrap_or_else(|| panic!("Props type mismatch: got {}", std::any::type_name::<T>()))
+            .clone()
+    }
+
+    pub fn params_ref<T: 'static>(&self) -> &T {
+        self.params
+            .downcast_ref::<T>()
+            .unwrap_or_else(|| panic!("Params type mismatch: got {}", std::any::type_name::<T>()))
+    }
+
+    pub fn props_ref<T: 'static>(&self) -> &T {
+        self.props
+            .downcast_ref::<T>()
+            .unwrap_or_else(|| panic!("Props type mismatch: got {}", std::any::type_name::<T>()))
     }
 }
 
@@ -358,11 +369,14 @@ pub trait InternalPage {
 /// We expose it because [`maudit_macros::route`] implements it for the user behind the scenes.
 pub trait FullPage: InternalPage + Sync {
     fn render_internal(&self, ctx: &mut RouteContext) -> RenderResult;
-    fn routes_internal(
-        &self,
-        context: &mut DynamicRouteContext,
-    ) -> Vec<(RouteParams, Box<dyn Any + Send + Sync>)>;
+    fn routes_internal(&self, context: &mut DynamicRouteContext) -> RoutesInternalResult;
 }
+
+type RoutesInternalResult = Vec<(
+    RouteParams,
+    Box<dyn Any + Send + Sync>,
+    Box<dyn Any + Send + Sync>,
+)>;
 
 pub fn get_page_url<T: Into<RouteParams>>(route: &impl FullPage, params: T) -> String {
     let params_defs = extract_params_from_raw_route(&route.route_raw());
