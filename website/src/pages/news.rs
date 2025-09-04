@@ -81,7 +81,7 @@ impl Page for NewsIndex {
 #[route("/news/[slug]")]
 pub struct NewsPage;
 
-#[derive(Params, Clone)]
+#[derive(Params)]
 struct NewsPageParams {
     slug: String,
 }

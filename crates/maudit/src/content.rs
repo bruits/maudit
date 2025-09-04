@@ -366,8 +366,7 @@ impl<T> ContentSource<T> {
 
     pub fn into_routes<Params, Props>(&self, cb: impl Fn(&ContentEntry<T>) -> crate::page::Route<Params, Props>) -> Vec<crate::page::Route<Params, Props>>
     where
-        Params: Into<RouteParams> + Clone,
-        Props: Clone,
+        Params: Into<RouteParams>,
     {
         self.entries.iter().map(cb).collect()
     }

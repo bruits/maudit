@@ -3,7 +3,7 @@ use maudit::{content::UntypedMarkdownContent, page::prelude::*};
 #[route("/[file]")]
 pub struct Article;
 
-#[derive(Params, Clone)]
+#[derive(Params)]
 struct Params {
     file: String,
 }

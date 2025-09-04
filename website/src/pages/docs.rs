@@ -39,7 +39,7 @@ fn render_entry(entry: &ContentEntry<DocsContent>, ctx: &mut RouteContext) -> Ma
 #[route("/docs/[slug]")]
 pub struct DocsPage;
 
-#[derive(Params, Clone)]
+#[derive(Params)]
 struct DocsPageParams {
     slug: String,
 }

@@ -5,7 +5,7 @@ use crate::{content::ArticleContent, layout::layout};
 #[route("/articles/[article]")]
 pub struct Article;
 
-#[derive(Params, Clone)]
+#[derive(Params)]
 pub struct ArticleParams {
     pub article: String,
 }

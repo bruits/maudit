@@ -64,8 +64,7 @@ impl From<&[u8]> for RenderResult {
 #[derive(Debug, Clone)]
 pub struct Route<Params = RouteParams, Props = ()>
 where
-    Params: Into<RouteParams> + Clone,
-    Props: Clone,
+    Params: Into<RouteParams>,
 {
     pub params: Params,
     pub props: Props,
@@ -73,8 +72,7 @@ where
 
 impl<Params, Props> Route<Params, Props>
 where
-    Params: Into<RouteParams> + Clone,
-    Props: Clone,
+    Params: Into<RouteParams>,
 {
     pub fn new(params: Params, props: Props) -> Self {
         Self { params, props }
@@ -83,7 +81,7 @@ where
 
 impl<Params> Route<Params, ()>
 where
-    Params: Into<RouteParams> + Clone,
+    Params: Into<RouteParams>,
 {
     pub fn from_params(params: Params) -> Self {
         Self { params, props: () }
@@ -141,7 +139,7 @@ pub fn paginate_content<T, Params>(
     mut params_fn: impl FnMut(usize) -> Params,
 ) -> Vec<Route<Params, PaginationMeta>>
 where
-    Params: Into<RouteParams> + Clone,
+    Params: Into<RouteParams>,
 {
     if entries.is_empty() {
         return vec![];
@@ -284,8 +282,8 @@ pub struct DynamicRouteContext<'a> {
 /// ```
 pub trait Page<Params = RouteParams, Props = (), T = RenderResult>
 where
-    Params: Into<RouteParams> + Clone,
-    Props: Clone + 'static,
+    Params: Into<RouteParams>,
+    Props: 'static,
     T: Into<RenderResult>,
 {
     fn routes(&self, _ctx: &mut DynamicRouteContext) -> Vec<Route<Params, Props>> {
