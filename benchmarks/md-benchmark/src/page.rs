@@ -13,9 +13,11 @@ impl Page<Params> for Article {
         context
             .content
             .get_source::<UntypedMarkdownContent>("articles")
-            .into_routes(|entry| Route::from_params(Params {
-                file: entry.id.clone(),
-            }))
+            .into_routes(|entry| {
+                Route::from_params(Params {
+                    file: entry.id.clone(),
+                })
+            })
     }
 
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {

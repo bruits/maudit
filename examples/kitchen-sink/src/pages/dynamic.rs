@@ -12,7 +12,9 @@ pub struct Params {
 
 impl Page<Params> for DynamicExample {
     fn routes(&self, _: &mut DynamicRouteContext) -> Vec<Route<Params>> {
-        (0..1).map(|i| Route::from_params(Params { page: i })).collect()
+        (0..1)
+            .map(|i| Route::from_params(Params { page: i }))
+            .collect()
     }
 
     fn render(&self, ctx: &mut RouteContext) -> RenderResult {

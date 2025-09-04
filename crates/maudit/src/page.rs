@@ -353,7 +353,10 @@ pub trait InternalPage {
 /// We expose it because [`maudit_macros::route`] implements it for the user behind the scenes.
 pub trait FullPage: InternalPage + Sync {
     fn render_internal(&self, ctx: &mut RouteContext) -> RenderResult;
-    fn routes_internal(&self, context: &mut DynamicRouteContext) -> Vec<(RouteParams, Box<dyn Any + Send + Sync>)>;
+    fn routes_internal(
+        &self,
+        context: &mut DynamicRouteContext,
+    ) -> Vec<(RouteParams, Box<dyn Any + Send + Sync>)>;
 }
 
 pub fn get_page_url<T: Into<RouteParams>>(route: &impl FullPage, params: T) -> String {
@@ -374,8 +377,8 @@ pub mod prelude {
     //! use maudit::page::prelude::*;
     //! ```
     pub use super::{
-        DynamicRouteContext, Page, PaginationMeta, RenderResult, Route, RouteContext, RouteParams, 
-        get_page_url, get_page_slice, paginate_content,
+        DynamicRouteContext, Page, PaginationMeta, RenderResult, Route, RouteContext, RouteParams,
+        get_page_slice, get_page_url, paginate_content,
     };
     // TODO: Remove this internal re-export when possible
     #[doc(hidden)]
