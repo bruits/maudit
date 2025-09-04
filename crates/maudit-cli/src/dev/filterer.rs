@@ -16,6 +16,13 @@ impl Filterer for DevServerFilterer {
         let mut result = true;
 
         for tag in &event.tags {
+            // NOTE: This happens whenever the watch gets dropped and re-added, you get something like `rescan: user dropped`
+            // It's probable that this needs to be used to do some sort of action on the watch, not sure what yet
+            if let Tag::FileEventKind(FileEventKind::Other) = tag {
+                result = false;
+                break;
+            }
+
             if let Tag::Path { path, file_type: _ } = tag {
                 // TODO: Customizable dist path
                 if path.ancestors().any(|p| p.ends_with("dist")) {
