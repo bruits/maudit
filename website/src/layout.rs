@@ -73,12 +73,15 @@ pub fn layout(
                             div { (PreEscaped(include_str!("../assets/logo.svg")))}
                             div.flex.gap-x-6.grow.justify-end."basis-[0]".items-center {
                                 a href="https://bsky.app/profile/bruits.org" {
+                                    span.sr-only { "Follow Maudit on Bluesky" }
                                     (PreEscaped(include_str!("../assets/bsky.svg")))
                                 }
                                 a href="/chat/" {
+                                    span.sr-only { "Join the Maudit community on Discord" }
                                     (PreEscaped(include_str!("../assets/discord.svg")))
                                 }
                                 a href="https://github.com/bruits/maudit" {
+                                    span.sr-only { "View Maudit on GitHub" }
                                     (PreEscaped(include_str!("../assets/github.svg")))
                                 }
                             }

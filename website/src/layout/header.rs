@@ -24,9 +24,11 @@ pub fn header(_: &mut RouteContext, bottom_border: bool) -> Markup {
 
                 div.flex.gap-x-6 {
                     a href="/chat/" {
+                        span.sr-only { "Join the Maudit community on Discord" }
                         (PreEscaped(include_str!("../../assets/discord.svg")))
                     }
                     a href="https://github.com/bruits/maudit" {
+                        span.sr-only { "View Maudit on GitHub" }
                         (PreEscaped(include_str!("../../assets/github.svg")))
                     }
                 }

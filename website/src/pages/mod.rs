@@ -1,12 +1,13 @@
-mod index;
-pub use index::Index;
-mod docs;
-pub use docs::{DocsIndex, DocsPage};
-mod chat;
-pub use chat::ChatRedirect;
+macro_rules! pub_mod {
+    ($($mod:ident),*) => {
+        $(
+            mod $mod;
+            pub use $mod::*;
+        )*
+    };
+}
 
-mod news;
-pub use news::{NewsIndex, NewsPage};
+pub_mod!(index, docs, chat, news, contribute);
 
 #[path = "404.rs"]
 mod not_found;

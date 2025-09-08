@@ -26,12 +26,12 @@ impl Page for Index {
                             h2."sm:text-6xl"."text-5xl"."sm:w-[22ch]"."xl:w-[30ch]"."mb-2"."leading-[1.15]" {
                                 "Lo, " span.text-brand-red { "the still scrolls of the web"} ", unchanging and steadfast, at last!"
                             }
-                            p.opacity-80.italic {
+                            p.opacity-90.italic {
                                 "Or, in simpler words, " span.text-brand-red {"a static site generator"} "."
                             }
                             div.mt-6.leading-tight {
                                 a.btn.block.group.inline-block href="/docs/" { "Get Started" }
-                                p.opacity-80.italic { "or scroll down to learn more" }
+                                p.opacity-90.italic { "or scroll down to learn more" }
                             }
                         }
                     }

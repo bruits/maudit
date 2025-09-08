@@ -5,9 +5,7 @@ mod content;
 mod layout;
 mod pages;
 
-use pages::{ChatRedirect, DocsIndex, DocsPage, Index, NewsIndex, NewsPage};
-
-use crate::pages::NotFound;
+use pages::*;
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(
@@ -18,7 +16,8 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
             DocsPage,
             NewsPage,
             ChatRedirect,
-            NotFound
+            NotFound,
+            Contribute
         ],
         content_sources(),
         BuildOptions {
