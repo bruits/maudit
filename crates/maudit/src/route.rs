@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::page::{RouteParams, RouteType};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ParameterDef {
     key: String,
     index: usize,
@@ -140,8 +140,8 @@ mod tests {
     use crate::{
         page::{RouteParams, RouteType},
         route::{
-            extract_params_from_raw_route, get_route_file_path, get_route_type_from_route_params,
-            ParameterDef,
+            ParameterDef, extract_params_from_raw_route, get_route_file_path,
+            get_route_type_from_route_params,
         },
     };
 

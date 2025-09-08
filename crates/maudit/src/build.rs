@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -209,65 +209,30 @@ pub async fn build(
     };
 
     #[allow(clippy::mutable_key_type)] // Image's Hash does not depend on mutable fields
-    let mut build_pages_images: FxHashSet<assets::Image> = FxHashSet::default();
-    let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
-    let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
+    let build_pages_images: FxHashSet<assets::Image> = FxHashSet::default();
+    let build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
+    let build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
 
-    let mut page_count = 0;
+    let page_count = 0;
 
-    // TODO: This is fully serial. Parallelizing it is trivial with Rayon and stuff, but it doesn't necessarily make it
-    // faster in all cases, making it sometimes even slower due to the overhead. It'd be great to investigate and benchmark
-    // this.
+    // First, collect all the individual pages to render
+    let mut all_page_jobs: Vec<(
+        &dyn FullPage,
+        Vec<ParameterDef>,
+        RouteParams,
+        Option<Box<dyn std::any::Any + Send + Sync>>,
+        Option<Box<dyn std::any::Any + Send + Sync>>,
+        bool, // is_dynamic
+    )> = Vec::new();
+
+    // Collect static and dynamic pages
     for route in routes {
         let params_def = extract_params_from_raw_route(&route.route_raw());
         let route_type = get_route_type_from_route_params(&params_def);
         match route_type {
             RouteType::Static => {
-                let route_start = SystemTime::now();
-                let mut page_assets = assets::PageAssets {
-                    assets_dir: options.assets_dir.clone().into(),
-                    ..Default::default()
-                };
-
                 let params = RouteParams(FxHashMap::default());
-
-                let mut content = Content::new(&content_sources.0);
-                let mut ctx = RouteContext {
-                    raw_params: &params,
-                    content: &mut content,
-                    assets: &mut page_assets,
-                    current_url: get_route_url(&route.route_raw(), &params_def, &params),
-
-                    // Static routes have no params or props
-                    params: &(),
-                    props: &(),
-                };
-
-                let (file_path, mut file) =
-                    create_route_file(*route, &params_def, &params, &dist_dir)?;
-                let result = route.render_internal(&mut ctx);
-
-                finish_route(
-                    result,
-                    &mut file,
-                    &page_assets.included_styles,
-                    &page_assets.included_scripts,
-                    route.route_raw(),
-                )?;
-
-                info!(target: "pages", "{} -> {} {}", get_route_url(&route.route_raw(), &params_def, &params), file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap());
-
-                build_pages_images.extend(page_assets.images);
-                build_pages_scripts.extend(page_assets.scripts);
-                build_pages_styles.extend(page_assets.styles);
-
-                build_metadata.add_page(
-                    route.route_raw().to_string(),
-                    file_path.to_string_lossy().to_string(),
-                    None,
-                );
-
-                page_count += 1;
+                all_page_jobs.push((*route, params_def, params, None, None, false));
             }
             RouteType::Dynamic => {
                 let mut dynamic_content = Content::new(&content_sources.0);
@@ -275,69 +240,125 @@ pub async fn build(
                     content: &mut dynamic_content,
                 };
 
-                let routes = route.routes_internal(&mut dynamic_route_context);
+                let routes_data = route.routes_internal(&mut dynamic_route_context);
 
-                if routes.is_empty() {
+                if routes_data.is_empty() {
                     info!(target: "build", "{} is a dynamic route, but its implementation of Page::routes returned an empty Vec. No pages will be generated for this route.", route.route_raw().to_string().bold());
                     continue;
                 } else {
                     info!(target: "build", "{}", route.route_raw().to_string().bold());
                 }
 
-                for (params, typed_params, props) in routes {
-                    let mut pages_assets = assets::PageAssets {
-                        assets_dir: options.assets_dir.clone().into(),
-                        ..Default::default()
-                    };
-                    let route_start = SystemTime::now();
-                    let mut content = Content::new(&content_sources.0);
-                    let mut ctx = RouteContext {
-                        raw_params: &params,
-                        params: typed_params.as_ref(),
-                        props: props.as_ref(),
-                        content: &mut content,
-                        assets: &mut pages_assets,
-                        current_url: get_route_url(&route.route_raw(), &params_def, &params),
-                    };
-
-                    let (file_path, mut file) =
-                        create_route_file(*route, &params_def, &params, &dist_dir)?;
-
-                    let result = route.render_internal(&mut ctx);
-
-                    build_metadata.add_page(
-                        route.route_raw().to_string(),
-                        file_path.to_string_lossy().to_string(),
-                        Some(params.0),
-                    );
-
-                    finish_route(
-                        result,
-                        &mut file,
-                        &pages_assets.included_styles,
-                        &pages_assets.included_scripts,
-                        route.route_raw(),
-                    )?;
-
-                    info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap());
-
-                    build_pages_images.extend(pages_assets.images);
-                    build_pages_scripts.extend(pages_assets.scripts);
-                    build_pages_styles.extend(pages_assets.styles);
-
-                    page_count += 1;
+                for (params, typed_params, props) in routes_data {
+                    all_page_jobs.push((
+                        *route,
+                        params_def.clone(),
+                        params,
+                        Some(typed_params),
+                        Some(props),
+                        true,
+                    ));
                 }
             }
         }
     }
 
-    info!(target: "pages", "{}", format!("generated {} pages in {}", page_count,  format_elapsed_time(pages_start.elapsed(), &section_format_options).unwrap()).bold());
+    // Wrap shared data in mutexes for parallel access
+    let build_pages_images = Mutex::new(build_pages_images);
+    let build_pages_scripts = Mutex::new(build_pages_scripts);
+    let build_pages_styles = Mutex::new(build_pages_styles);
+    let build_metadata_mutex = Mutex::new(&mut build_metadata);
+    let page_count_mutex = Mutex::new(page_count);
 
-    if !build_pages_styles.is_empty() || !build_pages_scripts.is_empty() {
+    // Now render all pages in parallel
+    let results: Vec<Result<(), String>> = all_page_jobs
+        .par_iter()
+        .map(|(route, params_def, params, typed_params_opt, props_opt, is_dynamic)| -> Result<(), String> {
+            let route_start = SystemTime::now();
+            let mut page_assets = assets::PageAssets {
+                assets_dir: options.assets_dir.clone().into(),
+                ..Default::default()
+            };
+
+            let mut content = Content::new(&content_sources.0);
+            let mut ctx = RouteContext {
+                raw_params: params,
+                content: &mut content,
+                assets: &mut page_assets,
+                current_url: get_route_url(&route.route_raw(), params_def, params),
+                params: typed_params_opt.as_ref().map(|p| p.as_ref()).unwrap_or(&()),
+                props: props_opt.as_ref().map(|p| p.as_ref()).unwrap_or(&()),
+            };
+
+            let (file_path, mut file) = create_route_file(*route, params_def, params, &dist_dir)
+                .map_err(|e| format!("Failed to create route file: {}", e))?;
+
+            let result = route.render_internal(&mut ctx);
+
+            finish_route(
+                result,
+                &mut file,
+                &page_assets.included_styles,
+                &page_assets.included_scripts,
+                route.route_raw(),
+            ).map_err(|e| format!("Failed to finish route: {}", e))?;
+
+            // Thread-safe updates using mutexes
+            {
+                let mut images = build_pages_images.lock().unwrap();
+                images.extend(page_assets.images);
+            }
+            {
+                let mut scripts = build_pages_scripts.lock().unwrap();
+                scripts.extend(page_assets.scripts);
+            }
+            {
+                let mut styles = build_pages_styles.lock().unwrap();
+                styles.extend(page_assets.styles);
+            }
+            {
+                let mut metadata = build_metadata_mutex.lock().unwrap();
+                metadata.add_page(
+                    route.route_raw().to_string(),
+                    file_path.to_string_lossy().to_string(),
+                    if typed_params_opt.is_some() { Some(params.0.clone()) } else { None },
+                );
+            }
+            {
+                let mut count = page_count_mutex.lock().unwrap();
+                *count += 1;
+            }
+
+            let display_format = if *is_dynamic {
+                format!("├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap())
+            } else {
+                format!("{} -> {} {}", get_route_url(&route.route_raw(), params_def, params), file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap())
+            };
+            info!(target: "pages", "{}", display_format);
+
+            Ok(())
+        })
+        .collect();
+
+    // Handle any errors from parallel processing
+    for result in results {
+        if let Err(e) = result {
+            return Err(e.into());
+        }
+    }
+
+    // Extract data from mutexes
+    let final_page_count = *page_count_mutex.lock().unwrap();
+    let final_build_pages_images = build_pages_images.into_inner().unwrap();
+    let final_build_pages_scripts = build_pages_scripts.into_inner().unwrap();
+    let final_build_pages_styles = build_pages_styles.into_inner().unwrap();
+    info!(target: "pages", "{}", format!("generated {} pages in {}", final_page_count, format_elapsed_time(pages_start.elapsed(), &section_format_options).unwrap()).bold());
+
+    if !final_build_pages_styles.is_empty() || !final_build_pages_scripts.is_empty() {
         let assets_start = SystemTime::now();
         print_title("generating assets");
 
-        let css_inputs = build_pages_styles
+        let css_inputs = final_build_pages_styles
             .iter()
             .map(|style| InputItem {
                 name: Some(
@@ -358,7 +379,7 @@ pub async fn build(
             })
             .collect::<Vec<InputItem>>();
 
-        let bundler_inputs = build_pages_scripts
+        let bundler_inputs = final_build_pages_scripts
             .iter()
             .map(|script| InputItem {
                 import: script.path().to_string_lossy().to_string(),
@@ -389,7 +410,7 @@ pub async fn build(
                 },
                 vec![Arc::new(TailwindPlugin {
                     tailwind_path: options.tailwind_binary_path.clone(),
-                    tailwind_entries: build_pages_styles
+                    tailwind_entries: final_build_pages_styles
                         .iter()
                         .filter_map(|style| {
                             if style.tailwind {
@@ -410,11 +431,11 @@ pub async fn build(
         info!(target: "build", "{}", format!("Assets generated in {}", format_elapsed_time(assets_start.elapsed(), &section_format_options).unwrap()).bold());
     }
 
-    if !build_pages_images.is_empty() {
+    if !final_build_pages_images.is_empty() {
         print_title("processing images");
 
         let start_time = SystemTime::now();
-        build_pages_images.par_iter().for_each(|image| {
+        final_build_pages_images.par_iter().for_each(|image| {
             let start_process = SystemTime::now();
             let dest_path = assets_dir.join(image.final_file_name());
             if let Some(image_options) = &image.options {
