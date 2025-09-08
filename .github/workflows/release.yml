@@ -23,7 +23,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish crates (tag + publish)
-        uses: bruits/sampo/crates/sampo-github-action@main
+        uses: bruits/sampo/crates/sampo-github-action
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -39,7 +39,7 @@ jobs:
           fetch-depth: 0
 
       - name: Open/refresh Release PR
-        uses: bruits/sampo/crates/sampo-github-action@main
+        uses: bruits/sampo/crates/sampo-github-action
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
