@@ -2,7 +2,7 @@ use colored::{ColoredString, Colorize};
 use env_logger::{Builder, Env};
 use log::info;
 use std::io::Write;
-use std::time::{Duration, SystemTimeError};
+use std::time::Duration;
 
 pub struct FormatElapsedTimeOptions<'a> {
     pub(crate) sec_yellow_threshold: u64,
@@ -29,7 +29,8 @@ pub fn init_logging() {
 
     let _ = Builder::from_env(logging_env)
         .format(|buf, record| {
-            if std::env::args().any(|arg| arg == "--quiet") || std::env::var("MAUDIT_QUIET").is_ok() {
+            if std::env::args().any(|arg| arg == "--quiet") || std::env::var("MAUDIT_QUIET").is_ok()
+            {
                 return Ok(());
             }
 
@@ -50,12 +51,7 @@ pub fn init_logging() {
         .try_init();
 }
 
-pub fn format_elapsed_time(
-    elapsed: Result<Duration, SystemTimeError>,
-    options: &FormatElapsedTimeOptions,
-) -> Result<ColoredString, SystemTimeError> {
-    let elapsed = elapsed?;
-
+pub fn format_elapsed_time(elapsed: Duration, options: &FormatElapsedTimeOptions) -> ColoredString {
     let result = match elapsed.as_secs() {
         secs if secs > options.sec_red_threshold => format!("{}m", secs / 60).red(),
         secs if secs > options.sec_yellow_threshold => format!("{}s", secs).yellow(),
@@ -81,9 +77,9 @@ pub fn format_elapsed_time(
     };
 
     if let Some(additional_fn) = &options.additional_fn {
-        Ok(additional_fn(result))
+        additional_fn(result)
     } else {
-        Ok(result)
+        result
     }
 }
 

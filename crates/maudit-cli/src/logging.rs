@@ -1,8 +1,5 @@
 use colored::{ColoredString, Colorize};
-use std::{
-    fmt,
-    time::{Duration, SystemTimeError},
-};
+use std::{fmt, time::Duration};
 use tracing::{Event, Subscriber};
 use tracing_subscriber::{
     fmt::{format, FmtContext, FormatEvent, FormatFields},
@@ -43,12 +40,7 @@ impl Default for FormatElapsedTimeOptions<'_> {
     }
 }
 
-pub fn format_elapsed_time(
-    elapsed: Result<Duration, SystemTimeError>,
-    options: &FormatElapsedTimeOptions,
-) -> Result<ColoredString, SystemTimeError> {
-    let elapsed = elapsed?;
-
+pub fn format_elapsed_time(elapsed: Duration, options: &FormatElapsedTimeOptions) -> ColoredString {
     let result = match elapsed.as_secs() {
         secs if secs > 60 => {
             let mins = secs / 60;
@@ -79,9 +71,9 @@ pub fn format_elapsed_time(
     };
 
     if let Some(additional_fn) = &options.additional_fn {
-        Ok(additional_fn(result))
+        additional_fn(result)
     } else {
-        Ok(result)
+        result
     }
 }
 

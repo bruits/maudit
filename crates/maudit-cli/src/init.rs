@@ -6,6 +6,7 @@ use std::{
 use colored::Colorize;
 use flate2::read::GzDecoder;
 use inquire::{validator::Validation, Confirm, Select, Text};
+use quanta::Instant;
 use rand::seq::IndexedRandom;
 use spinach::{Color, Spinner};
 use toml_edit::DocumentMut;
@@ -161,11 +162,11 @@ pub fn start_new_project(dry_run: &bool) {
         .symbols(vec!["◐", "◓", "◑", "◒"])
         .start();
 
-    let start_time = std::time::Instant::now();
+    let start_time = Instant::now();
     if !dry_run {
         std::fs::create_dir_all(&project_path).expect("Failed to create project directory");
     }
-    let elasped_time = format_elapsed_time(Ok(start_time.elapsed()), &Default::default()).unwrap();
+    let elasped_time = format_elapsed_time(start_time.elapsed(), &Default::default());
 
     directory_spinner
         .text(&format!(" Created directory {}", elasped_time))
@@ -177,12 +178,12 @@ pub fn start_new_project(dry_run: &bool) {
         .symbols(vec!["◐", "◓", "◑", "◒"])
         .start();
 
-    let start_time = std::time::Instant::now();
+    let start_time = Instant::now();
     if !dry_run {
         download_and_unpack_template(&template, &project_path)
             .expect("Failed to download template");
     }
-    let elasped_time = format_elapsed_time(Ok(start_time.elapsed()), &Default::default()).unwrap();
+    let elasped_time = format_elapsed_time(start_time.elapsed(), &Default::default());
 
     template_spinner
         .text(&format!(" Downloaded template {}", elasped_time))
@@ -195,7 +196,7 @@ pub fn start_new_project(dry_run: &bool) {
             .symbols(vec!["◐", "◓", "◑", "◒"])
             .start();
 
-        let start_time = std::time::Instant::now();
+        let start_time = Instant::now();
 
         let init_result = if !dry_run {
             init_git_repo(&project_path, dry_run)
@@ -203,8 +204,7 @@ pub fn start_new_project(dry_run: &bool) {
             Ok(())
         };
 
-        let elasped_time =
-            format_elapsed_time(Ok(start_time.elapsed()), &Default::default()).unwrap();
+        let elasped_time = format_elapsed_time(start_time.elapsed(), &Default::default());
 
         match init_result {
             Ok(_) => git_spinner

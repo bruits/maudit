@@ -1,4 +1,4 @@
-use std::{process::Termination, time::SystemTime};
+use std::{process::Termination, time::Instant};
 
 use rustc_hash::FxHashMap;
 
@@ -22,14 +22,14 @@ pub struct StaticAssetOutput {
 /// Metadata returned by [`coronate()`](crate::coronate) after a successful build.
 #[derive(Debug)]
 pub struct BuildOutput {
-    pub start_time: SystemTime,
+    pub start_time: Instant,
     pub pages: Vec<PageOutput>,
     pub assets: Vec<String>,
     pub static_files: Vec<StaticAssetOutput>,
 }
 
 impl BuildOutput {
-    pub fn new(start_time: SystemTime) -> Self {
+    pub fn new(start_time: Instant) -> Self {
         Self {
             start_time,
             pages: Vec::new(),
@@ -67,7 +67,7 @@ impl BuildOutput {
 
 impl Default for BuildOutput {
     fn default() -> Self {
-        Self::new(SystemTime::now())
+        Self::new(Instant::now())
     }
 }
 

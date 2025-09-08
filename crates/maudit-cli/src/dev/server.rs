@@ -11,6 +11,7 @@ use axum::{
     routing::get,
     Router,
 };
+use quanta::Instant;
 use tokio::{net::TcpSocket, signal, sync::broadcast};
 use tracing::{debug, Level};
 
@@ -59,7 +60,7 @@ fn inject_live_reload_script(html_content: &str, socket_addr: SocketAddr, host: 
 }
 
 pub async fn start_dev_web_server(
-    start_time: std::time::Instant,
+    start_time: Instant,
     tx: broadcast::Sender<WebSocketMessage>,
     host: bool,
 ) {
