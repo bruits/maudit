@@ -236,11 +236,15 @@ pub async fn build(
                     raw_params: &params,
                     content: &mut content,
                     assets: &mut page_assets,
-                    current_url: String::new(), // TODO
+                    current_url: get_route_url(&route.route_raw(), &params_def, &params),
+
+                    // Static routes have no params or props
+                    params: &(),
+                    props: &(),
                 };
 
                 let (file_path, mut file) =
-                    create_route_file(*route, &params_def, ctx.raw_params, &dist_dir)?;
+                    create_route_file(*route, &params_def, &params, &dist_dir)?;
                 let result = route.render_internal(&mut ctx);
 
                 finish_route(
@@ -280,7 +284,7 @@ pub async fn build(
                     info!(target: "build", "{}", route.route_raw().to_string().bold());
                 }
 
-                for params in routes {
+                for (params, typed_params, props) in routes {
                     let mut pages_assets = assets::PageAssets {
                         assets_dir: options.assets_dir.clone().into(),
                         ..Default::default()
@@ -289,13 +293,15 @@ pub async fn build(
                     let mut content = Content::new(&content_sources.0);
                     let mut ctx = RouteContext {
                         raw_params: &params,
+                        params: typed_params.as_ref(),
+                        props: props.as_ref(),
                         content: &mut content,
                         assets: &mut pages_assets,
-                        current_url: String::new(), // TODO
+                        current_url: get_route_url(&route.route_raw(), &params_def, &params),
                     };
 
                     let (file_path, mut file) =
-                        create_route_file(*route, &params_def, ctx.raw_params, &dist_dir)?;
+                        create_route_file(*route, &params_def, &params, &dist_dir)?;
 
                     let result = route.render_internal(&mut ctx);
 

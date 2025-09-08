@@ -36,8 +36,16 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 self.render(ctx).into()
             }
 
-            fn routes_internal(&self, ctx: &mut maudit::page::DynamicRouteContext) -> Vec<maudit::page::RouteParams> {
-                self.routes(ctx).iter().map(Into::into).collect()
+            fn routes_internal(&self, ctx: &mut maudit::page::DynamicRouteContext) -> Vec<(maudit::page::RouteParams, Box<dyn std::any::Any + Send + Sync>, Box<dyn std::any::Any + Send + Sync>)> {
+                self.routes(ctx)
+                    .into_iter()
+                    .map(|route| {
+                        let raw_params: maudit::page::RouteParams = (&route.params).into();
+                        let typed_params: Box<dyn std::any::Any + Send + Sync> = Box::new(route.params);
+                        let props: Box<dyn std::any::Any + Send + Sync> = Box::new(route.props);
+                        (raw_params, typed_params, props)
+                    })
+                    .collect()
             }
         }
 
@@ -63,14 +71,6 @@ pub fn derive_params(item: TokenStream) -> TokenStream {
 
     // Add a from Hashmap conversion
     let expanded = quote! {
-        impl From<RouteParams> for #struct_name {
-            fn from(params: RouteParams) -> Self {
-                #struct_name {
-                    #(#fields: maudit::params::FromParam::from_param(params.0.get(stringify!(#fields)).unwrap()).unwrap(),)*
-                }
-            }
-        }
-
         impl Into<RouteParams> for #struct_name {
             fn into(self) -> RouteParams {
                 let mut map = maudit::FxHashMap::default();
