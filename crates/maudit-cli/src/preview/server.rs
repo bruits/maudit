@@ -7,6 +7,7 @@ use axum::{
     response::IntoResponse,
     Router,
 };
+use quanta::Instant;
 use tokio::{fs, net::TcpSocket};
 use tracing::{debug, Level};
 
@@ -18,7 +19,7 @@ use tower_http::{
 use crate::server_utils::{find_open_port, log_server_start, CustomOnResponse};
 
 pub async fn start_preview_web_server(dist_dir: PathBuf, host: bool) {
-    let start_time = std::time::Instant::now();
+    let start_time = Instant::now();
 
     async fn handle_404(dist_dir: PathBuf) -> impl IntoResponse {
         let content = match fs::read_to_string(dist_dir.join("404.html")).await {

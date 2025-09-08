@@ -1,6 +1,7 @@
 use axum::{body::Body, http::Uri, response::Response};
 use colored::Colorize;
 use local_ip_address::local_ip;
+use quanta::Instant;
 use std::{
     net::{IpAddr, SocketAddr},
     time::Duration,
@@ -11,18 +12,12 @@ use tracing::{debug, info, Span};
 
 use crate::logging::{format_elapsed_time, FormatElapsedTimeOptions};
 
-pub fn log_server_start(
-    start_time: std::time::Instant,
-    host: bool,
-    addr: SocketAddr,
-    server_type: &str,
-) {
+pub fn log_server_start(start_time: Instant, host: bool, addr: SocketAddr, server_type: &str) {
     info!(name: "SKIP_FORMAT", "");
     let elapsed_time = format_elapsed_time(
-        Ok(start_time.elapsed()),
+        start_time.elapsed(),
         &FormatElapsedTimeOptions::default_dev(),
-    )
-    .unwrap();
+    );
     info!(name: "SKIP_FORMAT", "{} {}", "Maudit 👑".bold().bright_red(), format!("{} server started in {}", server_type, elapsed_time));
     info!(name: "SKIP_FORMAT", "");
 
@@ -75,8 +70,7 @@ impl OnResponse<Body> for CustomOnResponse {
             .to_string()
             .bold();
 
-        let latency =
-            format_elapsed_time(Ok(latency), &FormatElapsedTimeOptions::default()).unwrap();
+        let latency = format_elapsed_time(latency, &FormatElapsedTimeOptions::default());
 
         let message = format!("{} {} {}", status, uri, latency);
 

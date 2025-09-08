@@ -7,7 +7,7 @@ use std::{
     process::Command,
     str::FromStr,
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 use crate::{
@@ -70,7 +70,7 @@ impl Plugin for TailwindPlugin {
             .iter()
             .any(|entry| entry.canonicalize().unwrap().to_string_lossy() == args.id)
         {
-            let start_tailwind = SystemTime::now();
+            let start_tailwind = Instant::now();
             let tailwind_output =
                 Command::new(&self.tailwind_path)
                     .args(["--input", args.id])
@@ -96,7 +96,7 @@ impl Plugin for TailwindPlugin {
                 panic!("{}", error_message);
             }
 
-            info!("Tailwind took {:?}", start_tailwind.elapsed().unwrap());
+            info!("Tailwind took {:?}", start_tailwind.elapsed());
 
             let output = String::from_utf8_lossy(&tailwind_output.stdout);
             let (code, map) = if let Some((code, map)) = output.split_once("/*# sourceMappingURL") {
@@ -139,7 +139,7 @@ pub async fn build(
     content_sources: &mut ContentSources,
     options: &BuildOptions,
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
-    let build_start = SystemTime::now();
+    let build_start = Instant::now();
     let mut build_metadata = BuildOutput::new(build_start);
 
     // Create a directory for the output
@@ -171,22 +171,22 @@ pub async fn build(
 
     info!(target: "build", "Output directory: {}", dist_dir.to_string_lossy());
 
-    let content_sources_start = SystemTime::now();
+    let content_sources_start = Instant::now();
     print_title("initializing content sources");
     content_sources.0.iter_mut().for_each(|source| {
-        let source_start = SystemTime::now();
+        let source_start = Instant::now();
         source.init();
 
-        info!(target: "content", "{} initialized in {}", source.get_name(), format_elapsed_time(source_start.elapsed(), &FormatElapsedTimeOptions::default()).unwrap());
+        info!(target: "content", "{} initialized in {}", source.get_name(), format_elapsed_time(source_start.elapsed(), &FormatElapsedTimeOptions::default()));
     });
 
     info!(target: "content", "{}", format!("Content sources initialized in {}", format_elapsed_time(
         content_sources_start.elapsed(),
         &FormatElapsedTimeOptions::default(),
-    ).unwrap()).bold());
+    )).bold());
 
     print_title("generating pages");
-    let pages_start = SystemTime::now();
+    let pages_start = Instant::now();
 
     let route_format_options = FormatElapsedTimeOptions {
         additional_fn: Some(&|msg: ColoredString| {
@@ -223,7 +223,7 @@ pub async fn build(
         let route_type = get_route_type_from_route_params(&params_def);
         match route_type {
             RouteType::Static => {
-                let route_start = SystemTime::now();
+                let route_start = Instant::now();
                 let mut page_assets = assets::PageAssets {
                     assets_dir: options.assets_dir.clone().into(),
                     ..Default::default()
@@ -255,7 +255,7 @@ pub async fn build(
                     route.route_raw(),
                 )?;
 
-                info!(target: "pages", "{} -> {} {}", get_route_url(&route.route_raw(), &params_def, &params), file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap());
+                info!(target: "pages", "{} -> {} {}", get_route_url(&route.route_raw(), &params_def, &params), file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
                 build_pages_images.extend(page_assets.images);
                 build_pages_scripts.extend(page_assets.scripts);
@@ -289,7 +289,7 @@ pub async fn build(
                         assets_dir: options.assets_dir.clone().into(),
                         ..Default::default()
                     };
-                    let route_start = SystemTime::now();
+                    let route_start = Instant::now();
                     let mut content = Content::new(&content_sources.0);
                     let mut ctx = RouteContext {
                         raw_params: &params,
@@ -319,7 +319,7 @@ pub async fn build(
                         route.route_raw(),
                     )?;
 
-                    info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options).unwrap());
+                    info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
                     build_pages_images.extend(pages_assets.images);
                     build_pages_scripts.extend(pages_assets.scripts);
@@ -331,10 +331,10 @@ pub async fn build(
         }
     }
 
-    info!(target: "pages", "{}", format!("generated {} pages in {}", page_count,  format_elapsed_time(pages_start.elapsed(), &section_format_options).unwrap()).bold());
+    info!(target: "pages", "{}", format!("generated {} pages in {}", page_count,  format_elapsed_time(pages_start.elapsed(), &section_format_options)).bold());
 
     if !build_pages_styles.is_empty() || !build_pages_scripts.is_empty() {
-        let assets_start = SystemTime::now();
+        let assets_start = Instant::now();
         print_title("generating assets");
 
         let css_inputs = build_pages_styles
@@ -407,15 +407,15 @@ pub async fn build(
             // TODO: Add outputted chunks to build_metadata
         }
 
-        info!(target: "build", "{}", format!("Assets generated in {}", format_elapsed_time(assets_start.elapsed(), &section_format_options).unwrap()).bold());
+        info!(target: "build", "{}", format!("Assets generated in {}", format_elapsed_time(assets_start.elapsed(), &section_format_options)).bold());
     }
 
     if !build_pages_images.is_empty() {
         print_title("processing images");
 
-        let start_time = SystemTime::now();
+        let start_time = Instant::now();
         build_pages_images.par_iter().for_each(|image| {
-            let start_process = SystemTime::now();
+            let start_process = Instant::now();
             let dest_path = assets_dir.join(image.final_file_name());
             if let Some(image_options) = &image.options {
                 images::process_image(image, &dest_path, image_options);
@@ -430,28 +430,28 @@ pub async fn build(
                     )
                 });
             }
-            info!(target: "assets", "{} -> {} {}", image.path().to_string_lossy(), dest_path.to_string_lossy().dimmed(), format_elapsed_time(start_process.elapsed(), &route_format_options).unwrap().dimmed());
+            info!(target: "assets", "{} -> {} {}", image.path().to_string_lossy(), dest_path.to_string_lossy().dimmed(), format_elapsed_time(start_process.elapsed(), &route_format_options).dimmed());
         });
 
-        info!(target: "assets", "{}", format!("Images processed in {}", format_elapsed_time(start_time.elapsed(), &section_format_options).unwrap()).bold());
+        info!(target: "assets", "{}", format!("Images processed in {}", format_elapsed_time(start_time.elapsed(), &section_format_options)).bold());
     }
 
     // Check if static directory exists
     if static_dir.exists() {
-        let assets_start = SystemTime::now();
+        let assets_start = Instant::now();
         print_title("copying assets");
 
         // Copy the static directory to the dist directory
         copy_recursively(&static_dir, &dist_dir, &mut build_metadata)?;
 
-        info!(target: "build", "{}", format!("Assets copied in {}", format_elapsed_time(assets_start.elapsed(), &FormatElapsedTimeOptions::default()).unwrap()).bold());
+        info!(target: "build", "{}", format!("Assets copied in {}", format_elapsed_time(assets_start.elapsed(), &FormatElapsedTimeOptions::default())).bold());
     }
 
     // Remove temporary files
     let _ = remove_dir_all(&tmp_dir);
 
     info!(target: "SKIP_FORMAT", "{}", "");
-    info!(target: "build", "{}", format!("Build completed in {}", format_elapsed_time(build_start.elapsed(), &section_format_options).unwrap()).bold());
+    info!(target: "build", "{}", format!("Build completed in {}", format_elapsed_time(build_start.elapsed(), &section_format_options)).bold());
 
     clean_up_handle.await.unwrap();
 

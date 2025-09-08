@@ -5,6 +5,7 @@ pub(crate) mod server;
 mod filterer;
 
 use filterer::DevServerFilterer;
+use quanta::Instant;
 use server::WebSocketMessage;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -18,7 +19,7 @@ use watchexec::{
 use crate::logging::{format_elapsed_time, FormatElapsedTimeOptions};
 
 pub async fn start_dev_env(cwd: &str, host: bool) -> io::Result<()> {
-    let start_time = std::time::Instant::now();
+    let start_time = Instant::now();
     info!(name: "dev", "Preparing dev environment…");
 
     // Do initial sync build
@@ -29,7 +30,7 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> io::Result<()> {
         .unwrap();
     let duration = start_time.elapsed();
     let formatted_elasped_time =
-        format_elapsed_time(Ok(duration), &FormatElapsedTimeOptions::default_dev()).unwrap();
+        format_elapsed_time(duration, &FormatElapsedTimeOptions::default_dev());
 
     if command.status.success() {
         info!(name: "build", "Initial build finished {}", formatted_elasped_time);
@@ -87,7 +88,7 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> io::Result<()> {
 
                         let duration = *finished - *started;
                         let formatted_elasped_time =
-                            format_elapsed_time(Ok(duration), &FormatElapsedTimeOptions::default_dev()).unwrap();
+                            format_elapsed_time(duration, &FormatElapsedTimeOptions::default_dev());
 
                         match status {
                             watchexec_events::ProcessEnd::ExitError(_) => {
