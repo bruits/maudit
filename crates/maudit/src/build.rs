@@ -234,11 +234,13 @@ pub async fn build(
                 let mut content = Content::new(&content_sources.0);
                 let mut ctx = RouteContext {
                     raw_params: &params,
-                    params: &(),
-                    props: &(), // Static routes have no props
                     content: &mut content,
                     assets: &mut page_assets,
                     current_url: get_route_url(&route.route_raw(), &params_def, &params),
+
+                    // Static routes have no params or props
+                    params: &(),
+                    props: &(),
                 };
 
                 let (file_path, mut file) =

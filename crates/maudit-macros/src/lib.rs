@@ -71,14 +71,6 @@ pub fn derive_params(item: TokenStream) -> TokenStream {
 
     // Add a from Hashmap conversion
     let expanded = quote! {
-        impl From<RouteParams> for #struct_name {
-            fn from(params: RouteParams) -> Self {
-                #struct_name {
-                    #(#fields: maudit::params::FromParam::from_param(params.0.get(stringify!(#fields)).unwrap()).unwrap(),)*
-                }
-            }
-        }
-
         impl Into<RouteParams> for #struct_name {
             fn into(self) -> RouteParams {
                 let mut map = maudit::FxHashMap::default();
