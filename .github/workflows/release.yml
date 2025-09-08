@@ -1,6 +1,7 @@
 name: Release / Publish
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -23,7 +24,7 @@ jobs:
           fetch-depth: 0
 
       - name: Publish crates (tag + publish)
-        uses: bruits/sampo/crates/sampo-github-action
+        uses: bruits/sampo/crates/sampo-github-action@main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -39,7 +40,7 @@ jobs:
           fetch-depth: 0
 
       - name: Open/refresh Release PR
-        uses: bruits/sampo/crates/sampo-github-action
+        uses: bruits/sampo/crates/sampo-github-action@main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
