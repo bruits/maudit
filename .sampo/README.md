@@ -1,0 +1,115 @@
+# Sampo
+
+Automate changelogs, versioning, and publishing—even for monorepos across multiple package registries. Currently supported ecosystems: Rust ([Crates.io](https://crates.io))... And more coming soon!
+
+## Getting Started
+
+Install Sampo using Cargo:
+
+```bash
+cargo install sampo
+```
+
+Initialize Sampo in your repository:
+
+```bash
+sampo init
+```
+
+This command creates a `.sampo` directory at your repository root:
+
+```
+.sampo/
+├─ changesets/ <- Individual changeset files describing pending changes
+├─ config.toml <- Sampo configuration (package settings, registry options)
+└─ README.md <- A copy of this documentation
+```
+
+### Main concepts
+
+**Version bump**: Sampo enforces [Semantic Versioning](https://semver.org/) (SemVer) to indicate the nature of changes in each release. Versions follow the `MAJOR.MINOR.PATCH` format where:
+- **patch**: Bug fixes and backwards-compatible changes
+- **minor**: New features that are backwards-compatible
+- **major**: Breaking changes that are not backwards-compatible
+
+For example, a user can safely update from version `1.2.3` to `1.2.4` (patch) or `1.3.0` (minor), but should review changes before updating to `2.0.0` (major).
+
+**Changeset**: A markdown file describing what changed and how to version affected packages. Each changeset specifies which packages to bump and if it should be a patch, minor, or major update.
+
+```
+---
+packages:
+  - example
+release: minor
+---
+
+A helpful description of the changes.
+```
+
+**Changelog**: Automatically generated file listing all changes for each package version. Sampo consumes changesets to build comprehensive changelogs with semantic versioning.
+
+**Release**: The process of consuming changesets to bump package versions, update changelogs, and create git tags. Sampo works seamlessly with **monorepos** containing multiple packages and supports publishing to **multiple registries** across different ecosystems.
+
+**Internal dependencies**: Sampo detects packages within the same repository that depend on each other and automatically manages their versions.
+  - By default, dependent packages are automatically patched when an internal dependency is updated. For example: if `a@0.1.0` depends on `b@0.1.0` and `b` is updated to `0.2.0`, then `a` will be automatically bumped to `0.1.1` (patch). If `a` needs a major or minor change due to `b`'s update, it should be explicitly specified in a changeset.
+  - **Fixed dependencies** (see [configuration](#configuration)) always bump together with the same version, even if not directly affected. For example: if `a@1.0.0` and `b@1.0.0` are in a fixed group and `b` is updated to `2.0.0`, then `a` will also be bumped to `2.0.0`.
+  - **Linked dependencies** (see [configuration](#configuration)) apply the highest bump level to affected packages and their dependents. For example: if `a@1.0.0` depends on `b@1.0.0` in a linked group and `b` is updated to `2.0.0` (major), then `a` will also be bumped to `2.0.0`. If `a` is later updated to `2.1.0` (minor), `b` remains at `2.0.0` since it's not affected. Finally, if `b` has a patch update, both `a` and `b` will be bumped with patch level (the highest in the group).
+
+### Usage
+
+**Creating a changeset**: Use `sampo add` to create a new changeset file. The command guides you through selecting packages and describing changes. Use [Sampo GitHub bot](https://github.com/bruits/sampo/tree/main/crates/sampo-github-bot) to get reminders on each PR without a changeset.
+
+**Consuming changesets**: Run `sampo release` to process all pending changesets, bump package versions, and update changelogs. This can be automated in CI/CD pipelines using [Sampo GitHub Action](../sampo-github-action).
+
+As long as the release is not finalized, you can continue to add changesets and re-run the `sampo release` command. Sampo will update package versions and pending changelogs accordingly.
+
+**Publishing**: After running `sampo release`, use `sampo publish` to publish updated packages to their respective registries and tag the current versions. This step can also be automated in CI/CD pipelines using [Sampo GitHub Action](../sampo-github-action).
+
+## Configuration
+
+The `.sampo/config.toml` file allows you to customize Sampo's behavior. Example configuration:
+
+```toml
+[github]
+repository = "owner/repo"
+
+[changelog]
+show_commit_hash = true
+show_acknowledgments = true
+
+[packages]
+fixed_dependencies = [["pkg-a", "pkg-b"], ["pkg-c", "pkg-d"]]
+linked_dependencies = [["pkg-e", "pkg-f"], ["pkg-g", "pkg-h"]]
+```
+
+### `[github]` section
+
+`repository`: The GitHub repository slug in the format "owner/repo". If not set, Sampo uses the `GITHUB_REPOSITORY` environment variable or attempts to detect it from the `origin` git remote. This setting is used to enrich changelog messages with commit hash links and author acknowledgments, especially for first-time contributors.
+
+### `[changelog]` section
+
+`show_commit_hash`: Whether to include commit hash links in changelog entries (default: `true`). When enabled, changelog entries include clickable commit hash links that point to the commit on GitHub.
+
+`show_acknowledgments`: Whether to include author acknowledgments in changelog entries (default: `true`). When enabled, changelog entries include author acknowledgments with special messages for first-time contributors.
+
+### `[packages]` section
+
+`fixed_dependencies`: An array of dependency groups (default: `[]`) where packages in each group are bumped together with the same version level. Each group is an array of package names. When any package in a group is updated, all other packages in the same group receive the same version bump, regardless of actual dependencies. For example: if `fixed_dependencies = [["a", "b"], ["c", "d"]]` and `a` is updated to `2.0.0` (major), then `b` will also be bumped to `2.0.0`, but `c` and `d` remain unchanged.
+
+`linked_dependencies`: An array of dependency groups (default: `[]`) where affected packages and their dependents are bumped together using the highest bump level in the group. Each group is an array of package names. When any package in a group is updated, all packages in the same group that are affected or have internal dependencies within the group receive the highest version bump level from the group. For example: if `linked_dependencies = [["a", "b"]]` where `a` depends on `b`, when `b` is updated to `2.0.0` (major), then `a` will also be bumped to `2.0.0`. If `a` is later updated to `2.1.0` (minor), `b` remains at `2.0.0` since it's not affected. Finally, if `b` has a patch update, both `a` and `b` will be bumped with patch level since it's the highest bump in the group.
+
+Note: Packages cannot appear in both `fixed_dependencies` and `linked_dependencies` configurations.
+
+## Commands
+
+All commands should be run from the root of the repository:
+
+| Command         | Description                                                               |
+| --------------- | ------------------------------------------------------------------------- |
+| `sampo help`    | Show commands or the help of the given subcommand(s)                      |
+| `sampo init`    | Initialize Sampo in the current repository                                |
+| `sampo add`     | Create a new changeset                                                    |
+| `sampo release` | Consume changesets, and prepare release(s) (bump versions and changelogs) |
+| `sampo publish` | Publish packages to registries and tag current versions                   |
+
+For detailed command options, use `sampo help <command>` or `sampo <command> --help`.

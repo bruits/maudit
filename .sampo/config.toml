@@ -1,0 +1,2 @@
+[packages]
+linked_dependencies = [["maudit", "maudit-macros"]]

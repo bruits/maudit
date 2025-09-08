@@ -11,13 +11,14 @@ impl Page for Endpoint {
             .include_style_with_options("data/tailwind.css", StyleOptions { tailwind: true });
 
         // Return some JSON
-        RenderResult::Text(format!(
+        format!(
             r#"{{
                     "image": "{}",
                     "script": "{}"
                 }}"#,
             image.path.to_string_lossy(),
             some_script.path.to_string_lossy()
-        ))
+        )
+        .into()
     }
 }
