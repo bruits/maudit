@@ -1,50 +1,63 @@
-[package]
-name = "maudit"
-description = "Library for generating static websites."
-documentation = "https://docs.rs/maudit"
-homepage = "https://maudit.org"
-repository = "https://github.com/bruits/maudit"
-version = "0.3.2"
-license = "MIT"
-edition = "2024"
+[dependencies]
+base64 = "0.22.1"
+blake3 = "1.8.2"
+chrono = "0.4.39"
+colored = "2.2.0"
+dyn-eq = "0.1.3"
+env_logger = "0.11.5"
+glob = "0.3.1"
+image = "0.25.6"
+lol_html = "2.1.0"
+oxc_sourcemap = "4.1.0"
+oxipng = "9.1.5"
+pulldown-cmark = "0.12.2"
+quanta = "0.12.6"
+rayon = "1.11.0"
+rustc-hash = "2.1"
+serde_yml = "0.0.12"
+slug = "0.1.6"
+syntect = "5.0"
+thiserror = "2.0.9"
+thumbhash = "0.1.0"
+webp = "0.3.1"
+
+[dependencies.log]
+features = ["kv"]
+version = "0.4"
+
+[dependencies.maud]
+optional = true
+workspace = true
+
+[dependencies.maudit-macros]
+path = "../maudit-macros"
+version = "0.4.0"
+
+[dependencies.rolldown]
+package = "brk_rolldown"
+version = "0.1.4"
+
+[dependencies.serde]
+workspace = true
+
+[dependencies.tokio]
+features = ["macros", "rt-multi-thread"]
+version = "1"
 
 [features]
 default = ["maud"]
 maud = ["dep:maud"]
 
+[package]
+description = "Library for generating static websites."
+documentation = "https://docs.rs/maudit"
+edition = "2024"
+homepage = "https://maudit.org"
+license = "MIT"
+name = "maudit"
+repository = "https://github.com/bruits/maudit"
+version = "0.4.0"
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
-
-[dependencies]
-# Optional
-maud = { workspace = true, optional = true }
-
-# TODO: Allow making those optional
-rolldown = { package = "brk_rolldown", version = "0.1.4" }
-serde = { workspace = true }
-serde_yml = "0.0.12"
-pulldown-cmark = "0.12.2"
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-glob = "0.3.1"
-syntect = "5.0"
-lol_html = "2.1.0"
-slug = "0.1.6"
-image = "0.25.6"
-webp = "0.3.1"
-oxipng = "9.1.5"
-thumbhash = "0.1.0"
-base64 = "0.22.1"
-
-maudit-macros = { path = "../maudit-macros", version = "0.3" }
-log = { version = "0.4", features = ["kv"] }
-env_logger = "0.11.5"
-chrono = "0.4.39"
-colored = "2.2.0"
-rustc-hash = "2.1"
-dyn-eq = "0.1.3"
-thiserror = "2.0.9"
-blake3 = "1.8.2"
-oxc_sourcemap = "4.1.0"
-rayon = "1.11.0"
-quanta = "0.12.6"

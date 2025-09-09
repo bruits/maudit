@@ -1,10 +1,14 @@
-[package]
-name = "oubli-example-basics"
-version = "0.1.0"
-edition = "2021"
-publish = false
+[dependencies.maud]
+workspace = true
 
-[dependencies]
-maudit = { workspace = true }
-oubli = { workspace = true }
-maud = { workspace = true }
+[dependencies.maudit]
+workspace = true
+
+[dependencies.oubli]
+workspace = true
+
+[package]
+edition = "2021"
+name = "oubli-example-basics"
+publish = false
+version = "0.1.1"

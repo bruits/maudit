@@ -1,15 +1,16 @@
-[package]
-name = "md-benchmark"
-version = "0.1.0"
-edition = "2021"
-publish = false
-
-[dependencies]
-maudit = { workspace = true }
-
-[dev-dependencies]
-divan = { version = "3.0.5", package = "codspeed-divan-compat" }
-
 [[bench]]
-name = "build"
 harness = false
+name = "build"
+
+[dependencies.maudit]
+workspace = true
+
+[dev-dependencies.divan]
+package = "codspeed-divan-compat"
+version = "3.0.5"
+
+[package]
+edition = "2021"
+name = "md-benchmark"
+publish = false
+version = "0.1.1"

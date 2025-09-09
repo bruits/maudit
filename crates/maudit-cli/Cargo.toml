@@ -1,41 +1,65 @@
-[package]
-name = "maudit-cli"
-description = "CLI to operate on maudit projects."
-version = "0.4.0"
-license = "MIT"
-edition = "2021"
-
 [[bin]]
 name = "maudit"
 path = "src/main.rs"
 
 [dependencies]
-log = { version = "0.4", features = ["kv"] }
-env_logger = "0.11.5"
 chrono = "0.4.39"
 colored = "2.2.0"
-clap = { version = "4.5.23", features = ["derive"] }
-serde = { workspace = true, features = ["derive"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-axum = { version = "0.8.1", features = ["ws"] }
-tokio-tungstenite = { version = "0.26.0" }
+env_logger = "0.11.5"
+flate2 = "1.0.35"
 futures = "0.3"
-futures-util = { version = "0.3", default-features = false, features = [
-    "sink",
-    "std",
-] }
 http-body-util = "0.1.0"
-tower-http = { version = "0.6.2", features = ["fs", "trace"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "chrono"] }
-watchexec = "5.0.0"
-watchexec-events = "4.0.0"
 inquire = "0.7.5"
+local-ip-address = "0.6.3"
+quanta = "0.12.6"
 rand = "0.9.0"
 spinach = "3"
-ureq = "3.0.5"
 tar = "0.4.43"
 toml_edit = "0.22.23"
-local-ip-address = "0.6.3"
-flate2 = "1.0.35"
-quanta = "0.12.6"
+tracing = "0.1"
+ureq = "3.0.5"
+watchexec = "5.0.0"
+watchexec-events = "4.0.0"
+
+[dependencies.axum]
+features = ["ws"]
+version = "0.8.1"
+
+[dependencies.clap]
+features = ["derive"]
+version = "4.5.23"
+
+[dependencies.futures-util]
+default-features = false
+features = ["sink", "std"]
+version = "0.3"
+
+[dependencies.log]
+features = ["kv"]
+version = "0.4"
+
+[dependencies.serde]
+features = ["derive"]
+workspace = true
+
+[dependencies.tokio]
+features = ["macros", "rt-multi-thread"]
+version = "1"
+
+[dependencies.tokio-tungstenite]
+version = "0.26.0"
+
+[dependencies.tower-http]
+features = ["fs", "trace"]
+version = "0.6.2"
+
+[dependencies.tracing-subscriber]
+features = ["env-filter", "chrono"]
+version = "0.3"
+
+[package]
+description = "CLI to operate on maudit projects."
+edition = "2021"
+license = "MIT"
+name = "maudit-cli"
+version = "0.4.1"
