@@ -1,12 +1,14 @@
+[dependencies]
+maud = "0.26.0"
+
+[dependencies.maudit]
+workspace = true
+
 [package]
-name = "maudit-example-kitchen-sink"
-version = "0.1.0"
 edition = "2021"
+name = "maudit-example-kitchen-sink"
 publish = false
+version = "0.1.1"
 
 [package.metadata.maudit]
 intended_version = "0.3.0"
-
-[dependencies]
-maudit = { workspace = true }
-maud = "0.26.0"
