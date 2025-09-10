@@ -1,11 +1,11 @@
 [package]
 name = "md-benchmark"
-version = "0.1.1"
+version = "0.1.0"
 edition = "2021"
 publish = false
 
 [dependencies]
-"maudit" = { version = "0.4.0" }
+maudit = { workspace = true }
 
 [dev-dependencies]
 divan = { version = "3.0.5", package = "codspeed-divan-compat" }

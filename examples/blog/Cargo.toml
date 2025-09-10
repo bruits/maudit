@@ -1,6 +1,6 @@
 [package]
 name = "maudit-example-blog"
-version = "0.1.1"
+version = "0.1.0"
 edition = "2021"
 publish = false
 
@@ -8,6 +8,6 @@ publish = false
 intended_version = "0.3.0"
 
 [dependencies]
-"maudit" = { version = "0.4.0" }
+maudit = { workspace = true }
 maud = "0.26.0"
 serde = { version = "1.0.216" }
