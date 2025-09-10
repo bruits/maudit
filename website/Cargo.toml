@@ -1,10 +1,10 @@
 [package]
 name = "maudit-website"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 publish = false
 
 [dependencies]
-maudit = { workspace = true }
+"maudit" = { version = "0.4.0" }
 maud = { workspace = true }
 serde = { workspace = true }

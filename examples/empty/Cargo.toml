@@ -1,6 +1,6 @@
 [package]
 name = "maudit-example-empty"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 publish = false
 
@@ -8,4 +8,4 @@ publish = false
 intended_version = "0.3.0"
 
 [dependencies]
-maudit = { workspace = true }
+"maudit" = { version = "0.4.0" }
