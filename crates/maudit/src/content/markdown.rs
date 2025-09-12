@@ -6,10 +6,15 @@ use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd, html::p
 use serde::de::DeserializeOwned;
 
 pub mod components;
+pub mod shortcodes;
 
 use components::{LinkType, ListType, MarkdownComponents, TableAlignment};
 
-use crate::{assets::Asset, page::RouteContext};
+use crate::{
+    assets::Asset,
+    content::shortcodes::{MarkdownShortcodes, preprocess_shortcodes},
+    page::RouteContext,
+};
 
 use super::{ContentEntry, highlight::CodeBlock, slugger};
 
@@ -138,6 +143,7 @@ impl InternalMarkdownContent for UntypedMarkdownContent {
 #[derive(Default)]
 pub struct MarkdownOptions {
     pub components: MarkdownComponents,
+    pub shortcodes: MarkdownShortcodes,
 }
 
 impl MarkdownOptions {
@@ -145,8 +151,11 @@ impl MarkdownOptions {
         Self::default()
     }
 
-    pub fn with_components(components: MarkdownComponents) -> Self {
-        Self { components }
+    pub fn with_components(components: MarkdownComponents, shortcodes: MarkdownShortcodes) -> Self {
+        Self {
+            components,
+            shortcodes,
+        }
     }
 }
 
@@ -296,6 +305,12 @@ pub fn render_markdown(
     path: Option<&Path>,
     mut route_ctx: Option<&mut RouteContext>,
 ) -> String {
+    let content = preprocess_shortcodes(
+        content,
+        options.map_or(&MarkdownShortcodes::new(), |o| &o.shortcodes),
+    )
+    .unwrap_or_else(|e| panic!("Failed to preprocess shortcodes: {}", e));
+
     let mut slugger = slugger::Slugger::new();
     let mut html_output = String::new();
     let parser_options = Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
@@ -310,7 +325,7 @@ pub fn render_markdown(
     let mut code_block_content = String::new();
     let mut in_frontmatter = false;
     let mut in_image = false;
-    let mut events = Parser::new_ext(content, parser_options).collect::<Vec<Event>>();
+    let mut events = Parser::new_ext(&content, parser_options).collect::<Vec<Event>>();
 
     let options_with_components = options
         .as_ref()
@@ -788,7 +803,7 @@ where
 
     // TODO: Prettier errors for serialization errors (e.g. missing fields)
     // TODO: Support TOML frontmatters
-    let mut parsed = serde_yml::from_str::<T>(&frontmatter)
+    let mut parsed = serde_yaml::from_str::<T>(&frontmatter)
         .unwrap_or_else(|e| panic!("Failed to parse YAML frontmatter: {}, {}", e, frontmatter));
 
     let headings_internal = find_headings(&content_events);
@@ -854,6 +869,7 @@ More content here."#;
     fn test_rendering_with_empty_components() {
         let options = MarkdownOptions {
             components: MarkdownComponents::new(),
+            ..Default::default()
         };
         let markdown = r#"# Hello, world!"#;
 
@@ -878,6 +894,7 @@ More content here."#;
         // Render with options but no custom heading component
         let options_no_heading = MarkdownOptions {
             components: MarkdownComponents::new(),
+            ..Default::default()
         };
         let html_with_empty_options =
             render_markdown(markdown, Some(&options_no_heading), None, None);

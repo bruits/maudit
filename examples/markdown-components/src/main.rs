@@ -31,7 +31,7 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
                         .table(CustomTable)
                         .table_head(CustomTableHead)
                         .table_row(CustomTableRow)
-                        .table_cell(CustomTableCell)
+                        .table_cell(CustomTableCell), Default::default()
                 )
             ))
         ],
