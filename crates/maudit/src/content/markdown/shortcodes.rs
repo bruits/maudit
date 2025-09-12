@@ -73,9 +73,12 @@ pub fn preprocess_shortcodes(
 
         // Find the end of the opening shortcode tag
         let remaining = &rest[start + 2..];
-        let tag_end = remaining
-            .find("}}")
-            .ok_or("Unclosed shortcode: missing '}}'")?;
+        let Some(tag_end) = remaining.find("}}") else {
+            // No closing }}, treat as literal text
+            output.push_str("{{");
+            rest = remaining;
+            continue;
+        };
 
         let shortcode_content = remaining[..tag_end].trim();
 
@@ -469,16 +472,30 @@ console.log("Hello, Nested!");
     }
 
     #[test]
-    fn test_error_unclosed_shortcode() {
+    fn test_unclosed_shortcode_treated_as_literal() {
         let shortcodes = create_test_shortcodes();
         let content = "{{ simple ";
-        let result = preprocess_shortcodes(content, &shortcodes);
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .contains("Unclosed shortcode: missing '}}'")
-        );
+        let result = preprocess_shortcodes(content, &shortcodes).unwrap();
+        // Should treat as literal text since there's no closing }}
+        assert_eq!(result, "{{ simple ");
+    }
+
+    #[test]
+    fn test_unclosed_shortcode_with_valid_shortcode_after() {
+        let shortcodes = create_test_shortcodes();
+        let content = "Before {{ unclosed. Then {{ simple }} after.";
+        let result = preprocess_shortcodes(content, &shortcodes).unwrap();
+        // Should treat first {{ as literal and process the second shortcode
+        assert_eq!(result, "Before {{ unclosed. Then SIMPLE_OUTPUT after.");
+    }
+
+    #[test]
+    fn test_multiple_unclosed_shortcodes() {
+        let shortcodes = create_test_shortcodes();
+        let content = "{{ first {{ second {{ third";
+        let result = preprocess_shortcodes(content, &shortcodes).unwrap();
+        // All should be treated as literal text
+        assert_eq!(result, "{{ first {{ second {{ third");
     }
 
     #[test]
