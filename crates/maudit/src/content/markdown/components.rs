@@ -483,7 +483,7 @@ impl MarkdownComponents {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::content::{render_markdown, MarkdownOptions};
+    use crate::content::{MarkdownOptions, render_markdown};
 
     struct TestCustomHeading;
 
@@ -617,6 +617,7 @@ mod tests {
     fn test_custom_heading_component() {
         let options = MarkdownOptions {
             components: MarkdownComponents::new().heading(TestCustomHeading),
+            ..Default::default()
         };
 
         let html = render_markdown("# Hello, world!", Some(&options), None, None);
@@ -627,6 +628,7 @@ mod tests {
     fn test_custom_paragraph_component() {
         let options = MarkdownOptions {
             components: MarkdownComponents::new().paragraph(TestCustomParagraph),
+            ..Default::default()
         };
 
         let content = render_markdown("This is a paragraph.", Some(&options), None, None);
@@ -639,6 +641,7 @@ mod tests {
     fn test_custom_link_component() {
         let options = MarkdownOptions {
             components: MarkdownComponents::new().link(TestCustomLink),
+            ..Default::default()
         };
 
         let content = render_markdown("[Example](https://example.com)", Some(&options), None, None);
@@ -651,6 +654,7 @@ mod tests {
     fn test_custom_image_component() {
         let options = MarkdownOptions {
             components: MarkdownComponents::new().image(TestCustomImage),
+            ..Default::default()
         };
 
         let content = render_markdown("![Alt text](image.jpg)", Some(&options), None, None);
@@ -663,6 +667,7 @@ mod tests {
     fn test_custom_strong_component() {
         let options = MarkdownOptions {
             components: MarkdownComponents::new().strong(TestCustomStrong),
+            ..Default::default()
         };
 
         let content = render_markdown("**Bold text**", Some(&options), None, None);
@@ -673,6 +678,7 @@ mod tests {
     fn test_custom_emphasis_component() {
         let options = MarkdownOptions {
             components: MarkdownComponents::new().emphasis(TestCustomEmphasis),
+            ..Default::default()
         };
 
         let content = render_markdown("*Italic text*", Some(&options), None, None);
@@ -683,6 +689,7 @@ mod tests {
     fn test_custom_code_component() {
         let options = MarkdownOptions {
             components: MarkdownComponents::new().code(TestCustomCode),
+            ..Default::default()
         };
 
         let content = render_markdown("`console.log('hello')`", Some(&options), None, None);
@@ -693,6 +700,7 @@ mod tests {
     fn test_custom_blockquote_component() {
         let options = MarkdownOptions {
             components: MarkdownComponents::new().blockquote(TestCustomBlockquote),
+            ..Default::default()
         };
 
         let content = render_markdown("> This is a quote", Some(&options), None, None);
@@ -709,6 +717,7 @@ mod tests {
                 .paragraph(TestCustomParagraph)
                 .link(TestCustomLink)
                 .strong(TestCustomStrong),
+            ..Default::default()
         };
 
         let content = render_markdown(
@@ -734,6 +743,7 @@ mod tests {
                 .strong(TestCustomStrong)
                 .emphasis(TestCustomEmphasis)
                 .code(TestCustomCode),
+            ..Default::default()
         };
 
         let content = render_markdown(
@@ -869,6 +879,7 @@ mod tests {
     fn test_hard_break_component() {
         let options = MarkdownOptions {
             components: MarkdownComponents::new().hard_break(TestHardBreak),
+            ..Default::default()
         };
         let content = render_markdown("Line 1  \nLine 2", Some(&options), None, None);
         assert!(content.contains("<br class=\"custom-break\" />"));
@@ -878,6 +889,7 @@ mod tests {
     fn test_horizontal_rule_component() {
         let options = MarkdownOptions {
             components: MarkdownComponents::new().horizontal_rule(TestHorizontalRule),
+            ..Default::default()
         };
         let content = render_markdown("---", Some(&options), None, None);
         assert!(content.contains("<hr class=\"custom-rule\" />"));
@@ -889,6 +901,7 @@ mod tests {
             components: MarkdownComponents::new()
                 .list(TestList)
                 .list_item(TestListItem),
+            ..Default::default()
         };
         let content = render_markdown(
             "1. First\n2. Second\n\n- Bullet\n- Point",
@@ -905,6 +918,7 @@ mod tests {
     fn test_strikethrough_component() {
         let options = MarkdownOptions {
             components: MarkdownComponents::new().strikethrough(TestStrikethrough),
+            ..Default::default()
         };
         let content = render_markdown("~~strikethrough~~", Some(&options), None, None);
         assert!(content.contains("<del class=\"custom-strike\">"));
@@ -914,6 +928,7 @@ mod tests {
     fn test_task_list_component() {
         let options = MarkdownOptions {
             components: MarkdownComponents::new().task_list_marker(TestTaskListMarker),
+            ..Default::default()
         };
         let content = render_markdown("- [x] Done\n- [ ] Todo", Some(&options), None, None);
         assert!(content.contains("<input type=\"checkbox\" checked class=\"custom-task\" />"));
@@ -928,6 +943,7 @@ mod tests {
                 .table_head(TestTableHead)
                 .table_row(TestTableRow)
                 .table_cell(TestTableCell),
+            ..Default::default()
         };
         let content = render_markdown(
             "| Header | Header |\n|--------|--------|\n| Cell   | Cell   |",

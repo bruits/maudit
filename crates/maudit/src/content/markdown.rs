@@ -6,12 +6,20 @@ use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd, html::p
 use serde::de::DeserializeOwned;
 
 pub mod components;
+pub mod shortcodes;
 
 use components::{LinkType, ListType, MarkdownComponents, TableAlignment};
 
-use crate::{assets::Asset, page::RouteContext};
+use crate::{
+    assets::Asset,
+    content::shortcodes::{MarkdownShortcodes, preprocess_shortcodes},
+    page::RouteContext,
+};
 
 use super::{ContentEntry, highlight::CodeBlock, slugger};
+
+#[cfg(test)]
+mod shortcodes_tests;
 
 /// Represents a Markdown heading.
 ///
@@ -138,6 +146,7 @@ impl InternalMarkdownContent for UntypedMarkdownContent {
 #[derive(Default)]
 pub struct MarkdownOptions {
     pub components: MarkdownComponents,
+    pub shortcodes: MarkdownShortcodes,
 }
 
 impl MarkdownOptions {
@@ -145,8 +154,11 @@ impl MarkdownOptions {
         Self::default()
     }
 
-    pub fn with_components(components: MarkdownComponents) -> Self {
-        Self { components }
+    pub fn with_components(components: MarkdownComponents, shortcodes: MarkdownShortcodes) -> Self {
+        Self {
+            components,
+            shortcodes,
+        }
     }
 }
 
@@ -296,6 +308,15 @@ pub fn render_markdown(
     path: Option<&Path>,
     mut route_ctx: Option<&mut RouteContext>,
 ) -> String {
+    let content = if let Some(shortcodes) = options.map(|o| &o.shortcodes)
+        && !shortcodes.is_empty()
+    {
+        preprocess_shortcodes(content, shortcodes, route_ctx.as_deref_mut())
+            .unwrap_or_else(|e| panic!("Failed to preprocess shortcodes: {}", e))
+    } else {
+        content.to_string()
+    };
+
     let mut slugger = slugger::Slugger::new();
     let mut html_output = String::new();
     let parser_options = Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
@@ -310,7 +331,7 @@ pub fn render_markdown(
     let mut code_block_content = String::new();
     let mut in_frontmatter = false;
     let mut in_image = false;
-    let mut events = Parser::new_ext(content, parser_options).collect::<Vec<Event>>();
+    let mut events = Parser::new_ext(&content, parser_options).collect::<Vec<Event>>();
 
     let options_with_components = options
         .as_ref()
@@ -788,7 +809,7 @@ where
 
     // TODO: Prettier errors for serialization errors (e.g. missing fields)
     // TODO: Support TOML frontmatters
-    let mut parsed = serde_yml::from_str::<T>(&frontmatter)
+    let mut parsed = serde_yaml::from_str::<T>(&frontmatter)
         .unwrap_or_else(|e| panic!("Failed to parse YAML frontmatter: {}, {}", e, frontmatter));
 
     let headings_internal = find_headings(&content_events);
@@ -854,6 +875,7 @@ More content here."#;
     fn test_rendering_with_empty_components() {
         let options = MarkdownOptions {
             components: MarkdownComponents::new(),
+            ..Default::default()
         };
         let markdown = r#"# Hello, world!"#;
 
@@ -878,6 +900,7 @@ More content here."#;
         // Render with options but no custom heading component
         let options_no_heading = MarkdownOptions {
             components: MarkdownComponents::new(),
+            ..Default::default()
         };
         let html_with_empty_options =
             render_markdown(markdown, Some(&options_no_heading), None, None);
@@ -891,5 +914,423 @@ More content here."#;
         assert!(html_no_options.contains("<h2"));
         assert!(html_no_options.contains("<h3"));
         assert!(html_with_empty_options.contains("id=\""));
+    }
+
+    // Helper function to create test shortcodes
+    fn create_test_shortcodes() -> MarkdownShortcodes {
+        let mut shortcodes = MarkdownShortcodes::new();
+
+        shortcodes.register("simple", |_args, _| "SIMPLE_OUTPUT".to_string());
+
+        shortcodes.register("greet", |args, _| {
+            let name = args.get_str("name").unwrap_or("World");
+            format!("Hello, {}!", name)
+        });
+
+        shortcodes.register("date", |args, _| {
+            let format = args.get_str("format").unwrap_or("default");
+            format!("DATE[{}]", format)
+        });
+
+        shortcodes.register("highlight", |args, _| {
+            let lang = args.get_str("lang").unwrap_or("text");
+            let body = args.get_str("body").unwrap_or("");
+            format!("<code class=\"lang-{}\">{}</code>", lang, body)
+        });
+
+        shortcodes.register("alert", |args, _| {
+            let alert_type = args.get_str("type").unwrap_or("info");
+            let body = args.get_str("body").unwrap_or("");
+            format!("<div class=\"alert alert-{}\">{}</div>", alert_type, body)
+        });
+
+        shortcodes.register("section", |args, _| {
+            let title = args.get_str("title").unwrap_or("");
+            let body = args.get_str("body").unwrap_or("");
+            if title.is_empty() {
+                format!("<section>{}</section>", body)
+            } else {
+                format!("<section data-title=\"{}\">{}</section>", title, body)
+            }
+        });
+
+        shortcodes
+    }
+
+    #[test]
+    fn test_markdown_with_shortcodes_basic() {
+        let shortcodes = create_test_shortcodes();
+        let options = MarkdownOptions {
+            shortcodes,
+            ..Default::default()
+        };
+
+        let markdown = "# {{ greet name=Title }}\n\nHello {{ simple }}!";
+        let html = render_markdown(markdown, Some(&options), None, None);
+
+        assert!(html.contains("<h1"));
+        assert!(html.contains("Hello, Title!"));
+        assert!(html.contains("Hello SIMPLE_OUTPUT!"));
+    }
+
+    #[test]
+    fn test_markdown_with_shortcodes_in_headings() {
+        let shortcodes = create_test_shortcodes();
+        let options = MarkdownOptions {
+            shortcodes,
+            ..Default::default()
+        };
+
+        let markdown = r#"# {{ greet name=Main }}
+
+## Section {{ date format=short }}
+
+### {{ simple }} Chapter"#;
+        let html = render_markdown(markdown, Some(&options), None, None);
+
+        assert!(html.contains("<h1"));
+        assert!(html.contains("Hello, Main!"));
+        assert!(html.contains("<h2"));
+        assert!(html.contains("Section DATE[short]"));
+        assert!(html.contains("<h3"));
+        assert!(html.contains("SIMPLE_OUTPUT Chapter"));
+    }
+
+    #[test]
+    fn test_markdown_with_shortcodes_in_emphasis() {
+        let shortcodes = create_test_shortcodes();
+        let options = MarkdownOptions {
+            shortcodes,
+            ..Default::default()
+        };
+
+        let markdown = "*{{ greet name=Italic }}* and **{{ simple }}**";
+        let html = render_markdown(markdown, Some(&options), None, None);
+
+        assert!(html.contains("<em>Hello, Italic!</em>"));
+        assert!(html.contains("<strong>SIMPLE_OUTPUT</strong>"));
+    }
+
+    #[test]
+    fn test_markdown_with_shortcodes_in_lists() {
+        let shortcodes = create_test_shortcodes();
+        let options = MarkdownOptions {
+            shortcodes,
+            ..Default::default()
+        };
+
+        let markdown = r#"1. {{ greet name=First }}
+2. {{ simple }}
+3. {{ date format=iso }}"#;
+        let html = render_markdown(markdown, Some(&options), None, None);
+
+        assert!(html.contains("<ol>"));
+        assert!(html.contains("<li>Hello, First!</li>"));
+        assert!(html.contains("<li>SIMPLE_OUTPUT</li>"));
+        assert!(html.contains("<li>DATE[iso]</li>"));
+    }
+
+    #[test]
+    fn test_markdown_with_shortcodes_in_tables() {
+        let shortcodes = create_test_shortcodes();
+        let options = MarkdownOptions {
+            shortcodes,
+            ..Default::default()
+        };
+
+        let markdown = r#"| Name | Greeting |
+|------|----------|
+| Alice | {{ greet name=Alice }} |
+| Bob | {{ simple }} |"#;
+        let html = render_markdown(markdown, Some(&options), None, None);
+
+        assert!(html.contains("<table>"));
+        assert!(html.contains("<th>Name</th>"));
+        assert!(html.contains("<th>Greeting</th>"));
+        assert!(html.contains("<td>Alice</td>"));
+        assert!(html.contains("<td>Hello, Alice!</td>"));
+        assert!(html.contains("<td>Bob</td>"));
+        assert!(html.contains("<td>SIMPLE_OUTPUT</td>"));
+    }
+
+    #[test]
+    fn test_markdown_with_shortcodes_in_blockquotes() {
+        let shortcodes = create_test_shortcodes();
+        let options = MarkdownOptions {
+            shortcodes,
+            ..Default::default()
+        };
+
+        let markdown = r#"> {{ greet name=Quote }}
+>
+> {{ simple }}"#;
+        let html = render_markdown(markdown, Some(&options), None, None);
+
+        assert!(html.contains("<blockquote>"));
+        assert!(html.contains("Hello, Quote!"));
+        assert!(html.contains("SIMPLE_OUTPUT"));
+    }
+
+    #[test]
+    fn test_markdown_with_shortcodes_in_code_blocks() {
+        let shortcodes = create_test_shortcodes();
+        let options = MarkdownOptions {
+            shortcodes,
+            ..Default::default()
+        };
+
+        let markdown = r#"```rust
+fn main() {
+    println!("{{ greet name=Rust }}");
+    // {{ simple }}
+}
+```"#;
+        let html = render_markdown(markdown, Some(&options), None, None);
+
+        assert!(html.contains("<pre"));
+        assert!(html.contains("<code"));
+        assert!(html.contains("Hello, Rust!"));
+        assert!(html.contains("SIMPLE_OUTPUT"));
+    }
+
+    #[test]
+    fn test_markdown_with_shortcodes_in_links() {
+        let shortcodes = create_test_shortcodes();
+        let options = MarkdownOptions {
+            shortcodes,
+            ..Default::default()
+        };
+
+        let markdown = r#"[{{ greet name=Link }}](https://example.com "{{ simple }}")
+
+![{{ greet name=Alt }}](image.jpg "{{ date format=title }}")"#;
+        let html = render_markdown(markdown, Some(&options), None, None);
+
+        assert!(html.contains("<a href=\"https://example.com\""));
+        assert!(html.contains("title=\"SIMPLE_OUTPUT\""));
+        assert!(html.contains(">Hello, Link!</a>"));
+        assert!(html.contains("<img src=\"image.jpg\""));
+        assert!(html.contains("alt=\"Hello, Alt!\""));
+        assert!(html.contains("title=\"DATE[title]\""));
+    }
+
+    #[test]
+    fn test_markdown_with_block_shortcodes() {
+        let shortcodes = create_test_shortcodes();
+        let options = MarkdownOptions {
+            shortcodes,
+            ..Default::default()
+        };
+
+        let markdown = r#"{{ highlight lang=rust }}
+fn main() {
+    println!("{{ greet name=World }}");
+}
+{{ /highlight }}"#;
+        let html = render_markdown(markdown, Some(&options), None, None);
+
+        assert!(html.contains("<code class=\"lang-rust\">"));
+        assert!(html.contains("Hello, World!"));
+        assert!(html.contains("</code>"));
+    }
+
+    #[test]
+    fn test_markdown_with_nested_shortcodes() {
+        let shortcodes = create_test_shortcodes();
+        let options = MarkdownOptions {
+            shortcodes,
+            ..Default::default()
+        };
+
+        let markdown = r#"{{ alert type=warning }}
+## {{ greet name=Alert }}
+
+{{ simple }} content here.
+{{ /alert }}"#;
+        let html = render_markdown(markdown, Some(&options), None, None);
+
+        assert!(html.contains("<div class=\"alert alert-warning\">"));
+        // The markdown inside the shortcode becomes raw text, not processed markdown
+        assert!(html.contains("## Hello, Alert!"));
+        assert!(html.contains("SIMPLE_OUTPUT content"));
+        assert!(html.contains("</div>"));
+    }
+
+    #[test]
+    fn test_markdown_with_deeply_nested_shortcodes() {
+        let shortcodes = create_test_shortcodes();
+        let options = MarkdownOptions {
+            shortcodes,
+            ..Default::default()
+        };
+
+        let markdown = r#"{{ section title=Main }}
+# {{ greet name=Header }}
+
+{{ alert type=info }}
+**{{ greet name=Bold }}** and *{{ simple }}*
+{{ /alert }}
+{{ /section }}"#;
+        let html = render_markdown(markdown, Some(&options), None, None);
+
+        assert!(html.contains("<section data-title=\"Main\">"));
+        // The markdown inside shortcodes becomes raw text, not processed
+        assert!(html.contains("# Hello, Header!"));
+        assert!(html.contains("<div class=\"alert alert-info\">"));
+        assert!(html.contains("**Hello, Bold!** and *SIMPLE_OUTPUT*"));
+        assert!(html.contains("</div>"));
+        assert!(html.contains("</section>"));
+    }
+
+    #[test]
+    fn test_markdown_with_shortcodes_in_frontmatter() {
+        let shortcodes = create_test_shortcodes();
+        let options = MarkdownOptions {
+            shortcodes,
+            ..Default::default()
+        };
+
+        let markdown = r#"---
+title: {{ greet name=Blog }}
+date: {{ date format=iso }}
+tags: [{{ simple }}, {{ greet name=Tutorial }}]
+---
+
+# {{ greet name=Content }}
+
+Welcome to {{ simple }}!"#;
+        let html = render_markdown(markdown, Some(&options), None, None);
+
+        // The HTML shouldn't contain the frontmatter, but shortcodes in content should be processed
+        assert!(!html.contains("---"));
+        assert!(!html.contains("title:"));
+        assert!(html.contains("<h1"));
+        assert!(html.contains("Hello, Content!"));
+        assert!(html.contains("Welcome to SIMPLE_OUTPUT!"));
+    }
+
+    #[test]
+    fn test_markdown_with_task_lists_and_shortcodes() {
+        let shortcodes = create_test_shortcodes();
+        let options = MarkdownOptions {
+            shortcodes,
+            ..Default::default()
+        };
+
+        let markdown = r#"- [x] {{ greet name=Done }}
+- [ ] {{ simple }}
+- [ ] {{ date format=todo }}"#;
+        let html = render_markdown(markdown, Some(&options), None, None);
+
+        assert!(html.contains("<ul>"));
+        assert!(html.contains("type=\"checkbox\""));
+        assert!(html.contains("checked=\"\""));
+        assert!(html.contains("Hello, Done!"));
+        assert!(html.contains("SIMPLE_OUTPUT"));
+        assert!(html.contains("DATE[todo]"));
+    }
+
+    #[test]
+    fn test_markdown_with_strikethrough_and_shortcodes() {
+        let shortcodes = create_test_shortcodes();
+        let options = MarkdownOptions {
+            shortcodes,
+            ..Default::default()
+        };
+
+        let markdown = "~~{{ greet name=Deleted }}~~ and {{ simple }}";
+        let html = render_markdown(markdown, Some(&options), None, None);
+
+        assert!(html.contains("<del>Hello, Deleted!</del>"));
+        assert!(html.contains("and SIMPLE_OUTPUT"));
+    }
+
+    #[test]
+    fn test_markdown_real_world_blog_post_with_shortcodes() {
+        let shortcodes = create_test_shortcodes();
+        let options = MarkdownOptions {
+            shortcodes,
+            ..Default::default()
+        };
+
+        let markdown = r#"---
+title: {{ greet name=BlogPost }}
+date: {{ date format=iso }}
+---
+
+# {{ greet name=Reader }}!
+
+Welcome to my blog about **{{ simple }}**.
+
+## What we'll cover
+
+1. {{ greet name=Introduction }}
+2. {{ simple }} basics
+3. Advanced {{ greet name=Techniques }}
+
+{{ alert type=info }}
+💡 **Tip**: Remember {{ greet name=This }}!
+{{ /alert }}
+
+### Code Example
+
+{{ highlight lang=rust }}
+fn main() {
+    println!("{{ greet name=World }}!");
+}
+{{ /highlight }}
+
+### Task List
+
+- [x] {{ greet name=Setup }}
+- [ ] {{ simple }}
+- [ ] {{ greet name=Deploy }}
+
+> "{{ greet name=Quote }}" - *{{ simple }}*
+
+Check out [this link](https://example.com "{{ greet name=Title }}")!"#;
+
+        let html = render_markdown(markdown, Some(&options), None, None);
+
+        // Test various HTML elements are properly rendered with shortcodes
+        assert!(html.contains("<h1"));
+        assert!(html.contains("Hello, Reader!"));
+        assert!(html.contains("<strong>SIMPLE_OUTPUT</strong>"));
+        assert!(html.contains("<h2"));
+        assert!(html.contains("<ol>"));
+        assert!(html.contains("Hello, Introduction!"));
+        assert!(html.contains("<div class=\"alert alert-info\">"));
+        assert!(html.contains("Remember Hello, This!"));
+        assert!(html.contains("<code class=\"lang-rust\">"));
+        assert!(html.contains("Hello, World!"));
+        assert!(html.contains("<ul>"));
+        assert!(html.contains("type=\"checkbox\""));
+        assert!(html.contains("Hello, Setup!"));
+        assert!(html.contains("<blockquote>"));
+        assert!(html.contains("Hello, Quote!"));
+        assert!(html.contains("<a href=\"https://example.com\""));
+        assert!(html.contains("title=\"Hello, Title!\""));
+    }
+
+    #[test]
+    fn test_markdown_with_math_and_shortcodes() {
+        let shortcodes = create_test_shortcodes();
+        let options = MarkdownOptions {
+            shortcodes,
+            ..Default::default()
+        };
+
+        let markdown = r#"Inline math with {{ simple }}: $x = {{ greet name=Variable }}$
+
+Block math:
+$$
+{{ greet name=Equation }}
+$$"#;
+        let html = render_markdown(markdown, Some(&options), None, None);
+
+        assert!(html.contains("SIMPLE_OUTPUT"));
+        // Math expressions might be processed differently
+        assert!(html.contains("Hello, Variable!"));
+        assert!(html.contains("Hello, Equation!"));
     }
 }

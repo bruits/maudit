@@ -1,0 +1,334 @@
+use rustc_hash::FxHashMap;
+use std::str::FromStr;
+
+use crate::page::RouteContext;
+
+pub type ShortcodeFn =
+    Box<dyn Fn(&ShortcodeArgs, Option<&mut RouteContext>) -> String + Send + Sync>;
+
+#[derive(Default)]
+pub struct MarkdownShortcodes(FxHashMap<String, ShortcodeFn>);
+
+impl MarkdownShortcodes {
+    pub fn new() -> Self {
+        Self(FxHashMap::default())
+    }
+
+    pub fn register<F>(&mut self, name: &str, func: F)
+    where
+        F: Fn(&ShortcodeArgs, Option<&mut RouteContext>) -> String + Send + Sync + 'static,
+    {
+        self.0.insert(name.to_string(), Box::new(func));
+    }
+
+    pub(crate) fn get(&self, name: &str) -> Option<&ShortcodeFn> {
+        self.0.get(name)
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+// Helper function to validate shortcode names
+// Valid names match ^[A-Za-z_][0-9A-Za-z_]+$ pattern
+fn is_valid_shortcode_name(name: &str) -> bool {
+    if name.len() < 2 {
+        return false; // Must have at least 2 characters
+    }
+
+    let mut chars = name.chars();
+
+    // First character must be A-Z, a-z, or _
+    let first = chars.next().unwrap();
+    if !first.is_ascii_alphabetic() && first != '_' {
+        return false;
+    }
+
+    // Remaining characters must be A-Z, a-z, 0-9, or _
+    for ch in chars {
+        if !ch.is_ascii_alphanumeric() && ch != '_' {
+            return false;
+        }
+    }
+
+    true
+}
+
+pub fn preprocess_shortcodes(
+    content: &str,
+    shortcodes: &MarkdownShortcodes,
+    mut route_ctx: Option<&mut RouteContext>,
+) -> Result<String, String> {
+    let mut output = String::new();
+    let mut rest = content;
+
+    while let Some(start) = rest.find("{{") {
+        // Check for escaped shortcode syntax like `\{{` - if found, skip this occurrence
+        if start > 0 && rest.chars().nth(start - 1) == Some('\\') {
+            // This is an escaped shortcode, add everything up to and including the {{
+            output.push_str(&rest[..start + 2]);
+            rest = &rest[start + 2..];
+            continue;
+        }
+
+        // Add everything before the shortcode
+        output.push_str(&rest[..start]);
+
+        // Find the end of the opening shortcode tag
+        let remaining = &rest[start + 2..];
+        let Some(tag_end) = remaining.find("}}") else {
+            // No closing }}, treat as literal text
+            output.push_str("{{");
+            rest = remaining;
+            continue;
+        };
+
+        let shortcode_content = remaining[..tag_end].trim();
+
+        // Parse shortcode name and arguments
+        let mut parts = shortcode_content.split_whitespace();
+        let name = parts.next().ok_or("Empty shortcode")?;
+
+        // Check if this is a closing tag
+        if name.starts_with('/') {
+            return Err(format!("Unexpected closing tag: {}", name));
+        }
+
+        // Validate shortcode name format
+        let actual_name = name.strip_prefix('/').unwrap_or(name);
+
+        if !is_valid_shortcode_name(actual_name) {
+            // Invalid shortcode name, treat as literal text and continue
+            output.push_str("{{");
+            rest = remaining;
+            continue;
+        }
+
+        // Parse arguments with support for quoted values
+        let mut args = FxHashMap::default();
+        let args_str = parts.collect::<Vec<_>>().join(" ");
+
+        if !args_str.is_empty() {
+            let mut chars = args_str.chars().peekable();
+            let mut current_key = String::new();
+            let mut current_value = String::new();
+            let mut in_key = true;
+            let mut in_quotes = false;
+            let mut quote_char = ' ';
+
+            while let Some(ch) = chars.next() {
+                match ch {
+                    '=' if in_key && !in_quotes => {
+                        in_key = false;
+                        // Check if next char is a quote
+                        if let Some(&next_ch) = chars.peek()
+                            && (next_ch == '"' || next_ch == '\'')
+                        {
+                            quote_char = next_ch;
+                            in_quotes = true;
+                            chars.next(); // consume the quote
+                        }
+                    }
+                    '"' | '\'' if !in_key && in_quotes && ch == quote_char => {
+                        // End of quoted value
+                        in_quotes = false;
+                        args.insert(current_key.trim().to_string(), current_value.clone());
+                        current_key.clear();
+                        current_value.clear();
+                        in_key = true;
+
+                        // Skip any whitespace after the closing quote
+                        while let Some(&next_ch) = chars.peek() {
+                            if next_ch.is_whitespace() {
+                                chars.next();
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    ' ' if !in_quotes => {
+                        if !in_key && !current_value.is_empty() {
+                            // End of unquoted value
+                            args.insert(
+                                current_key.trim().to_string(),
+                                current_value.trim().to_string(),
+                            );
+                            current_key.clear();
+                            current_value.clear();
+                            in_key = true;
+                        } else if in_key && !current_key.is_empty() {
+                            return Err(format!(
+                                "Invalid argument format: '{}'. Expected 'key=value'",
+                                current_key
+                            ));
+                        }
+                        // Skip multiple spaces
+                        while let Some(&next_ch) = chars.peek() {
+                            if next_ch == ' ' {
+                                chars.next();
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    _ => {
+                        if in_key {
+                            current_key.push(ch);
+                        } else {
+                            current_value.push(ch);
+                        }
+                    }
+                }
+            }
+
+            // Handle the last argument if there's one pending
+            if !in_key && (!current_value.is_empty() || !in_quotes) {
+                if in_quotes {
+                    return Err("Unclosed quote in argument value".to_string());
+                }
+                args.insert(
+                    current_key.trim().to_string(),
+                    current_value.trim().to_string(),
+                );
+            } else if !current_key.trim().is_empty() {
+                return Err(format!(
+                    "Invalid argument format: '{}'. Expected 'key=value'",
+                    current_key.trim()
+                ));
+            }
+        }
+
+        // Move past the opening tag
+        let after_opening_tag = &remaining[tag_end + 2..];
+
+        // Look for closing tag - handle both {{/name}} and {{ /name }} formats
+        let closing_tag_compact = format!("{{{{/{}}}}}", name);
+        let closing_tag_spaced = format!("{{{{ /{} }}}}", name);
+
+        let close_pos = after_opening_tag
+            .find(&closing_tag_compact)
+            .or_else(|| after_opening_tag.find(&closing_tag_spaced));
+
+        if let Some(close_pos) = close_pos {
+            // Determine which closing tag format was found to calculate the correct length
+            let closing_tag_len =
+                if after_opening_tag[close_pos..].starts_with(&closing_tag_compact) {
+                    closing_tag_compact.len()
+                } else {
+                    closing_tag_spaced.len()
+                };
+
+            // Block shortcode - extract body and recursively process it
+            let body = &after_opening_tag[..close_pos];
+            let processed_body = preprocess_shortcodes(body, shortcodes, route_ctx.as_deref_mut())?;
+
+            // Execute shortcode with processed body
+            if let Some(func) = shortcodes.get(name) {
+                let mut shortcode_args = ShortcodeArgs::new(args);
+                shortcode_args.0.insert("body".to_string(), processed_body);
+                let result = func(&shortcode_args, route_ctx.as_deref_mut());
+                output.push_str(&result);
+            } else {
+                return Err(format!("Unknown shortcode: '{}'", name));
+            }
+
+            // Continue after the closing tag
+            rest = &after_opening_tag[close_pos + closing_tag_len..];
+        } else {
+            // Self-closing shortcode
+            if let Some(func) = shortcodes.get(name) {
+                let shortcode_args = ShortcodeArgs::new(args);
+                let result = func(&shortcode_args, route_ctx.as_deref_mut());
+                output.push_str(&result);
+            } else {
+                return Err(format!("Unknown shortcode: '{}'", name));
+            }
+
+            // Continue after the opening tag
+            rest = after_opening_tag;
+        }
+    }
+
+    output.push_str(rest);
+    Ok(output)
+}
+
+pub struct ShortcodeArgs(FxHashMap<String, String>);
+
+impl ShortcodeArgs {
+    pub fn new(args: FxHashMap<String, String>) -> Self {
+        Self(args)
+    }
+
+    /// Get argument with automatic type conversion
+    pub fn get<T>(&self, key: &str) -> Option<T>
+    where
+        T: FromStr,
+        T::Err: std::fmt::Debug,
+    {
+        self.0.get(key)?.parse().ok()
+    }
+
+    /// Get required argument with automatic type conversion
+    pub fn get_required<T>(&self, key: &str) -> T
+    where
+        T: FromStr,
+        T::Err: std::fmt::Debug,
+    {
+        self.0
+            .get(key)
+            .unwrap_or_else(|| panic!("Required argument '{}' not found", key))
+            .parse()
+            .unwrap_or_else(|e| panic!("Failed to parse argument '{}': {:?}", key, e))
+    }
+
+    /// Get argument with default value and type conversion
+    pub fn get_or<T>(&self, key: &str, default: T) -> T
+    where
+        T: FromStr,
+        T::Err: std::fmt::Debug,
+    {
+        self.0
+            .get(key)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(default)
+    }
+
+    /// Get raw string (no conversion)
+    pub fn get_str(&self, key: &str) -> Option<&str> {
+        self.0.get(key).map(|s| s.as_str())
+    }
+
+    pub fn get_str_required(&self, key: &str) -> &str {
+        self.0
+            .get(key)
+            .map(|s| s.as_str())
+            .unwrap_or_else(|| panic!("Required argument '{}' not found", key))
+    }
+
+    pub fn get_str_or<'a>(&'a self, key: &str, default: &'a str) -> &'a str {
+        self.0.get(key).map(|s| s.as_str()).unwrap_or(default)
+    }
+}
+
+// Macro to make typed shortcodes easier to write
+#[macro_export]
+macro_rules! shortcode {
+    ($args:ident, $($param:ident: $type:ty),* => $body:expr) => {
+        |$args: &ShortcodeArgs| -> String {
+            $(
+                let $param: $type = $args.get_required(stringify!($param));
+            )*
+            $body
+        }
+    };
+    ($args:ident, $($param:ident: $type:ty = $default:expr),* => $body:expr) => {
+        |$args: &ShortcodeArgs| -> String {
+            $(
+                let $param: $type = $args.get_or(stringify!($param), $default);
+            )*
+            $body
+        }
+    };
+}
