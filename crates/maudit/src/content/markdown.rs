@@ -18,6 +18,9 @@ use crate::{
 
 use super::{ContentEntry, highlight::CodeBlock, slugger};
 
+#[cfg(test)]
+mod shortcodes_tests;
+
 /// Represents a Markdown heading.
 ///
 /// Can be used to generate a table of contents.
@@ -309,11 +312,8 @@ pub fn render_markdown(
     let shortcodes = options.map(|o| &o.shortcodes).unwrap_or(&binding);
 
     let content = if !shortcodes.is_empty() {
-        preprocess_shortcodes(
-            content,
-            options.map_or(&MarkdownShortcodes::new(), |o| &o.shortcodes),
-        )
-        .unwrap_or_else(|e| panic!("Failed to preprocess shortcodes: {}", e))
+        preprocess_shortcodes(content, shortcodes, route_ctx.as_deref_mut())
+            .unwrap_or_else(|e| panic!("Failed to preprocess shortcodes: {}", e))
     } else {
         content.to_string()
     };
@@ -921,31 +921,31 @@ More content here."#;
     fn create_test_shortcodes() -> MarkdownShortcodes {
         let mut shortcodes = MarkdownShortcodes::new();
 
-        shortcodes.register("simple", |_args| "SIMPLE_OUTPUT".to_string());
+        shortcodes.register("simple", |_args, _| "SIMPLE_OUTPUT".to_string());
 
-        shortcodes.register("greet", |args| {
+        shortcodes.register("greet", |args, _| {
             let name = args.get_str("name").unwrap_or("World");
             format!("Hello, {}!", name)
         });
 
-        shortcodes.register("date", |args| {
+        shortcodes.register("date", |args, _| {
             let format = args.get_str("format").unwrap_or("default");
             format!("DATE[{}]", format)
         });
 
-        shortcodes.register("highlight", |args| {
+        shortcodes.register("highlight", |args, _| {
             let lang = args.get_str("lang").unwrap_or("text");
             let body = args.get_str("body").unwrap_or("");
             format!("<code class=\"lang-{}\">{}</code>", lang, body)
         });
 
-        shortcodes.register("alert", |args| {
+        shortcodes.register("alert", |args, _| {
             let alert_type = args.get_str("type").unwrap_or("info");
             let body = args.get_str("body").unwrap_or("");
             format!("<div class=\"alert alert-{}\">{}</div>", alert_type, body)
         });
 
-        shortcodes.register("section", |args| {
+        shortcodes.register("section", |args, _| {
             let title = args.get_str("title").unwrap_or("");
             let body = args.get_str("body").unwrap_or("");
             if title.is_empty() {
