@@ -6,6 +6,7 @@ use image::GenericImageView;
 use thumbhash::{rgba_to_thumb_hash, thumb_hash_to_average_rgba, thumb_hash_to_rgba};
 
 use crate::assets::{Asset, InternalAsset};
+use crate::is_dev;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum ImageFormat {
@@ -130,7 +131,11 @@ fn get_placeholder(path: &PathBuf) -> Option<ImagePlaceholder> {
 
     let thumbhash_rgba = thumb_hash_to_rgba(&thumb_hash).ok().unwrap();
     let thumbhash_png = thumbhash_to_png(&thumbhash_rgba);
-    let optimized_png = oxipng::optimize_from_memory(&thumbhash_png, &Default::default()).unwrap();
+    let optimized_png = if is_dev() {
+        thumbhash_png
+    } else {
+        oxipng::optimize_from_memory(&thumbhash_png, &Default::default()).unwrap()
+    };
 
     let base64 = base64::engine::general_purpose::STANDARD.encode(&optimized_png);
     let data_uri = format!("data:image/png;base64,{}", base64);

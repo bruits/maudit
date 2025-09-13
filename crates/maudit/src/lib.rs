@@ -59,6 +59,14 @@ use content::ContentSources;
 use logging::init_logging;
 use page::FullPage;
 
+pub fn is_dev() -> bool {
+    if option_env!("MAUDIT_DEV") == Some("true") {
+        return true;
+    }
+
+    env::var("MAUDIT_DEV").map(|v| v == "true").unwrap_or(false)
+}
+
 #[macro_export]
 /// Helps to define every route that should be build by [`coronate()`].
 ///

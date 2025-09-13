@@ -25,7 +25,8 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> io::Result<()> {
     // Do initial sync build
     info!(name: "build", "Doing initial build…");
     let command = std::process::Command::new("cargo")
-        .args(["run", "--quiet", "--", "--quiet"])
+        .args(["run", "--quiet"])
+        .envs([("MAUDIT_DEV", "true"), ("MAUDIT_QUIET", "true")])
         .output()
         .unwrap();
     let duration = start_time.elapsed();

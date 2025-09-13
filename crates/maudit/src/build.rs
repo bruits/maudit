@@ -15,6 +15,7 @@ use crate::{
     assets::{self},
     content::{Content, ContentSources},
     errors::BuildError,
+    is_dev,
     logging::print_title,
     page::{DynamicRouteContext, FullPage, RenderResult, RouteContext, RouteParams, RouteType},
     route::{
@@ -71,18 +72,29 @@ impl Plugin for TailwindPlugin {
             .any(|entry| entry.canonicalize().unwrap().to_string_lossy() == args.id)
         {
             let start_tailwind = Instant::now();
-            let tailwind_output =
-                Command::new(&self.tailwind_path)
-                    .args(["--input", args.id])
-                    .arg("--minify") // TODO: Allow disabling minification
-                    .arg("--map") // TODO: Allow disabling source maps
-                    .output()
+            let mut command = Command::new(&self.tailwind_path);
+            command.args(["--input", args.id]);
+
+            // Add minify in production, source maps in development
+            if !crate::is_dev() {
+                command.arg("--minify");
+            }
+            if crate::is_dev() {
+                command.arg("--map");
+            }
+
+            let tailwind_output = command.output()
                     .unwrap_or_else(|e| {
                         // TODO: Return a proper error instead of panicking
+                        let args_str = if crate::is_dev() {
+                            format!("['--input', '{}', '--map']", args.id)
+                        } else {
+                            format!("['--input', '{}', '--minify']", args.id)
+                        };
                         panic!(
-                            "Failed to execute Tailwind CSS command, is it installed and is the path to its binary correct?\nCommand: '{}', Args: ['--input', '{}', '--minify', '--map']. Error: {}",
+                            "Failed to execute Tailwind CSS command, is it installed and is the path to its binary correct?\nCommand: '{}', Args: {}. Error: {}",
                             &self.tailwind_path,
-                            args.id,
+                            args_str,
                             e
                         )
             });
@@ -381,7 +393,7 @@ pub async fn build(
             let mut bundler = Bundler::with_plugins(
                 BundlerOptions {
                     input: Some(bundler_inputs),
-                    minify: Some(rolldown::RawMinifyOptions::Bool(true)),
+                    minify: Some(rolldown::RawMinifyOptions::Bool(!is_dev())),
                     dir: Some(assets_dir.to_string_lossy().to_string()),
                     module_types: Some(module_types_hashmap),
 
