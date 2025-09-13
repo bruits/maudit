@@ -24,6 +24,13 @@ impl Filterer for DevServerFilterer {
             }
 
             if let Tag::Path { path, file_type: _ } = tag {
+                if let Some(file_name) = path.file_name() {
+                    if file_name == ".DS_Store" {
+                        result = false;
+                        break;
+                    }
+                }
+
                 // TODO: Customizable dist path
                 if path.ancestors().any(|p| p.ends_with("dist")) {
                     result = false;
