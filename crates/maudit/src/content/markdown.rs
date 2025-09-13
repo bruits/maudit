@@ -308,10 +308,9 @@ pub fn render_markdown(
     path: Option<&Path>,
     mut route_ctx: Option<&mut RouteContext>,
 ) -> String {
-    let binding = MarkdownShortcodes::new();
-    let shortcodes = options.map(|o| &o.shortcodes).unwrap_or(&binding);
-
-    let content = if !shortcodes.is_empty() {
+    let content = if let Some(shortcodes) = options.map(|o| &o.shortcodes)
+        && !shortcodes.is_empty()
+    {
         preprocess_shortcodes(content, shortcodes, route_ctx.as_deref_mut())
             .unwrap_or_else(|e| panic!("Failed to preprocess shortcodes: {}", e))
     } else {
