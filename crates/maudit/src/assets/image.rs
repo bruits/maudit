@@ -1,10 +1,12 @@
 use std::hash::Hash;
-use std::{path::PathBuf, sync::OnceLock};
+use std::{path::PathBuf, sync::OnceLock, time::Instant};
 
 use base64::Engine;
 use image::GenericImageView;
+use log::debug;
 use thumbhash::{rgba_to_thumb_hash, thumb_hash_to_average_rgba, thumb_hash_to_rgba};
 
+use super::image_cache::ImageCache;
 use crate::assets::{Asset, InternalAsset};
 use crate::is_dev;
 
@@ -58,7 +60,7 @@ pub struct ImageOptions {
     pub format: Option<ImageFormat>,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone)]
 #[non_exhaustive]
 pub struct Image {
     pub path: PathBuf,
@@ -77,31 +79,140 @@ impl Hash for Image {
     }
 }
 
+impl PartialEq for Image {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path
+            && self.assets_dir == other.assets_dir
+            && self.hash == other.hash
+            && self.options == other.options
+    }
+}
+
+impl Eq for Image {}
+
 impl Image {
     /// Get a placeholder for the image, which can be used for low-quality image placeholders (LQIP) or similar techniques.
     ///
     /// This uses the [ThumbHash](https://evanw.github.io/thumbhash/) algorithm to generate a very small placeholder image.
     pub fn placeholder(&self) -> &ImagePlaceholder {
         self.__cache_placeholder
-            .get_or_init(|| get_placeholder(&self.path).unwrap_or_default())
+            .get_or_init(|| get_placeholder(&self.path))
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Eq)]
+#[derive(Debug)]
 pub struct ImagePlaceholder {
     pub thumbhash: Vec<u8>,
     pub thumbhash_base64: String,
-    pub average_rgba: Option<(u8, u8, u8, u8)>,
-    pub data_uri: String,
+    average_rgba_cache: OnceLock<Option<(u8, u8, u8, u8)>>,
+    data_uri_cache: OnceLock<String>,
 }
 
-fn get_placeholder(path: &PathBuf) -> Option<ImagePlaceholder> {
-    let image = image::open(path).ok()?;
+impl Clone for ImagePlaceholder {
+    fn clone(&self) -> Self {
+        Self {
+            thumbhash: self.thumbhash.clone(),
+            thumbhash_base64: self.thumbhash_base64.clone(),
+            average_rgba_cache: OnceLock::new(),
+            data_uri_cache: OnceLock::new(),
+        }
+    }
+}
+
+impl Default for ImagePlaceholder {
+    fn default() -> Self {
+        Self {
+            thumbhash: Vec::new(),
+            thumbhash_base64: String::new(),
+            average_rgba_cache: OnceLock::new(),
+            data_uri_cache: OnceLock::new(),
+        }
+    }
+}
+
+impl ImagePlaceholder {
+    pub fn average_rgba(&self) -> Option<(u8, u8, u8, u8)> {
+        *self.average_rgba_cache.get_or_init(|| {
+            let start = Instant::now();
+            let result = thumb_hash_to_average_rgba(&self.thumbhash)
+                .ok()
+                .map(|(r, g, b, a)| {
+                    (
+                        (r * 255.0) as u8,
+                        (g * 255.0) as u8,
+                        (b * 255.0) as u8,
+                        (a * 255.0) as u8,
+                    )
+                });
+            debug!("Average RGBA calculation took {:?}", start.elapsed());
+            result
+        })
+    }
+
+    pub fn data_uri(&self) -> &str {
+        self.data_uri_cache.get_or_init(|| {
+            let start = Instant::now();
+
+            let rgba_start = Instant::now();
+            let thumbhash_rgba = thumb_hash_to_rgba(&self.thumbhash).unwrap();
+            debug!(
+                "ThumbHash to RGBA conversion took {:?}",
+                rgba_start.elapsed()
+            );
+
+            let png_start = Instant::now();
+            let thumbhash_png = thumbhash_to_png(&thumbhash_rgba);
+            debug!("PNG generation took {:?}", png_start.elapsed());
+
+            let optimized_png = if is_dev() {
+                thumbhash_png
+            } else {
+                let optimize_start = Instant::now();
+                let result =
+                    oxipng::optimize_from_memory(&thumbhash_png, &Default::default()).unwrap();
+                debug!("PNG optimization took {:?}", optimize_start.elapsed());
+                result
+            };
+
+            let encode_start = Instant::now();
+            let base64 = base64::engine::general_purpose::STANDARD.encode(&optimized_png);
+            let result = format!("data:image/png;base64,{}", base64);
+            debug!("Data URI encoding took {:?}", encode_start.elapsed());
+
+            debug!("Total data URI generation took {:?}", start.elapsed());
+            result
+        })
+    }
+}
+
+fn get_placeholder(path: &PathBuf) -> ImagePlaceholder {
+    // Check cache first
+    if let Some(cached) = ImageCache::get_placeholder(path) {
+        debug!("Using cached placeholder for {}", path.display());
+        let thumbhash_base64 = base64::engine::general_purpose::STANDARD.encode(&cached.thumbhash);
+        return ImagePlaceholder {
+            thumbhash: cached.thumbhash,
+            thumbhash_base64,
+            average_rgba_cache: OnceLock::new(),
+            data_uri_cache: OnceLock::new(),
+        };
+    }
+
+    let total_start = Instant::now();
+
+    let load_start = Instant::now();
+    let image = image::open(path).ok().unwrap();
     let (width, height) = image.dimensions();
     let (width, height) = (width as usize, height as usize);
+    debug!(
+        "Image load took {:?} for {}",
+        load_start.elapsed(),
+        path.display()
+    );
 
     // If width or height > 100, resize image down to max 100
     let (width, height, rgba) = if width.max(height) > 100 {
+        let resize_start = Instant::now();
         let scale = 100.0 / width.max(height) as f32;
         let new_width = (width as f32 * scale).round() as usize;
         let new_height = (height as f32 * scale).round() as usize;
@@ -112,42 +223,46 @@ fn get_placeholder(path: &PathBuf) -> Option<ImagePlaceholder> {
             new_height as u32,
             image::imageops::FilterType::Nearest,
         );
-        (new_width, new_height, resized.into_raw())
+        let result = (new_width, new_height, resized.into_raw());
+        debug!(
+            "Image resize took {:?} ({}x{} -> {}x{})",
+            resize_start.elapsed(),
+            width,
+            height,
+            new_width,
+            new_height
+        );
+        result
     } else {
-        (width, height, image.to_rgba8().into_raw())
+        let convert_start = Instant::now();
+        let result = (width, height, image.to_rgba8().into_raw());
+        debug!("Image RGBA conversion took {:?}", convert_start.elapsed());
+        result
     };
 
+    let thumbhash_start = Instant::now();
     let thumb_hash = rgba_to_thumb_hash(width, height, &rgba);
-    let average_rgba = thumb_hash_to_average_rgba(&thumb_hash)
-        .ok()
-        .map(|(r, g, b, a)| {
-            (
-                (r * 255.0) as u8,
-                (g * 255.0) as u8,
-                (b * 255.0) as u8,
-                (a * 255.0) as u8,
-            )
-        });
+    debug!("ThumbHash generation took {:?}", thumbhash_start.elapsed());
 
-    let thumbhash_rgba = thumb_hash_to_rgba(&thumb_hash).ok().unwrap();
-    let thumbhash_png = thumbhash_to_png(&thumbhash_rgba);
-    let optimized_png = if is_dev() {
-        thumbhash_png
-    } else {
-        oxipng::optimize_from_memory(&thumbhash_png, &Default::default()).unwrap()
-    };
-
-    let base64 = base64::engine::general_purpose::STANDARD.encode(&optimized_png);
-    let data_uri = format!("data:image/png;base64,{}", base64);
-
+    let encode_start = Instant::now();
     let thumbhash_base64 = base64::engine::general_purpose::STANDARD.encode(&thumb_hash);
+    debug!("Base64 encoding took {:?}", encode_start.elapsed());
 
-    Some(ImagePlaceholder {
+    debug!(
+        "Total placeholder generation took {:?} for {}",
+        total_start.elapsed(),
+        path.display()
+    );
+
+    // Cache the result
+    ImageCache::cache_placeholder(path, thumb_hash.clone());
+
+    ImagePlaceholder {
         thumbhash: thumb_hash,
         thumbhash_base64,
-        average_rgba,
-        data_uri,
-    })
+        average_rgba_cache: OnceLock::new(),
+        data_uri_cache: OnceLock::new(),
+    }
 }
 
 /// Port of https://github.com/evanw/thumbhash/blob/a652ce6ed691242f459f468f0a8756cda3b90a82/js/thumbhash.js#L234

@@ -17,8 +17,6 @@ impl Page for Index {
             },
         );
 
-        println!("Walrus placeholder ({:?})", walrus.placeholder());
-
         layout(html! {
             (logo)
             h1 { "Hello World" }

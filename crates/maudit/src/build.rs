@@ -12,7 +12,11 @@ use std::{
 
 use crate::{
     BuildOptions, BuildOutput,
-    assets::{self},
+    assets::{
+        self,
+        image_cache::{IMAGE_CACHE_DIR, ImageCache},
+    },
+    build::images::process_image,
     content::{Content, ContentSources},
     errors::BuildError,
     is_dev,
@@ -24,7 +28,7 @@ use crate::{
     },
 };
 use colored::{ColoredString, Colorize};
-use log::{info, trace};
+use log::{debug, info, trace};
 use oxc_sourcemap::SourceMap;
 use rolldown::{
     Bundler, BundlerOptions, InputItem, ModuleType,
@@ -425,12 +429,38 @@ pub async fn build(
     if !build_pages_images.is_empty() {
         print_title("processing images");
 
+        let _ = fs::create_dir_all(IMAGE_CACHE_DIR);
+
         let start_time = Instant::now();
         build_pages_images.par_iter().for_each(|image| {
             let start_process = Instant::now();
             let dest_path = assets_dir.join(image.final_file_name());
+
             if let Some(image_options) = &image.options {
-                images::process_image(image, &dest_path, image_options);
+                let final_filename = image.final_file_name();
+
+                // Check cache for transformed images
+                if let Some(cached_path) = ImageCache::get_transformed_image(&final_filename) {
+                    // Copy from cache instead of processing
+                    if fs::copy(&cached_path, &dest_path).is_ok() {
+                        info!(target: "assets", "{} -> {} (from cache) {}", image.path().to_string_lossy(), dest_path.to_string_lossy().dimmed(), format_elapsed_time(start_process.elapsed(), &route_format_options).dimmed());
+                        return;
+                    }
+                }
+
+                // Generate cache path for transformed image
+                let cache_path = ImageCache::generate_cache_path(&final_filename);
+
+                // Process image directly to cache
+                process_image(image, &cache_path, image_options);
+
+                // Copy from cache to destination
+                if fs::copy(&cache_path, &dest_path).is_ok() {
+                    // Cache the processed image path
+                    ImageCache::cache_transformed_image(&final_filename, cache_path);
+                } else {
+                    debug!("Failed to copy from cache {} to dest {}", cache_path.display(), dest_path.display());
+                }
             } else if !dest_path.exists() {
                 // TODO: Check if copying should be done in this parallel iterator, I/O doesn't benefit from parallelism so having those tasks here might just be slowing processing
                 fs::copy(image.path(), &dest_path).unwrap_or_else(|e| {

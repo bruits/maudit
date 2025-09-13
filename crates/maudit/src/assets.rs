@@ -5,6 +5,7 @@ use std::sync::OnceLock;
 use std::{fs, path::PathBuf};
 
 mod image;
+pub mod image_cache;
 mod script;
 mod style;
 pub use image::{Image, ImageFormat, ImageOptions};
