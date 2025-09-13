@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [package.metadata.maudit]
-intended_version = "0.3.0"
+intended_version = "0.5.0"
 
 [dependencies]
 maudit = { workspace = true }

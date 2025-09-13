@@ -1,2 +1,3 @@
 [packages]
 linked = [["maudit", "maudit-macros"]]
+ignore = ["benchmarks/*", "examples/*", "maudit-website"]
