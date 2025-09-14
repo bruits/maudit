@@ -1,5 +1,12 @@
 # maudit-cli
 
+## 0.4.2
+
+### Patch changes
+
+- [da95572](https://github.com/bruits/maudit/commit/da955725e460be405898b5749d64877404636e69) Fixed dev server reloading for no apparent reason on macOS — Thanks @Princesseuh!
+
+
 ## 0.4.1
 
 ### Patch changes
