@@ -27,7 +27,10 @@ futures-util = { version = "0.3", default-features = false, features = [
 http-body-util = "0.1.0"
 tower-http = { version = "0.6.2", features = ["fs", "trace"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "chrono"] }
+tracing-subscriber = { version = "=0.3.19", features = [
+    "env-filter",
+    "chrono",
+] }
 watchexec = "5.0.0"
 watchexec-events = "4.0.0"
 inquire = "0.7.5"
