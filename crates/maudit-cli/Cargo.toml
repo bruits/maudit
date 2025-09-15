@@ -10,21 +10,12 @@ name = "maudit"
 path = "src/main.rs"
 
 [dependencies]
-log = { version = "0.4", features = ["kv"] }
-env_logger = "0.11.5"
 chrono = "0.4.39"
 colored = "2.2.0"
 clap = { version = "4.5.23", features = ["derive"] }
-serde = { workspace = true, features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 axum = { version = "0.8.1", features = ["ws"] }
-tokio-tungstenite = { version = "0.26.0" }
 futures = "0.3"
-futures-util = { version = "0.3", default-features = false, features = [
-    "sink",
-    "std",
-] }
-http-body-util = "0.1.0"
 tower-http = { version = "0.6.2", features = ["fs", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "=0.3.19", features = [
