@@ -1,7 +1,5 @@
 ---
-packages:
-  - maudit-cli
-release: patch
+maudit-cli: patch
 ---
 
 Fixes missing DEV flag on rebuilds
