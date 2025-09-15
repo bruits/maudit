@@ -1,5 +1,12 @@
 # maudit
 
+## 0.5.1
+
+### Patch changes
+
+- [9cd5fdd](https://github.com/bruits/maudit/commit/9cd5fdd8abe3044bd09d48b96217e3a0d2878b13) Updates default quality for webp to 80 to match sharp — Thanks @Princesseuh!
+
+
 ## 0.5.0
 
 ### Minor changes
