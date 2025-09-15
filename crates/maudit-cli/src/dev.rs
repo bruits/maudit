@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{debug, error, info};
 use watchexec::{
-    command::{Command, Program},
+    command::{Command, Program, Shell},
     job::CommandState,
     Watchexec,
 };
@@ -55,15 +55,20 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> io::Result<()> {
                     return action;
                 } else {
                     info!(name: "build", "Detected changes. Rebuilding…");
+
+                    // TODO: This kinda sucks but watchexec doesn't support setting env vars on commands
+                    // Maybe I need to use something else than watchexec
+                    let (shell, command) = if cfg!(windows) {
+                        ("cmd", "/C set MAUDIT_DEV=true && set MAUDIT_QUIET=true && cargo run --quiet")
+                    } else {
+                        ("sh", "MAUDIT_DEV=true MAUDIT_QUIET=true cargo run --quiet")
+                    };
+
                     let (_, job) = action.create_job(Arc::new(Command {
-                        program: Program::Exec {
-                            prog: "cargo".into(),
-                            args: vec![
-                                "run".into(),
-                                "--quiet".into(),
-                                "--".into(),
-                                "--quiet".into(),
-                            ],
+                        program: Program::Shell {
+                            shell: Shell::new(shell),
+                            command: command.into(),
+                            args: vec![],
                         },
                         options: Default::default(),
                     }));

@@ -21,7 +21,7 @@ pub fn process_image(image: &Image, dest_path: &Path, image_options: &ImageOptio
     // TODO: Add a way for people to choose lossless WebP encoding, despite the larger file sizes
     if new_format == ImageFormat::Webp {
         let encoder: Encoder = Encoder::from_image(&img).unwrap();
-        let webp: WebPMemory = encoder.encode(90f32); // TODO: Allow configuring quality
+        let webp: WebPMemory = encoder.encode(80f32); // TODO: Allow configuring quality
         std::fs::write(dest_path, &*webp).unwrap();
     } else {
         let file = File::create(dest_path).unwrap();
