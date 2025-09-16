@@ -4,6 +4,7 @@ use crate::layouts::layout;
 use maud::{html, Markup};
 use maudit::content::markdown_entry;
 use maudit::page::prelude::*;
+use maudit::page::FullPage;
 
 pub fn blog_index_content<T: FullPage>(
     route: impl FullPage,
@@ -45,9 +46,11 @@ pub struct BlogEntryParams {
 pub fn blog_entry_routes(ctx: &mut DynamicRouteContext, name: &str) -> Vec<Route<BlogEntryParams>> {
     let blog_entries = ctx.content.get_source::<BlogEntryContent>(name);
 
-    blog_entries.into_routes(|entry| Route::from_params(BlogEntryParams {
-        entry: entry.id.clone(),
-    }))
+    blog_entries.into_routes(|entry| {
+        Route::from_params(BlogEntryParams {
+            entry: entry.id.clone(),
+        })
+    })
 }
 
 pub fn blog_entry_render(ctx: &mut RouteContext, name: &str, stringified_ident: &str) -> Markup {

@@ -59,6 +59,7 @@ pub fn preprocess_shortcodes(
     content: &str,
     shortcodes: &MarkdownShortcodes,
     mut route_ctx: Option<&mut RouteContext>,
+    markdown_path: Option<&str>,
 ) -> Result<String, String> {
     let mut output = String::new();
     let mut rest = content;
@@ -85,6 +86,14 @@ pub fn preprocess_shortcodes(
         };
 
         let shortcode_content = remaining[..tag_end].trim();
+
+        // Check if this is a self-closing shortcode (ends with /)
+        let is_self_closing = shortcode_content.ends_with('/');
+        let shortcode_content = if is_self_closing {
+            shortcode_content.trim_end_matches('/').trim()
+        } else {
+            shortcode_content
+        };
 
         // Parse shortcode name and arguments
         let mut parts = shortcode_content.split_whitespace();
@@ -128,6 +137,41 @@ pub fn preprocess_shortcodes(
                             quote_char = next_ch;
                             in_quotes = true;
                             chars.next(); // consume the quote
+                        }
+                    }
+                    '\\' if !in_key && in_quotes => {
+                        // Handle escaped characters
+                        if let Some(escaped_ch) = chars.next() {
+                            match escaped_ch {
+                                '"' | '\'' => {
+                                    // Escaped quote - add literal quote character
+                                    current_value.push(escaped_ch);
+                                }
+                                '\\' => {
+                                    // Escaped backslash - add literal backslash
+                                    current_value.push('\\');
+                                }
+                                'n' => {
+                                    // Escaped newline
+                                    current_value.push('\n');
+                                }
+                                't' => {
+                                    // Escaped tab
+                                    current_value.push('\t');
+                                }
+                                'r' => {
+                                    // Escaped carriage return
+                                    current_value.push('\r');
+                                }
+                                _ => {
+                                    // For any other escaped character, keep the backslash and the character
+                                    current_value.push('\\');
+                                    current_value.push(escaped_ch);
+                                }
+                            }
+                        } else {
+                            // Trailing backslash - add it literally
+                            current_value.push('\\');
                         }
                     }
                     '"' | '\'' if !in_key && in_quotes && ch == quote_char => {
@@ -202,43 +246,14 @@ pub fn preprocess_shortcodes(
         // Move past the opening tag
         let after_opening_tag = &remaining[tag_end + 2..];
 
-        // Look for closing tag - handle both {{/name}} and {{ /name }} formats
-        let closing_tag_compact = format!("{{{{/{}}}}}", name);
-        let closing_tag_spaced = format!("{{{{ /{} }}}}", name);
-
-        let close_pos = after_opening_tag
-            .find(&closing_tag_compact)
-            .or_else(|| after_opening_tag.find(&closing_tag_spaced));
-
-        if let Some(close_pos) = close_pos {
-            // Determine which closing tag format was found to calculate the correct length
-            let closing_tag_len =
-                if after_opening_tag[close_pos..].starts_with(&closing_tag_compact) {
-                    closing_tag_compact.len()
-                } else {
-                    closing_tag_spaced.len()
-                };
-
-            // Block shortcode - extract body and recursively process it
-            let body = &after_opening_tag[..close_pos];
-            let processed_body = preprocess_shortcodes(body, shortcodes, route_ctx.as_deref_mut())?;
-
-            // Execute shortcode with processed body
+        if is_self_closing {
+            // Self-closing shortcode - execute immediately
             if let Some(func) = shortcodes.get(name) {
                 let mut shortcode_args = ShortcodeArgs::new(args);
-                shortcode_args.0.insert("body".to_string(), processed_body);
-                let result = func(&shortcode_args, route_ctx.as_deref_mut());
-                output.push_str(&result);
-            } else {
-                return Err(format!("Unknown shortcode: '{}'", name));
-            }
-
-            // Continue after the closing tag
-            rest = &after_opening_tag[close_pos + closing_tag_len..];
-        } else {
-            // Self-closing shortcode
-            if let Some(func) = shortcodes.get(name) {
-                let shortcode_args = ShortcodeArgs::new(args);
+                shortcode_args.0.insert(
+                    "markdown_path".to_string(),
+                    markdown_path.unwrap_or("").to_string(),
+                );
                 let result = func(&shortcode_args, route_ctx.as_deref_mut());
                 output.push_str(&result);
             } else {
@@ -247,6 +262,56 @@ pub fn preprocess_shortcodes(
 
             // Continue after the opening tag
             rest = after_opening_tag;
+        } else {
+            // Block shortcode - look for closing tag
+            let closing_tag_compact = format!("{{{{/{}}}}}", name);
+            let closing_tag_spaced = format!("{{{{ /{} }}}}", name);
+
+            let close_pos = after_opening_tag
+                .find(&closing_tag_compact)
+                .or_else(|| after_opening_tag.find(&closing_tag_spaced));
+
+            if let Some(close_pos) = close_pos {
+                // Determine which closing tag format was found to calculate the correct length
+                let closing_tag_len =
+                    if after_opening_tag[close_pos..].starts_with(&closing_tag_compact) {
+                        closing_tag_compact.len()
+                    } else {
+                        closing_tag_spaced.len()
+                    };
+
+                // Block shortcode - extract body and recursively process it
+                let body = &after_opening_tag[..close_pos];
+                let processed_body = preprocess_shortcodes(
+                    body,
+                    shortcodes,
+                    route_ctx.as_deref_mut(),
+                    markdown_path,
+                )?;
+
+                // Execute shortcode with processed body
+                if let Some(func) = shortcodes.get(name) {
+                    let mut shortcode_args = ShortcodeArgs::new(args);
+                    shortcode_args.0.insert("body".to_string(), processed_body);
+                    shortcode_args.0.insert(
+                        "markdown_path".to_string(),
+                        markdown_path.unwrap_or("").to_string(),
+                    );
+                    let result = func(&shortcode_args, route_ctx.as_deref_mut());
+                    output.push_str(&result);
+                } else {
+                    return Err(format!("Unknown shortcode: '{}'", name));
+                }
+
+                // Continue after the closing tag
+                rest = &after_opening_tag[close_pos + closing_tag_len..];
+            } else {
+                // No closing tag found for block shortcode - this is an error
+                return Err(format!(
+                    "Block shortcode '{}' is missing its closing tag. Use '{{{{ {} /}}}}' for self-closing shortcodes or add '{{{{/{}}}}}'",
+                    name, name, name
+                ));
+            }
         }
     }
 

@@ -89,7 +89,7 @@ mod tests {
         content: &str,
         shortcodes: &MarkdownShortcodes,
     ) -> Result<String, String> {
-        preprocess_shortcodes(content, shortcodes, None)
+        preprocess_shortcodes(content, shortcodes, None, None)
     }
 
     // Helper function that automatically wraps RouteContext in Some() for existing tests
@@ -98,7 +98,7 @@ mod tests {
         shortcodes: &MarkdownShortcodes,
         route_ctx: &mut RouteContext,
     ) -> Result<String, String> {
-        preprocess_shortcodes(content, shortcodes, Some(route_ctx))
+        preprocess_shortcodes(content, shortcodes, Some(route_ctx), None)
     }
 
     #[test]
@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn test_simple_self_closing_shortcode() {
         let shortcodes = create_test_shortcodes();
-        let content = "Before {{ simple }} after";
+        let content = "Before {{ simple /}} after";
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx).unwrap()
         });
@@ -124,7 +124,7 @@ mod tests {
     #[test]
     fn test_shortcode_with_arguments() {
         let shortcodes = create_test_shortcodes();
-        let content = "{{ greet name=Alice }}";
+        let content = "{{ greet name=Alice /}}";
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx).unwrap()
         });
@@ -134,19 +134,19 @@ mod tests {
     #[test]
     fn test_multiple_arguments() {
         let shortcodes = create_test_shortcodes();
-        let content = "{{ date format=iso year=2023 }}";
+        let content = "{{ date day=Monday month=January year=2024 /}}";
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx).unwrap()
         });
-        assert_eq!(result, "DATE[iso]");
+        assert_eq!(result, "DATE[default]");
     }
 
     #[test]
     fn test_frontmatter_shortcodes() {
         let shortcodes = create_test_shortcodes();
         let content = r#"---
-title: {{ greet name=Blog }}
-date: {{ date format=iso }}
+title: {{ greet name=Blog /}}
+date: {{ date format=iso /}}
 ---
 
 # Content here"#;
@@ -165,7 +165,7 @@ date: DATE[iso]
     #[test]
     fn test_shortcodes_in_headings() {
         let shortcodes = create_test_shortcodes();
-        let content = "# {{ greet name=Header }}\n\n## Section {{ date format=short }}";
+        let content = "# {{ greet name=Header /}}\n\n## Section {{ date format=short /}}";
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx).unwrap()
         });
@@ -175,7 +175,7 @@ date: DATE[iso]
     #[test]
     fn test_shortcodes_in_links() {
         let shortcodes = create_test_shortcodes();
-        let content = "[{{ greet name=Link }}](https://example.com)";
+        let content = "[{{ greet name=Link /}}](https://example.com)";
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx).unwrap()
         });
@@ -185,7 +185,7 @@ date: DATE[iso]
     #[test]
     fn test_shortcodes_in_code_blocks() {
         let shortcodes = create_test_shortcodes();
-        let content = "```\nSome code with {{ simple }}\n```";
+        let content = "```\nSome code with {{ simple /}}\n```";
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx).unwrap()
         });
@@ -205,7 +205,7 @@ date: DATE[iso]
     #[test]
     fn test_nested_shortcodes_in_block() {
         let shortcodes = create_test_shortcodes();
-        let content = "{{ section title=Main }}\nHello {{ greet name=World }}!\n{{ /section }}";
+        let content = "{{ section title=Main }}\nHello {{ greet name=World /}}!\n{{ /section }}";
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -222,7 +222,7 @@ date: DATE[iso]
         let content = r#"{{ section title=Outer }}
 {{ alert type=warning }}
 {{ highlight lang=javascript }}
-console.log("{{ greet name=Nested }}");
+console.log("{{ greet name=Nested /}}");
 {{ /highlight }}
 {{ /alert }}
 {{ /section }}"#;
@@ -243,7 +243,7 @@ console.log("Hello, Nested!");
     #[test]
     fn test_multiple_shortcodes_same_line() {
         let shortcodes = create_test_shortcodes();
-        let content = "{{ greet name=Alice }} and {{ greet name=Bob }}";
+        let content = "{{ greet name=Alice /}} and {{ greet name=Bob /}}";
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -254,9 +254,9 @@ console.log("Hello, Nested!");
     #[test]
     fn test_shortcodes_in_lists() {
         let shortcodes = create_test_shortcodes();
-        let content = r#"- Item 1: {{ greet name=First }}
-- Item 2: {{ date format=short }}
-- Item 3: {{ simple }}"#;
+        let content = r#"- Item 1: {{ greet name=First /}}
+- Item 2: {{ date format=short /}}
+- Item 3: {{ simple /}}"#;
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -272,8 +272,8 @@ console.log("Hello, Nested!");
         let shortcodes = create_test_shortcodes();
         let content = r#"| Name | Greeting |
 |------|----------|
-| Alice | {{ greet name=Alice }} |
-| Bob | {{ greet name=Bob }} |"#;
+| Alice | {{ greet name=Alice /}} |
+| Bob | {{ greet name=Bob /}} |"#;
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -288,7 +288,7 @@ console.log("Hello, Nested!");
     #[test]
     fn test_shortcodes_with_special_characters() {
         let shortcodes = create_test_shortcodes();
-        let content = "Before\n{{ simple }}\nAfter\n\n{{ greet name=Test }}";
+        let content = "Before\n{{ simple /}}\nAfter\n\n{{ greet name=Test /}}";
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -299,7 +299,7 @@ console.log("Hello, Nested!");
     #[test]
     fn test_error_unknown_shortcode() {
         let shortcodes = create_test_shortcodes();
-        let content = "{{ unknown_shortcode }}";
+        let content = "{{ unknown_shortcode /}}";
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         });
@@ -326,7 +326,7 @@ console.log("Hello, Nested!");
     #[test]
     fn test_unclosed_shortcode_with_valid_shortcode_after() {
         let shortcodes = create_test_shortcodes();
-        let content = "Before {{ unclosed. Then {{ simple }} after.";
+        let content = "Before {{ unclosed. Then {{ simple /}} after.";
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -361,7 +361,7 @@ console.log("Hello, Nested!");
     #[test]
     fn test_error_invalid_argument_format() {
         let shortcodes = create_test_shortcodes();
-        let content = "{{ greet name Alice }}";
+        let content = "{{ greet name Alice /}}";
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         });
@@ -383,7 +383,7 @@ console.log("Hello, Nested!");
     #[test]
     fn test_whitespace_handling() {
         let shortcodes = create_test_shortcodes();
-        let content = "{{   simple   }}";
+        let content = "{{   simple   /}}";
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -394,7 +394,7 @@ console.log("Hello, Nested!");
     #[test]
     fn test_whitespace_in_arguments() {
         let shortcodes = create_test_shortcodes();
-        let content = "{{  greet   name=Alice  }}";
+        let content = "{{  greet   name=Alice  /}}";
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -406,34 +406,34 @@ console.log("Hello, Nested!");
     fn test_complex_markdown_document() {
         let shortcodes = create_test_shortcodes();
         let content = r#"---
-title: {{ greet name=Blog }}
-author: {{ greet name=Author }}
+title: {{ greet name=Blog /}}
+author: {{ greet name=Author /}}
 ---
 
-# {{ greet name=Reader }}
+# {{ greet name=Reader /}}
 
-Welcome to my blog! Today is {{ date format=full }}.
+Welcome to my blog! Today is {{ date format=full /}}.
 
 ## Code Example
 
 {{ highlight lang=rust }}
 fn main() {
-    println!("{{ greet name=Rust }}");
+    println!("{{ greet name=Rust /}}");
 }
 {{ /highlight }}
 
 ## Alert Section
 
 {{ alert type=info }}
-This is an important message with {{ simple }} content.
+This is an important message with {{ simple /}} content.
 {{ /alert }}
 
-- List item with {{ greet name=Item }}
-- Another item: {{ date format=short }}
+- List item with {{ greet name=Item /}}
+- Another item: {{ date format=short /}}
 
-> Quote with {{ simple }} shortcode
+> Quote with {{ simple /}} shortcode
 
-[Link with {{ greet name=Link }}](http://example.com)"#;
+[Link with {{ greet name=Link /}}](http://example.com)"#;
 
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
@@ -475,7 +475,7 @@ This is an important message with SIMPLE_OUTPUT content.
     #[test]
     fn test_markdown_integration_headings_with_shortcodes() {
         let shortcodes = create_test_shortcodes();
-        let content = "# {{ greet name=Title }}\n\n## Section {{ date format=short }}";
+        let content = "# {{ greet name=Title /}}\n\n## Section {{ date format=short /}}";
 
         // Test shortcode preprocessing first
         let processed = with_test_route_context(|route_ctx| {
@@ -488,7 +488,7 @@ This is an important message with SIMPLE_OUTPUT content.
     #[test]
     fn test_markdown_integration_emphasis_with_shortcodes() {
         let shortcodes = create_test_shortcodes();
-        let content = "*{{ greet name=Italic }}* and **{{ greet name=Bold }}**";
+        let content = "*{{ greet name=Italic /}}* and **{{ greet name=Bold /}}**";
         let processed = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -499,7 +499,7 @@ This is an important message with SIMPLE_OUTPUT content.
     #[test]
     fn test_markdown_integration_code_spans_with_shortcodes() {
         let shortcodes = create_test_shortcodes();
-        let content = "Use `{{ simple }}` in your code";
+        let content = "Use `{{ simple /}}` in your code";
         let processed = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -510,7 +510,7 @@ This is an important message with SIMPLE_OUTPUT content.
     #[test]
     fn test_markdown_integration_blockquotes_with_shortcodes() {
         let shortcodes = create_test_shortcodes();
-        let content = "> {{ greet name=Quote }}\n> \n> {{ simple }}";
+        let content = "> {{ greet name=Quote /}}\n> \n> {{ simple /}}";
         let processed = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -521,12 +521,12 @@ This is an important message with SIMPLE_OUTPUT content.
     #[test]
     fn test_markdown_integration_nested_lists_with_shortcodes() {
         let shortcodes = create_test_shortcodes();
-        let content = r#"1. {{ greet name=First }}
-   - Nested {{ simple }}
-   - {{ date format=iso }}
-2. {{ greet name=Second }}
-   1. Numbered {{ simple }}
-   2. {{ greet name=Nested }}"#;
+        let content = r#"1. {{ greet name=First /}}
+   - Nested {{ simple /}}
+   - {{ date format=iso /}}
+2. {{ greet name=Second /}}
+   1. Numbered {{ simple /}}
+   2. {{ greet name=Nested /}}"#;
         let processed = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -543,10 +543,10 @@ This is an important message with SIMPLE_OUTPUT content.
     #[test]
     fn test_markdown_integration_complex_tables_with_shortcodes() {
         let shortcodes = create_test_shortcodes();
-        let content = r#"| **{{ greet name=Header }}** | _{{ date format=long }}_ |
+        let content = r#"| **{{ greet name=Header /}}** | _{{ date format=long /}}_ |
 |:---------------------------|-------------------------:|
-| {{ simple }}               | {{ greet name=Cell }}     |
-| `{{ greet name=Code }}`    | > {{ simple }}            |"#;
+| {{ simple /}}               | {{ greet name=Cell /}}     |
+| `{{ greet name=Code /}}`    | > {{ simple /}}            |"#;
         let processed = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -561,9 +561,9 @@ This is an important message with SIMPLE_OUTPUT content.
     #[test]
     fn test_markdown_integration_task_lists_with_shortcodes() {
         let shortcodes = create_test_shortcodes();
-        let content = r#"- [x] {{ greet name=Done }}
-- [ ] {{ simple }}
-- [ ] {{ date format=todo }}"#;
+        let content = r#"- [x] {{ greet name=Done /}}
+- [ ] {{ simple /}}
+- [ ] {{ date format=todo /}}"#;
         let processed = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -577,7 +577,7 @@ This is an important message with SIMPLE_OUTPUT content.
     #[test]
     fn test_markdown_integration_strikethrough_with_shortcodes() {
         let shortcodes = create_test_shortcodes();
-        let content = "~~{{ greet name=Deleted }}~~ and {{ simple }}";
+        let content = "~~{{ greet name=Deleted /}}~~ and {{ simple /}}";
         let processed = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -588,7 +588,7 @@ This is an important message with SIMPLE_OUTPUT content.
     #[test]
     fn test_markdown_integration_horizontal_rules_with_shortcodes() {
         let shortcodes = create_test_shortcodes();
-        let content = "{{ greet name=Before }}\n\n---\n\n{{ simple }}";
+        let content = "{{ greet name=Before /}}\n\n---\n\n{{ simple /}}";
         let processed = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -599,7 +599,7 @@ This is an important message with SIMPLE_OUTPUT content.
     #[test]
     fn test_markdown_integration_footnotes_with_shortcodes() {
         let shortcodes = create_test_shortcodes();
-        let content = "{{ greet name=Text }}[^1]\n\n[^1]: {{ simple }}";
+        let content = "{{ greet name=Text /}}[^1]\n\n[^1]: {{ simple /}}";
         let processed = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -610,13 +610,13 @@ This is an important message with SIMPLE_OUTPUT content.
     #[test]
     fn test_markdown_integration_complex_links_with_shortcodes() {
         let shortcodes = create_test_shortcodes();
-        let content = r#"[{{ greet name=Link }}](https://example.com "{{ simple }}")
+        let content = r#"[{{ greet name=Link /}}](https://example.com "{{ simple /}}")
 
-![{{ greet name=Alt }}](image.jpg "{{ date format=title }}")
+![{{ greet name=Alt /}}](image.jpg "{{ date format=title /}}")
 
-[Reference {{ simple }}][ref]
+[Reference {{ simple /}}][ref]
 
-[ref]: https://example.com "{{ greet name=RefTitle }}""#;
+[ref]: https://example.com "{{ greet name=RefTitle /}}""#;
         let processed = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -636,13 +636,13 @@ This is an important message with SIMPLE_OUTPUT content.
         let shortcodes = create_test_shortcodes();
         let content = r#"```rust
 fn main() {
-    println!("{{ greet name=Rust }}");
-    // {{ simple }}
+    println!("{{ greet name=Rust /}}");
+    // {{ simple /}}
 }
 ```
 
-```{{ greet name=Language }}
-{{ simple }}
+```{{ greet name=Language /}}
+{{ simple /}}
 ```"#;
         let processed = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
@@ -665,11 +665,11 @@ SIMPLE_OUTPUT
     fn test_markdown_integration_html_blocks_with_shortcodes() {
         let shortcodes = create_test_shortcodes();
         let content = r#"<div class="custom">
-  <h2>{{ greet name=HTML }}</h2>
-  <p>{{ simple }}</p>
+  <h2>{{ greet name=HTML /}}</h2>
+  <p>{{ simple /}}</p>
 </div>
 
-<img src="test.jpg" alt="{{ greet name=Alt }}" title="{{ date format=attr }}">"#;
+<img src="test.jpg" alt="{{ greet name=Alt /}}" title="{{ date format=attr /}}">"#;
         let processed = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -686,14 +686,14 @@ SIMPLE_OUTPUT
     #[test]
     fn test_markdown_integration_math_blocks_with_shortcodes() {
         let shortcodes = create_test_shortcodes();
-        let content = r#"Inline math: ${{ simple }}$
+        let content = r#"Inline math: ${{ simple /}}$
 
 Block math:
 $$
-{{ greet name=Math }}
+{{ greet name=Math /}}
 $$
 
-{{ greet name=Text }} with $x = {{ simple }}$ inline."#;
+{{ greet name=Text /}} with $x = {{ simple /}}$ inline."#;
         let processed = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -713,19 +713,19 @@ Hello, Text! with $x = SIMPLE_OUTPUT$ inline."#;
     fn test_markdown_integration_frontmatter_yaml_with_shortcodes() {
         let shortcodes = create_test_shortcodes();
         let content = r#"---
-title: "{{ greet name=Blog }}"
-description: {{ simple }}
+title: "{{ greet name=Blog /}}"
+description: {{ simple /}}
 tags:
-  - {{ greet name=Tag1 }}
-  - {{ simple }}
+  - {{ greet name=Tag1 /}}
+  - {{ simple /}}
 metadata:
-  created: {{ date format=iso }}
-  author: {{ greet name=Author }}
+  created: {{ date format=iso /}}
+  author: {{ greet name=Author /}}
 ---
 
-# {{ greet name=Content }}
+# {{ greet name=Content /}}
 
-{{ simple }}"#;
+{{ simple /}}"#;
         let processed = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -751,14 +751,14 @@ SIMPLE_OUTPUT"#;
     fn test_markdown_integration_block_shortcodes_with_markdown() {
         let shortcodes = create_test_shortcodes();
         let content = r#"{{ section title=Main }}
-# {{ greet name=Header }}
+# {{ greet name=Header /}}
 
-**{{ greet name=Bold }}** and *{{ simple }}*
+**{{ greet name=Bold /}}** and *{{ simple /}}*
 
-- {{ greet name=Item1 }}
-- {{ simple }}
+- {{ greet name=Item1 /}}
+- {{ simple /}}
 
-> {{ greet name=Quote }}
+> {{ greet name=Quote /}}
 
 {{ /section }}"#;
         let processed = with_test_route_context(|route_ctx| {
@@ -782,18 +782,18 @@ SIMPLE_OUTPUT"#;
     #[test]
     fn test_markdown_integration_edge_cases() {
         let shortcodes = create_test_shortcodes();
-        let content = r#"{{ greet name=Start }}
+        let content = r#"{{ greet name=Start /}}
 
-<!-- {{ simple }} in comment -->
+<!-- {{ simple /}} in comment -->
 
 {{ highlight lang=markdown }}
-# {{ greet name=NestedMD }}
-{{ simple }}
+# {{ greet name=NestedMD /}}
+{{ simple /}}
 {{ /highlight }}
 
-`{{ greet name=BacktickCode }}`
+`{{ greet name=BacktickCode /}}`
 
-{{ greet name=End }}"#;
+{{ greet name=End /}}"#;
         let processed = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -817,51 +817,51 @@ Hello, End!"#;
     fn test_markdown_integration_real_world_blog_post() {
         let shortcodes = create_test_shortcodes();
         let content = r#"---
-title: {{ greet name=BlogPost }}
-date: {{ date format=iso }}
-author: {{ greet name=Writer }}
-tags: [{{ simple }}, {{ greet name=Tutorial }}]
+title: {{ greet name=BlogPost /}}
+date: {{ date format=iso /}}
+author: {{ greet name=Writer /}}
+tags: [{{ simple /}}, {{ greet name=Tutorial /}}]
 ---
 
-# {{ greet name=Reader }}!
+# {{ greet name=Reader /}}!
 
-Welcome to my blog post about {{ simple }}.
+Welcome to my blog post about {{ simple /}}.
 
 ## What we'll cover
 
-1. **{{ greet name=Introduction }}** - Getting started
-2. **{{ simple }}** basics
-3. Advanced {{ greet name=Techniques }}
+1. **{{ greet name=Introduction /}}** - Getting started
+2. **{{ simple /}}** basics
+3. Advanced {{ greet name=Techniques /}}
 
 {{ alert type=info }}
-💡 **Tip**: {{ greet name=Remember }} to {{ simple }}!
+💡 **Tip**: {{ greet name=Remember /}} to {{ simple /}}!
 {{ /alert }}
 
 ## Code Example
 
 {{ highlight lang=rust }}
 fn main() {
-    println!("{{ greet name=World }}!");
-    // {{ simple }}
+    println!("{{ greet name=World /}}!");
+    // {{ simple /}}
 }
 {{ /highlight }}
 
 ### Task List
 
-- [x] {{ greet name=Setup }}
-- [ ] {{ simple }}
-- [ ] {{ greet name=Publish }}
+- [x] {{ greet name=Setup /}}
+- [ ] {{ simple /}}
+- [ ] {{ greet name=Publish /}}
 
 ---
 
-> "{{ greet name=Quote }}" - {{ simple }}
+> "{{ greet name=Quote /}}" - {{ simple /}}
 
 {{ section title=Resources }}
-- [Documentation](https://docs.rs) - {{ simple }}
-- [GitHub](https://github.com) - {{ greet name=Source }}
+- [Documentation](https://docs.rs) - {{ simple /}}
+- [GitHub](https://github.com) - {{ greet name=Source /}}
 {{ /section }}
 
-*Published on {{ date format=long }}*"#;
+*Published on {{ date format=long /}}*"#;
 
         let processed = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
@@ -922,8 +922,8 @@ fn main() {
 
         // Test invalid names that should be treated as literal text
         let test_cases = vec![
-            ("{{ 123invalid }}", "{{ 123invalid }}"), // starts with number
-            ("{{ -invalid }}", "{{ -invalid }}"),     // starts with dash
+            ("{{ 123invalid /}}", "{{ 123invalid /}}"), // starts with number
+            ("{{ -invalid }}", "{{ -invalid }}"),       // starts with dash
             ("{{ invalid-name }}", "{{ invalid-name }}"), // contains dash
             ("{{ invalid.name }}", "{{ invalid.name }}"), // contains dot
             ("{{ invalid@name }}", "{{ invalid@name }}"), // contains special char
@@ -946,11 +946,11 @@ fn main() {
         shortcodes.register("name123", |_, _| "NAME123".to_string());
 
         let test_cases = vec![
-            ("{{ valid_name }}", "VALID_NAME"),
-            ("{{ ValidName }}", "VALID_NAME_CAMEL"),
-            ("{{ _underscore }}", "UNDERSCORE"),
-            ("{{ name123 }}", "NAME123"),
-            ("{{ a }}", "{{ a }}"), // single char is invalid (too short for pattern)
+            ("{{ valid_name /}}", "VALID_NAME"),
+            ("{{ ValidName /}}", "VALID_NAME_CAMEL"),
+            ("{{ _underscore /}}", "UNDERSCORE"),
+            ("{{ name123 /}}", "NAME123"),
+            ("{{ a /}}", "{{ a /}}"), // single char is invalid (too short for pattern)
         ];
 
         for (input, expected) in test_cases {
@@ -968,7 +968,7 @@ fn main() {
             (r#"\{{"hello"}}"#, r#"\{{"hello"}}"#),
             (r#"Before \{{test}} after"#, r#"Before \{{test}} after"#),
             (
-                r#"\{{invalid}} and {{ simple }}"#,
+                r#"\{{invalid}} and {{ simple /}}"#,
                 r#"\{{invalid}} and SIMPLE_OUTPUT"#,
             ),
         ];
@@ -985,10 +985,10 @@ fn main() {
 
         // Test various edge cases - invalid names should be treated as literal text
         let test_cases = vec![
-            ("{{ 1 }}", "{{ 1 }}"),       // single digit (invalid)
-            ("{{ _ }}", "{{ _ }}"),       // single underscore (invalid - too short)
-            ("{{ 1A }}", "{{ 1A }}"),     // invalid: digit + letter
-            ("{{ café }}", "{{ café }}"), // invalid: non-ASCII
+            ("{{ 1 /}}", "{{ 1 /}}"),       // single digit (invalid)
+            ("{{ _ /}}", "{{ _ /}}"),       // single underscore (invalid - too short)
+            ("{{ 1A /}}", "{{ 1A /}}"),     // invalid: digit + letter
+            ("{{ café /}}", "{{ café /}}"), // invalid: non-ASCII
         ];
 
         for (input, expected) in test_cases {
@@ -997,8 +997,12 @@ fn main() {
         }
 
         // Test valid names that aren't registered - should get "Unknown shortcode" error
-        let valid_but_unregistered =
-            vec!["{{ _a }}", "{{ a_ }}", "{{ A1 }}", "{{ valid_name123 }}"];
+        let valid_but_unregistered = vec![
+            "{{ _a /}}",
+            "{{ a_ /}}",
+            "{{ A1 /}}",
+            "{{ valid_name123 /}}",
+        ];
 
         for input in valid_but_unregistered {
             let result = preprocess_shortcodes_simple(input, &shortcodes);
@@ -1030,11 +1034,11 @@ fn main() {
         let shortcodes = create_test_shortcodes();
 
         let content = r#"
-Valid: {{ simple }}
-Invalid number start: {{ 123invalid }}
-Valid underscore: {{ greet name=Test }}
+Valid: {{ simple /}}
+Invalid number start: {{ 123invalid /}}
+Valid underscore: {{ greet name=Test /}}
 Invalid dash: {{ invalid-name }}
-Another valid: {{ date format=iso }}
+Another valid: {{ date format=iso /}}
 "#;
 
         let result = with_test_route_context(|route_ctx| {
@@ -1043,7 +1047,7 @@ Another valid: {{ date format=iso }}
         .unwrap();
         let expected = r#"
 Valid: SIMPLE_OUTPUT
-Invalid number start: {{ 123invalid }}
+Invalid number start: {{ 123invalid /}}
 Valid underscore: Hello, Test!
 Invalid dash: {{ invalid-name }}
 Another valid: DATE[iso]
@@ -1057,7 +1061,7 @@ Another valid: DATE[iso]
         let shortcodes = create_test_shortcodes();
 
         // Test double quotes
-        let content = r#"{{ greet name="Hello World" }}"#;
+        let content = r#"{{ greet name="Hello World" /}}"#;
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -1065,7 +1069,7 @@ Another valid: DATE[iso]
         assert_eq!(result, "Hello, Hello World!");
 
         // Test single quotes
-        let content = r#"{{ greet name='Hello World' }}"#;
+        let content = r#"{{ greet name='Hello World' /}}"#;
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -1082,7 +1086,7 @@ Another valid: DATE[iso]
             format!("{} - {}", text, author)
         });
 
-        let content = r#"{{ message text="Hello World" author=John }}"#;
+        let content = r#"{{ message text="Hello World" author=John /}}"#;
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -1097,7 +1101,7 @@ Another valid: DATE[iso]
             args.get_str("value").unwrap_or("").to_string()
         });
 
-        let content = r#"{{ special value="Hello, World! How are you?" }}"#;
+        let content = r#"{{ special value="Hello, World! How are you?" /}}"#;
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
@@ -1109,7 +1113,7 @@ Another valid: DATE[iso]
     fn test_error_unclosed_quotes() {
         let shortcodes = create_test_shortcodes();
 
-        let content = r#"{{ greet name="Hello World }}"#;
+        let content = r#"{{ greet name="Hello World /}}"#;
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         });
@@ -1125,11 +1129,160 @@ Another valid: DATE[iso]
             format!("'{}'", value)
         });
 
-        let content = r#"{{ empty value="" }}"#;
+        let content = r#"{{ empty value="" /}}"#;
         let result = with_test_route_context(|route_ctx| {
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         })
         .unwrap();
         assert_eq!(result, "''");
+    }
+
+    #[test]
+    fn test_escaped_quotes_in_arguments() {
+        let mut shortcodes = create_test_shortcodes();
+        shortcodes.register("quote", |args, _| {
+            let message = args.get_str("message").unwrap_or("");
+            format!("Quote: {}", message)
+        });
+
+        // Test escaped double quotes
+        let content = r#"{{ quote message="Me answering \"thanks man glad you like it\" to someone saying a feature is stupid" /}}"#;
+        let result = with_test_route_context(|route_ctx| {
+            preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
+        })
+        .unwrap();
+        assert_eq!(
+            result,
+            r#"Quote: Me answering "thanks man glad you like it" to someone saying a feature is stupid"#
+        );
+
+        // Test escaped single quotes
+        let content = r#"{{ quote message='It\'s a "great" day!' /}}"#;
+        let result = with_test_route_context(|route_ctx| {
+            preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
+        })
+        .unwrap();
+        assert_eq!(result, r#"Quote: It's a "great" day!"#);
+
+        // Test escaped backslashes
+        let content = r#"{{ quote message="Path: C:\\Users\\name\\file.txt" /}}"#;
+        let result = with_test_route_context(|route_ctx| {
+            preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
+        })
+        .unwrap();
+        assert_eq!(result, r#"Quote: Path: C:\Users\name\file.txt"#);
+
+        // Test escaped newlines and tabs
+        let content = r#"{{ quote message="Line 1\nLine 2\tTabbed" /}}"#;
+        let result = with_test_route_context(|route_ctx| {
+            preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
+        })
+        .unwrap();
+        assert_eq!(result, "Quote: Line 1\nLine 2\tTabbed");
+
+        // Test mixed escape sequences
+        let content = r#"{{ quote message="Say \"Hello\", then press \\n for newline\nDone!" /}}"#;
+        let result = with_test_route_context(|route_ctx| {
+            preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
+        })
+        .unwrap();
+        assert_eq!(
+            result,
+            "Quote: Say \"Hello\", then press \\n for newline\nDone!"
+        );
+    }
+
+    #[test]
+    fn test_self_closing_shortcode_syntax() {
+        let mut shortcodes = create_test_shortcodes();
+        shortcodes.register("current_date", |_args, _| "2024-01-01".to_string());
+        shortcodes.register("user", |args, _| {
+            let name = args.get_str("name").unwrap_or("Anonymous");
+            format!("User: {}", name)
+        });
+
+        // Test basic self-closing shortcode
+        let content = r#"Today is {{ current_date /}}"#;
+        let result = with_test_route_context(|route_ctx| {
+            preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
+        })
+        .unwrap();
+        assert_eq!(result, "Today is 2024-01-01");
+
+        // Test self-closing shortcode with arguments
+        let content = r#"{{ user name="Alice" /}}"#;
+        let result = with_test_route_context(|route_ctx| {
+            preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
+        })
+        .unwrap();
+        assert_eq!(result, "User: Alice");
+
+        // Test self-closing shortcode with spaces before /
+        let content = r#"{{ user name="Bob" /}}"#;
+        let result = with_test_route_context(|route_ctx| {
+            preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
+        })
+        .unwrap();
+        assert_eq!(result, "User: Bob");
+
+        // Test multiple self-closing shortcodes
+        let content = r#"{{ user name="Alice" /}} and {{ user name="Bob" /}}"#;
+        let result = with_test_route_context(|route_ctx| {
+            preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
+        })
+        .unwrap();
+        assert_eq!(result, "User: Alice and User: Bob");
+    }
+
+    #[test]
+    fn test_block_shortcode_requires_closing_tag() {
+        let shortcodes = create_test_shortcodes();
+
+        // This should now be an error because it's not self-closing and has no closing tag
+        let content = r#"{{ highlight lang="rust" }}"#;
+        let result = with_test_route_context(|route_ctx| {
+            preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
+        });
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("missing its closing tag"));
+        assert!(error_msg.contains("Use '{{ highlight /}}' for self-closing"));
+    }
+
+    #[test]
+    fn test_ambiguous_shortcode_resolution() {
+        let mut shortcodes = create_test_shortcodes();
+        shortcodes.register("img", |args, _| {
+            let src = args.get_str("src").unwrap_or("");
+            format!("<img src=\"{}\">", src)
+        });
+
+        // This scenario would have been ambiguous in the old syntax:
+        // Two shortcodes where the first could mistakenly consume the second as body
+
+        // Using new self-closing syntax - should work correctly
+        let content = r#"{{ img src="photo.jpg" /}} {{ img src="photo2.jpg" /}}"#;
+        let result = with_test_route_context(|route_ctx| {
+            preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
+        })
+        .unwrap();
+        assert_eq!(result, r#"<img src="photo.jpg"> <img src="photo2.jpg">"#);
+
+        // Block shortcode with proper closing tags should still work
+        let content = r#"{{ highlight lang="rust" }}
+let x = 5;
+{{ /highlight }}
+
+{{ highlight lang="js" }}
+const y = 10;
+{{ /highlight }}"#;
+        let result = with_test_route_context(|route_ctx| {
+            preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
+        })
+        .unwrap();
+        assert!(result.contains(r#"<code lang="rust">"#));
+        assert!(result.contains("let x = 5;"));
+        assert!(result.contains(r#"<code lang="js">"#));
+        assert!(result.contains("const y = 10;"));
     }
 }

@@ -232,7 +232,7 @@ enum HashConfig<'a> {
 }
 
 fn calculate_hash(path: &PathBuf, options: Option<HashConfig>) -> String {
-    let content = fs::read(path).unwrap();
+    let content = fs::read(path).expect(format!("Failed to read asset file: {:?}", path).as_str());
 
     // TODO: Consider using xxhash for both performance and to match Rolldown's hashing
     let mut hasher = blake3::Hasher::new();
