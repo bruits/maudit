@@ -1,5 +1,12 @@
 # maudit-cli
 
+## 0.4.5
+
+### Patch changes
+
+- [9cd5fdd](https://github.com/bruits/maudit/commit/9cd5fdd8abe3044bd09d48b96217e3a0d2878b13) Fixes missing DEV flag on rebuilds — Thanks @Princesseuh!
+
+
 ## 0.4.4
 
 ### Patch changes
