@@ -1,8 +1,8 @@
-use maud::{html, Markup, Render};
+use maud::{Markup, Render, html};
 
 use crate::{
-    assets::{Asset, Image, Script, Style},
     GENERATOR,
+    assets::{Asset, Image, Script, Style},
 };
 
 impl Render for Style {
@@ -24,7 +24,7 @@ impl Render for Script {
 impl Render for Image {
     fn render(&self) -> Markup {
         html! {
-            img src=(self.url().unwrap()) loading="lazy" decoding="async";
+            img src=(self.url().unwrap()) width=(self.width) height=(self.height) loading="lazy" decoding="async";
         }
     }
 }

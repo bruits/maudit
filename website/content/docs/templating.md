@@ -42,7 +42,7 @@ impl Page<RouteParams, Markup> for Index {
         let logo = ctx.add_image("./logo.png");
 
         html! {
-            (logo) // Will generate <img src="IMAGE_PATH" loading="lazy" decoding="async" />
+            (logo) // Will generate <img src="IMAGE_PATH" width="IMAGE_WIDTH" height="IMAGE_HEIGHT" loading="lazy" decoding="async" />
         }
     }
 }

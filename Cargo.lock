@@ -2794,7 +2794,6 @@ name = "maudit"
 version = "0.5.0"
 dependencies = [
  "base64",
- "blake3",
  "brk_rolldown",
  "chrono",
  "colored",
@@ -2819,6 +2818,7 @@ dependencies = [
  "thumbhash",
  "tokio",
  "webp",
+ "xxhash-rust",
 ]
 
 [[package]]
