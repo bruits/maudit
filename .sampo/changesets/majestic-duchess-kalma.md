@@ -1,7 +1,5 @@
 ---
-packages:
-  - maudit
-release: patch
+maudit: patch
 ---
 
 Improve hashing performance for assets
