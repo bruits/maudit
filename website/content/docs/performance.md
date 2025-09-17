@@ -4,7 +4,7 @@ description: "Learn how to improve the build times and performance of your Maudi
 section: "guide"
 ---
 
-Maudit can generally build websites pretty quickly, but there are a few strategies you can use to improve build times and the performance of your site.
+Maudit can generally [build websites pretty quickly](https://github.com/bruits/maudit/tree/main/benchmarks), but there are a few strategies you can use to improve build times and the performance of your site.
 
 A Maudit project is a normal Rust project, so [any performance optimizations that apply to Rust projects](https://nnethercote.github.io/perf-book/build-configuration.html#minimizing-compile-times) also apply to Maudit projects, but there are a few specific strategies that can help improve the performance of your Maudit site.
 
@@ -33,11 +33,11 @@ if !is_dev() {
 }
 ```
 
-Running `cargo run` will show which pages of your site are slow to build, allowing you to identify bottlenecks in your build process.
+Running `cargo run` will show which pages of your site are slow to build, allowing you to identify bottlenecks in your build process. Note that it is not generally worth it to disable things such as image processing as Maudit will cache processed images between builds, even in development mode.
 
 ### Preventing build directory block
 
-As Maudit recompile your project on every change, it is possible to run into issues where the build directory is blocked by another process, [most commonly `rust-analyzer` in your editor.](https://github.com/rust-lang/rust-analyzer/issues/4616), slowing down builds significantly.
+As Maudit recompile your project on every change, it is possible to run into issues where the build directory is first blocked by another process, [most commonly `rust-analyzer` in your editor.](https://github.com/rust-lang/rust-analyzer/issues/4616), slowing down builds significantly.
 
 While this does improve the time it takes to get feedback on changes, note that changing `rust-analyzer` settings to use a different build directory will use a lot of disk space.
 
