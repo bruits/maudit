@@ -11,7 +11,7 @@ pub struct ArticleParams {
 }
 
 impl Page<ArticleParams> for Article {
-    fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<Route<ArticleParams>> {
+    fn routes(&self, ctx: &DynamicRouteContext) -> Vec<Route<ArticleParams>> {
         let articles = ctx.content.get_source::<ArticleContent>("articles");
 
         articles.into_routes(|entry| {

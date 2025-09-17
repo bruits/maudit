@@ -2,8 +2,12 @@
 //!
 //! Every page must implement the [`Page`] trait. Then, pages can be passed to [`coronate()`](crate::coronate), through the [`routes!`](crate::routes) macro, to be built.
 use crate::assets::PageAssets;
-use crate::content::Content;
-use crate::route::{extract_params_from_raw_route, get_route_url, guess_if_route_is_endpoint};
+use crate::build::finish_route;
+use crate::content::PageContent;
+use crate::route::{
+    extract_params_from_raw_route, get_route_type_from_route_params, get_route_url,
+    guess_if_route_is_endpoint,
+};
 use rustc_hash::FxHashMap;
 use std::any::Any;
 
@@ -206,12 +210,28 @@ pub struct RouteContext<'a> {
     pub raw_params: &'a RouteParams,
     pub params: &'a dyn Any,
     pub props: &'a dyn Any,
-    pub content: &'a Content<'a>,
+    pub content: &'a PageContent<'a>,
     pub assets: &'a mut PageAssets,
     pub current_url: String,
 }
 
-impl RouteContext<'_> {
+impl<'a> RouteContext<'a> {
+    pub fn from_dynamic_route(
+        dynamic_route: &'a RouteResult,
+        content: &'a PageContent,
+        assets: &'a mut PageAssets,
+        current_url: String,
+    ) -> Self {
+        Self {
+            raw_params: &dynamic_route.0,
+            params: dynamic_route.1.as_ref(),
+            props: dynamic_route.2.as_ref(),
+            content,
+            assets,
+            current_url,
+        }
+    }
+
     pub fn params<T: 'static + Clone>(&self) -> T {
         self.params
             .downcast_ref::<T>()
@@ -268,7 +288,7 @@ impl RouteContext<'_> {
 ///      article.render().into()
 ///   }
 ///
-///    fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<ArticleParams> {
+///    fn routes(&self, ctx: &DynamicRouteContext) -> Vec<ArticleParams> {
 ///       let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///
 ///       articles.into_params(|entry| ArticleParams {
@@ -278,7 +298,7 @@ impl RouteContext<'_> {
 /// }
 /// ```
 pub struct DynamicRouteContext<'a> {
-    pub content: &'a mut Content<'a>,
+    pub content: &'a PageContent<'a>,
 }
 
 /// Must be implemented for every page of your website.
@@ -304,7 +324,7 @@ where
     Props: 'static,
     T: Into<RenderResult>,
 {
-    fn routes(&self, _ctx: &mut DynamicRouteContext) -> Vec<Route<Params, Props>> {
+    fn routes(&self, _ctx: &DynamicRouteContext) -> Vec<Route<Params, Props>> {
         Vec::new()
     }
     fn render(&self, ctx: &mut RouteContext) -> T;
@@ -362,6 +382,10 @@ pub trait InternalPage {
     fn is_endpoint(&self) -> bool {
         guess_if_route_is_endpoint(&self.route_raw())
     }
+    fn route_type(&self) -> RouteType {
+        let params_def = extract_params_from_raw_route(&self.route_raw());
+        get_route_type_from_route_params(&params_def)
+    }
 }
 
 #[doc(hidden)]
@@ -369,14 +393,21 @@ pub trait InternalPage {
 /// We expose it because [`maudit_macros::route`] implements it for the user behind the scenes.
 pub trait FullPage: InternalPage + Sync + Send {
     fn render_internal(&self, ctx: &mut RouteContext) -> RenderResult;
-    fn routes_internal(&self, context: &mut DynamicRouteContext) -> RoutesInternalResult;
+    fn routes_internal(&self, context: &DynamicRouteContext) -> RoutesResult;
+
+    fn build(&self, ctx: &mut RouteContext) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let result = self.render_internal(ctx);
+        let bytes = finish_route(result, ctx.assets, self.route_raw())?;
+
+        Ok(bytes)
+    }
 }
 
-type RoutesInternalResult = Vec<(
-    RouteParams,
-    Box<dyn Any + Send + Sync>,
-    Box<dyn Any + Send + Sync>,
-)>;
+pub type RouteResult = (RouteParams, RouteProps, RouteTypedParams);
+pub type RoutesResult = Vec<RouteResult>;
+
+pub type RouteProps = Box<dyn Any + Send + Sync>;
+pub type RouteTypedParams = Box<dyn Any + Send + Sync>;
 
 pub fn get_page_url<T: Into<RouteParams>>(route: &impl FullPage, params: T) -> String {
     let params_defs = extract_params_from_raw_route(&route.route_raw());

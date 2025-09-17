@@ -36,7 +36,7 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 self.render(ctx).into()
             }
 
-            fn routes_internal(&self, ctx: &mut maudit::page::DynamicRouteContext) -> Vec<(maudit::page::RouteParams, Box<dyn std::any::Any + Send + Sync>, Box<dyn std::any::Any + Send + Sync>)> {
+            fn routes_internal(&self, ctx: &maudit::page::DynamicRouteContext) -> Vec<(maudit::page::RouteParams, Box<dyn std::any::Any + Send + Sync>, Box<dyn std::any::Any + Send + Sync>)> {
                 self.routes(ctx)
                     .into_iter()
                     .map(|route| {

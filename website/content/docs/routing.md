@@ -67,7 +67,7 @@ impl Page<Params> for Post {
     RenderResult::Text(format!("Hello, {}!", params.slug))
   }
 
-  fn routes(&self, ctx: &mut DynamicRouteContext) -> Routes<Params> {
+  fn routes(&self, ctx: &DynamicRouteContext) -> Routes<Params> {
     vec![Route::from_params(Params {
       slug: "hello-world".to_string(),
     })]
@@ -94,7 +94,7 @@ impl Page for Post {
     format!("Hello, {}!", slug)
   }
 
-  fn routes(&self, ctx: &mut DynamicRouteContext) -> Routes<Params> {
+  fn routes(&self, ctx: &DynamicRouteContext) -> Routes<Params> {
     vec![Route::from_params(Params {
       slug: "hello-world".to_string(),
     })]
@@ -137,7 +137,7 @@ pub struct Params {
 }
 
 impl Page<Params> for PostJson {
-  fn routes(&self, ctx: &mut DynamicRouteContext) -> Routes<Params> {
+  fn routes(&self, ctx: &DynamicRouteContext) -> Routes<Params> {
     vec![Route::from_params(Params {
       slug: "hello-world".to_string()
     })]

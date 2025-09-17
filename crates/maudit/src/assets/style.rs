@@ -14,6 +14,7 @@ pub struct Style {
     pub(crate) assets_dir: PathBuf,
     pub(crate) hash: String,
     pub(crate) tailwind: bool,
+    pub(crate) included: bool,
 }
 
 impl InternalAsset for Style {

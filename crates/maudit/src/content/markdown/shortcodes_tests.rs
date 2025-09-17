@@ -58,7 +58,7 @@ mod tests {
     {
         use crate::{
             assets::PageAssets,
-            content::{Content, ContentSources},
+            content::{ContentSources, PageContent},
             page::RouteParams,
         };
         use rustc_hash::FxHashMap;
@@ -66,7 +66,7 @@ mod tests {
 
         let params = RouteParams(FxHashMap::default());
         let content_sources = ContentSources::new(vec![]);
-        let content = Content::new(&content_sources.0);
+        let content = PageContent::new(&content_sources);
         let mut page_assets = PageAssets {
             assets_dir: PathBuf::from("assets"),
             ..Default::default()
