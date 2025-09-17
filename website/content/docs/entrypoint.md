@@ -17,7 +17,7 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
 }
 ```
 
-### Registering Routes
+## Registering Routes
 
 All kinds of routes must be passed to the `coronate` function in order for them to be built.
 
@@ -35,6 +35,6 @@ coronate(
 
 See the [Routing](/docs/routing) documentation for more information on how to define routes.
 
-### Content
+## Content
 
-### Options
+## Options
