@@ -367,7 +367,7 @@ pub trait InternalPage {
 #[doc(hidden)]
 /// Used internally by Maudit and should not be implemented by the user.
 /// We expose it because [`maudit_macros::route`] implements it for the user behind the scenes.
-pub trait FullPage: InternalPage + Sync {
+pub trait FullPage: InternalPage + Sync + Send {
     fn render_internal(&self, ctx: &mut RouteContext) -> RenderResult;
     fn routes_internal(&self, context: &mut DynamicRouteContext) -> RoutesInternalResult;
 }
@@ -399,9 +399,6 @@ pub mod prelude {
         DynamicRouteContext, Page, PaginationMeta, RenderResult, Route, RouteContext, RouteParams,
         Routes, get_page_slice, get_page_url, paginate_content,
     };
-    // TODO: Remove this internal re-export when possible
-    #[doc(hidden)]
-    pub use super::{FullPage, InternalPage};
     pub use crate::assets::{Asset, Image, Style, StyleOptions};
     pub use crate::content::MarkdownContent;
     pub use maudit_macros::{Params, route};

@@ -311,8 +311,13 @@ pub fn render_markdown(
     let content = if let Some(shortcodes) = options.map(|o| &o.shortcodes)
         && !shortcodes.is_empty()
     {
-        preprocess_shortcodes(content, shortcodes, route_ctx.as_deref_mut())
-            .unwrap_or_else(|e| panic!("Failed to preprocess shortcodes: {}", e))
+        preprocess_shortcodes(
+            content,
+            shortcodes,
+            route_ctx.as_deref_mut(),
+            path.and_then(|p| p.to_str()),
+        )
+        .unwrap_or_else(|e| panic!("Failed to preprocess shortcodes for {:?}: {}", path, e))
     } else {
         content.to_string()
     };
@@ -965,7 +970,7 @@ More content here."#;
             ..Default::default()
         };
 
-        let markdown = "# {{ greet name=Title }}\n\nHello {{ simple }}!";
+        let markdown = "# {{ greet name=Title /}}\n\nHello {{ simple /}}!";
         let html = render_markdown(markdown, Some(&options), None, None);
 
         assert!(html.contains("<h1"));
@@ -981,11 +986,11 @@ More content here."#;
             ..Default::default()
         };
 
-        let markdown = r#"# {{ greet name=Main }}
+        let markdown = r#"# {{ greet name=Main /}}
 
-## Section {{ date format=short }}
+## Section {{ date format=short /}}
 
-### {{ simple }} Chapter"#;
+### {{ simple /}} Chapter"#;
         let html = render_markdown(markdown, Some(&options), None, None);
 
         assert!(html.contains("<h1"));
@@ -1004,7 +1009,7 @@ More content here."#;
             ..Default::default()
         };
 
-        let markdown = "*{{ greet name=Italic }}* and **{{ simple }}**";
+        let markdown = "*{{ greet name=Italic /}}* and **{{ simple /}}**";
         let html = render_markdown(markdown, Some(&options), None, None);
 
         assert!(html.contains("<em>Hello, Italic!</em>"));
@@ -1019,9 +1024,9 @@ More content here."#;
             ..Default::default()
         };
 
-        let markdown = r#"1. {{ greet name=First }}
-2. {{ simple }}
-3. {{ date format=iso }}"#;
+        let markdown = r#"1. {{ greet name=First /}}
+2. {{ simple /}}
+3. {{ date format=iso /}}"#;
         let html = render_markdown(markdown, Some(&options), None, None);
 
         assert!(html.contains("<ol>"));
@@ -1040,8 +1045,8 @@ More content here."#;
 
         let markdown = r#"| Name | Greeting |
 |------|----------|
-| Alice | {{ greet name=Alice }} |
-| Bob | {{ simple }} |"#;
+| Alice | {{ greet name=Alice /}} |
+| Bob | {{ simple /}} |"#;
         let html = render_markdown(markdown, Some(&options), None, None);
 
         assert!(html.contains("<table>"));
@@ -1061,9 +1066,9 @@ More content here."#;
             ..Default::default()
         };
 
-        let markdown = r#"> {{ greet name=Quote }}
+        let markdown = r#"> {{ greet name=Quote /}}
 >
-> {{ simple }}"#;
+> {{ simple /}}"#;
         let html = render_markdown(markdown, Some(&options), None, None);
 
         assert!(html.contains("<blockquote>"));
@@ -1081,8 +1086,8 @@ More content here."#;
 
         let markdown = r#"```rust
 fn main() {
-    println!("{{ greet name=Rust }}");
-    // {{ simple }}
+    println!("{{ greet name=Rust /}}");
+    // {{ simple /}}
 }
 ```"#;
         let html = render_markdown(markdown, Some(&options), None, None);
@@ -1101,9 +1106,9 @@ fn main() {
             ..Default::default()
         };
 
-        let markdown = r#"[{{ greet name=Link }}](https://example.com "{{ simple }}")
+        let markdown = r#"[{{ greet name=Link /}}](https://example.com "{{ simple /}}")
 
-![{{ greet name=Alt }}](image.jpg "{{ date format=title }}")"#;
+![{{ greet name=Alt /}}](image.jpg "{{ date format=title /}}")"#;
         let html = render_markdown(markdown, Some(&options), None, None);
 
         assert!(html.contains("<a href=\"https://example.com\""));
@@ -1124,7 +1129,7 @@ fn main() {
 
         let markdown = r#"{{ highlight lang=rust }}
 fn main() {
-    println!("{{ greet name=World }}");
+    println!("{{ greet name=World /}}");
 }
 {{ /highlight }}"#;
         let html = render_markdown(markdown, Some(&options), None, None);
@@ -1143,9 +1148,9 @@ fn main() {
         };
 
         let markdown = r#"{{ alert type=warning }}
-## {{ greet name=Alert }}
+## {{ greet name=Alert /}}
 
-{{ simple }} content here.
+{{ simple /}} content here.
 {{ /alert }}"#;
         let html = render_markdown(markdown, Some(&options), None, None);
 
@@ -1165,10 +1170,10 @@ fn main() {
         };
 
         let markdown = r#"{{ section title=Main }}
-# {{ greet name=Header }}
+# {{ greet name=Header /}}
 
 {{ alert type=info }}
-**{{ greet name=Bold }}** and *{{ simple }}*
+**{{ greet name=Bold /}}** and *{{ simple /}}*
 {{ /alert }}
 {{ /section }}"#;
         let html = render_markdown(markdown, Some(&options), None, None);
@@ -1191,14 +1196,14 @@ fn main() {
         };
 
         let markdown = r#"---
-title: {{ greet name=Blog }}
-date: {{ date format=iso }}
-tags: [{{ simple }}, {{ greet name=Tutorial }}]
+title: {{ greet name=Blog /}}
+date: {{ date format=iso /}}
+tags: [{{ simple /}}, {{ greet name=Tutorial /}}]
 ---
 
-# {{ greet name=Content }}
+# {{ greet name=Content /}}
 
-Welcome to {{ simple }}!"#;
+Welcome to {{ simple /}}!"#;
         let html = render_markdown(markdown, Some(&options), None, None);
 
         // The HTML shouldn't contain the frontmatter, but shortcodes in content should be processed
@@ -1217,9 +1222,9 @@ Welcome to {{ simple }}!"#;
             ..Default::default()
         };
 
-        let markdown = r#"- [x] {{ greet name=Done }}
-- [ ] {{ simple }}
-- [ ] {{ date format=todo }}"#;
+        let markdown = r#"- [x] {{ greet name=Done /}}
+- [ ] {{ simple /}}
+- [ ] {{ date format=todo /}}"#;
         let html = render_markdown(markdown, Some(&options), None, None);
 
         assert!(html.contains("<ul>"));
@@ -1238,7 +1243,7 @@ Welcome to {{ simple }}!"#;
             ..Default::default()
         };
 
-        let markdown = "~~{{ greet name=Deleted }}~~ and {{ simple }}";
+        let markdown = "~~{{ greet name=Deleted /}}~~ and {{ simple /}}";
         let html = render_markdown(markdown, Some(&options), None, None);
 
         assert!(html.contains("<del>Hello, Deleted!</del>"));
@@ -1254,41 +1259,41 @@ Welcome to {{ simple }}!"#;
         };
 
         let markdown = r#"---
-title: {{ greet name=BlogPost }}
-date: {{ date format=iso }}
+title: {{ greet name=BlogPost /}}
+date: {{ date format=iso /}}
 ---
 
-# {{ greet name=Reader }}!
+# {{ greet name=Reader /}}!
 
-Welcome to my blog about **{{ simple }}**.
+Welcome to my blog about **{{ simple /}}**.
 
 ## What we'll cover
 
-1. {{ greet name=Introduction }}
-2. {{ simple }} basics
-3. Advanced {{ greet name=Techniques }}
+1. {{ greet name=Introduction /}}
+2. {{ simple /}} basics
+3. Advanced {{ greet name=Techniques /}}
 
 {{ alert type=info }}
-💡 **Tip**: Remember {{ greet name=This }}!
+💡 **Tip**: Remember {{ greet name=This /}}!
 {{ /alert }}
 
 ### Code Example
 
 {{ highlight lang=rust }}
 fn main() {
-    println!("{{ greet name=World }}!");
+    println!("{{ greet name=World /}}!");
 }
 {{ /highlight }}
 
 ### Task List
 
-- [x] {{ greet name=Setup }}
-- [ ] {{ simple }}
-- [ ] {{ greet name=Deploy }}
+- [x] {{ greet name=Setup /}}
+- [ ] {{ simple /}}
+- [ ] {{ greet name=Deploy /}}
 
-> "{{ greet name=Quote }}" - *{{ simple }}*
+> "{{ greet name=Quote /}}" - *{{ simple /}}*
 
-Check out [this link](https://example.com "{{ greet name=Title }}")!"#;
+Check out [this link](https://example.com "{{ greet name=Title /}}")!"#;
 
         let html = render_markdown(markdown, Some(&options), None, None);
 
@@ -1320,11 +1325,11 @@ Check out [this link](https://example.com "{{ greet name=Title }}")!"#;
             ..Default::default()
         };
 
-        let markdown = r#"Inline math with {{ simple }}: $x = {{ greet name=Variable }}$
+        let markdown = r#"Inline math with {{ simple /}}: $x = {{ greet name=Variable /}}$
 
 Block math:
 $$
-{{ greet name=Equation }}
+{{ greet name=Equation /}}
 $$"#;
         let html = render_markdown(markdown, Some(&options), None, None);
 

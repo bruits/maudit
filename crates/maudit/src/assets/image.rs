@@ -64,6 +64,8 @@ pub struct ImageOptions {
 #[non_exhaustive]
 pub struct Image {
     pub path: PathBuf,
+    pub width: u32,
+    pub height: u32,
     pub(crate) assets_dir: PathBuf,
     pub(crate) hash: String,
     pub(crate) options: Option<ImageOptions>,

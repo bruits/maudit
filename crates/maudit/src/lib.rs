@@ -26,9 +26,7 @@ mod templating;
 #[cfg(feature = "maud")]
 #[cfg_attr(docsrs, doc(cfg(feature = "maud")))]
 pub mod maud {
-    //! Allows to use [Maud](https://maud.lambda.xyz), a macro for writing HTML templates in Rust.
-    //!
-    //! Maudit supports Maud by default, but you can use your own templating engine.
+    //! Allows to use [Maud](https://maud.lambda.xyz), a macro for writing HTML templates, ergonomically in your Maudit pages.
     //!
     //! ## Example
     //! ```rs
@@ -59,6 +57,10 @@ use content::ContentSources;
 use logging::init_logging;
 use page::FullPage;
 
+/// Returns whether Maudit is running in development mode (through `maudit dev`).
+///
+/// This can be useful to conditionally enable features or logging that should only be active during development.
+/// Oftentimes, this is used to disable some expensive operations that would slow down build times during development.
 pub fn is_dev() -> bool {
     if option_env!("MAUDIT_DEV") == Some("true") {
         return true;

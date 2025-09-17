@@ -1,8 +1,12 @@
+use ::image::image_dimensions;
 use dyn_eq::DynEq;
+use log::debug;
 use rustc_hash::FxHashSet;
 use std::hash::Hash;
 use std::sync::OnceLock;
+use std::time::Instant;
 use std::{fs, path::PathBuf};
+use xxhash_rust::xxh3::xxh3_64;
 
 mod image;
 pub mod image_cache;
@@ -46,9 +50,14 @@ impl PageAssets {
             return image.clone();
         }
 
+        let (width, height) = image_dimensions(&image_path).unwrap_or((0, 0));
+
         let image = Image {
             path: image_path.clone(),
+            width,
+            height,
             assets_dir: self.assets_dir.clone(),
+            // TODO: This is gonna re-read the file, even though we already had to in order to get dimensions, perhaps we can re-use the same data?
             hash: calculate_hash(&image_path, Some(HashConfig::Image(&options))),
             options: if options == ImageOptions::default() {
                 None
@@ -232,16 +241,18 @@ enum HashConfig<'a> {
 }
 
 fn calculate_hash(path: &PathBuf, options: Option<HashConfig>) -> String {
-    let content = fs::read(path).unwrap();
+    let start_time = Instant::now();
+    let content =
+        fs::read(path).unwrap_or_else(|_| panic!("Failed to read asset file: {:?}", path));
 
-    // TODO: Consider using xxhash for both performance and to match Rolldown's hashing
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(&content);
-    hasher.update(path.to_string_lossy().as_bytes());
+    // Pre-allocate a single buffer to hash at once
+    let mut buf = Vec::with_capacity(content.len() + 256);
+    buf.extend_from_slice(&content);
+    buf.extend_from_slice(path.to_string_lossy().as_bytes());
+
     if let Some(options) = options {
         match options {
             HashConfig::Image(opts) => {
-                let mut buf = Vec::new();
                 if let Some(width) = opts.width {
                     buf.extend_from_slice(&width.to_le_bytes());
                 }
@@ -251,20 +262,24 @@ fn calculate_hash(path: &PathBuf, options: Option<HashConfig>) -> String {
                 if let Some(format) = &opts.format {
                     buf.extend_from_slice(&format.to_hash_value().to_le_bytes());
                 }
-
-                hasher.update(&buf);
             }
             HashConfig::Style(opts) => {
-                let mut buf = Vec::new();
-                buf.extend_from_slice(&[opts.tailwind as u8]);
-                hasher.update(&buf);
+                buf.push(opts.tailwind as u8);
             }
         }
     }
-    let hash = hasher.finalize();
 
-    // Take the first 5 characters of the hex string for a short hash like "al3hx"
-    hash.to_hex()[..5].to_string()
+    let hash = xxh3_64(&buf); // one-shot, much faster than streaming
+
+    debug!(
+        "Calculated hash for asset {:?} in {:?}",
+        path,
+        start_time.elapsed()
+    );
+
+    // TODO: This works, but perhaps we can generate prettier hashes, see https://github.com/rolldown/rolldown/blob/abf62c45d7a69b42dab4bff92095e320b418e9b8/crates/rolldown_utils/src/xxhash.rs
+    let hex = format!("{:016x}", hash);
+    hex[..5].to_string()
 }
 
 trait InternalAsset {
