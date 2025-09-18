@@ -3,7 +3,6 @@ use dyn_eq::DynEq;
 use log::debug;
 use rustc_hash::FxHashSet;
 use std::hash::Hash;
-use std::sync::OnceLock;
 use std::time::Instant;
 use std::{fs, path::PathBuf};
 use xxhash_rust::xxh3::xxh3_64;
@@ -18,17 +17,39 @@ pub use style::{Style, StyleOptions};
 
 #[derive(Default)]
 pub struct PageAssets {
-    pub(crate) images: FxHashSet<Image>,
-    pub(crate) scripts: FxHashSet<Script>,
-    pub(crate) styles: FxHashSet<Style>,
-
-    pub(crate) included_styles: Vec<Style>,
-    pub(crate) included_scripts: Vec<Script>,
+    pub images: FxHashSet<Image>,
+    pub scripts: FxHashSet<Script>,
+    pub styles: FxHashSet<Style>,
 
     pub(crate) assets_dir: PathBuf,
 }
 
 impl PageAssets {
+    pub fn new(assets_dir: PathBuf) -> Self {
+        Self {
+            assets_dir,
+            ..Default::default()
+        }
+    }
+
+    pub fn assets(&self) -> impl Iterator<Item = &dyn Asset> {
+        self.images
+            .iter()
+            .map(|asset| asset as &dyn Asset)
+            .chain(self.scripts.iter().map(|asset| asset as &dyn Asset))
+            .chain(self.styles.iter().map(|asset| asset as &dyn Asset))
+    }
+
+    /// Get all styles that are marked as included
+    pub fn included_styles(&self) -> impl Iterator<Item = &Style> {
+        self.styles.iter().filter(|s| s.included)
+    }
+
+    /// Get all scripts that are marked as included
+    pub fn included_scripts(&self) -> impl Iterator<Item = &Script> {
+        self.scripts.iter().filter(|s| s.included)
+    }
+
     /// Add an image to the page assets, causing the file to be created in the output directory. The image is resolved relative to the current working directory.
     ///
     /// The image will not automatically be included in the page, but can be included through the `.url()` method on the returned `Image` object.
@@ -64,7 +85,6 @@ impl PageAssets {
             } else {
                 Some(options)
             },
-            __cache_placeholder: OnceLock::new(),
         };
 
         self.images.insert(image.clone());
@@ -94,6 +114,7 @@ impl PageAssets {
             path: path.clone(),
             assets_dir: self.assets_dir.clone(),
             hash: calculate_hash(&path, None),
+            included: false,
         };
 
         self.scripts.insert(script.clone());
@@ -115,10 +136,10 @@ impl PageAssets {
             path: path.clone(),
             assets_dir: self.assets_dir.clone(),
             hash: calculate_hash(&path, None),
+            included: true,
         };
 
-        self.scripts.insert(script.clone());
-        self.included_scripts.push(script);
+        self.scripts.insert(script);
     }
 
     /// Add a style to the page assets, causing the file to be created in the output directory. The style is resolved relative to the current working directory.
@@ -149,6 +170,7 @@ impl PageAssets {
             assets_dir: self.assets_dir.clone(),
             hash: calculate_hash(&path, Some(HashConfig::Style(&options))),
             tailwind: options.tailwind,
+            included: false,
         };
 
         self.styles.insert(style.clone());
@@ -184,10 +206,10 @@ impl PageAssets {
             assets_dir: self.assets_dir.clone(),
             hash,
             tailwind: options.tailwind,
+            included: true,
         };
 
-        self.styles.insert(style.clone());
-        self.included_styles.push(style);
+        self.styles.insert(style);
     }
 }
 
@@ -333,7 +355,7 @@ mod tests {
         page_assets.include_style(temp_dir.join("style.css"));
 
         assert!(page_assets.styles.len() == 1);
-        assert!(page_assets.included_styles.len() == 1);
+        assert!(page_assets.included_styles().count() == 1);
     }
 
     #[test]
@@ -359,7 +381,7 @@ mod tests {
         page_assets.include_script(temp_dir.join("script.js"));
 
         assert!(page_assets.scripts.len() == 1);
-        assert!(page_assets.included_scripts.len() == 1);
+        assert!(page_assets.included_scripts().count() == 1);
     }
 
     #[test]
@@ -459,7 +481,7 @@ mod tests {
         let image_webp = page_assets.add_image_with_options(
             &image_path,
             ImageOptions {
-                format: Some(ImageFormat::Webp),
+                format: Some(ImageFormat::WebP),
                 ..Default::default()
             },
         );
@@ -476,7 +498,7 @@ mod tests {
             ImageOptions {
                 width: Some(100),
                 height: Some(100),
-                format: Some(ImageFormat::Webp),
+                format: Some(ImageFormat::WebP),
             },
         );
 
@@ -617,6 +639,7 @@ mod tests {
                 Some(HashConfig::Style(&StyleOptions::default())),
             ),
             tailwind: false,
+            included: false,
         };
 
         assert_ne!(

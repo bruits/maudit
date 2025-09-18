@@ -8,6 +8,7 @@ pub struct Script {
     pub path: PathBuf,
     pub(crate) assets_dir: PathBuf,
     pub(crate) hash: String,
+    pub(crate) included: bool,
 }
 
 impl InternalAsset for Script {

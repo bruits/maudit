@@ -168,7 +168,7 @@ macro_rules! routes {
 #[macro_export]
 macro_rules! content_sources {
     ($($name:expr => $entries:expr),*) => {
-        maudit::content::ContentSources(vec![$(Box::new(maudit::content::ContentSource::new($name, Box::new(move || $entries)))),*])
+        maudit::content::ContentSources::new(vec![$(Box::new(maudit::content::ContentSource::new($name, Box::new(move || $entries)))),*])
     };
 }
 /// The version of Maudit being used.

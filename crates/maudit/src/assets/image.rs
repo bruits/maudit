@@ -10,11 +10,11 @@ use super::image_cache::ImageCache;
 use crate::assets::{Asset, InternalAsset};
 use crate::is_dev;
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ImageFormat {
     Png,
     Jpeg,
-    Webp,
+    WebP,
     Avif,
     Gif,
 }
@@ -24,7 +24,7 @@ impl ImageFormat {
         match self {
             ImageFormat::Png => "png",
             ImageFormat::Jpeg => "jpg",
-            ImageFormat::Webp => "webp",
+            ImageFormat::WebP => "webp",
             ImageFormat::Avif => "avif",
             ImageFormat::Gif => "gif",
         }
@@ -34,7 +34,7 @@ impl ImageFormat {
         match self {
             ImageFormat::Png => 1,
             ImageFormat::Jpeg => 2,
-            ImageFormat::Webp => 3,
+            ImageFormat::WebP => 3,
             ImageFormat::Gif => 4,
             ImageFormat::Avif => 5,
         }
@@ -46,22 +46,21 @@ impl From<ImageFormat> for image::ImageFormat {
         match val {
             ImageFormat::Png => image::ImageFormat::Png,
             ImageFormat::Jpeg => image::ImageFormat::Jpeg,
-            ImageFormat::Webp => image::ImageFormat::WebP,
+            ImageFormat::WebP => image::ImageFormat::WebP,
             ImageFormat::Avif => image::ImageFormat::Avif,
             ImageFormat::Gif => image::ImageFormat::Gif,
         }
     }
 }
 
-#[derive(Default, Clone, PartialEq, Eq, Hash)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ImageOptions {
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub format: Option<ImageFormat>,
 }
 
-#[derive(Clone)]
-#[non_exhaustive]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Image {
     pub path: PathBuf,
     pub width: u32,
@@ -69,36 +68,14 @@ pub struct Image {
     pub(crate) assets_dir: PathBuf,
     pub(crate) hash: String,
     pub(crate) options: Option<ImageOptions>,
-    pub(crate) __cache_placeholder: OnceLock<ImagePlaceholder>,
 }
-
-impl Hash for Image {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.path.hash(state);
-        self.assets_dir.hash(state);
-        self.hash.hash(state);
-        self.options.hash(state);
-    }
-}
-
-impl PartialEq for Image {
-    fn eq(&self, other: &Self) -> bool {
-        self.path == other.path
-            && self.assets_dir == other.assets_dir
-            && self.hash == other.hash
-            && self.options == other.options
-    }
-}
-
-impl Eq for Image {}
 
 impl Image {
     /// Get a placeholder for the image, which can be used for low-quality image placeholders (LQIP) or similar techniques.
     ///
     /// This uses the [ThumbHash](https://evanw.github.io/thumbhash/) algorithm to generate a very small placeholder image.
-    pub fn placeholder(&self) -> &ImagePlaceholder {
-        self.__cache_placeholder
-            .get_or_init(|| get_placeholder(&self.path))
+    pub fn placeholder(&self) -> ImagePlaceholder {
+        get_placeholder(&self.path)
     }
 }
 

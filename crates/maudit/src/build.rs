@@ -1,8 +1,8 @@
 use core::panic;
 use std::{
     env,
-    fs::{self, File, remove_dir_all},
-    io::{self, Write},
+    fs::{self},
+    io::{self},
     path::{Path, PathBuf},
     process::Command,
     str::FromStr,
@@ -13,19 +13,15 @@ use std::{
 use crate::{
     BuildOptions, BuildOutput,
     assets::{
-        self,
+        self, PageAssets,
         image_cache::{IMAGE_CACHE_DIR, ImageCache},
     },
     build::images::process_image,
-    content::{Content, ContentSources},
+    content::{ContentSources, PageContent},
     errors::BuildError,
     is_dev,
     logging::print_title,
     page::{DynamicRouteContext, FullPage, RenderResult, RouteContext, RouteParams, RouteType},
-    route::{
-        ParameterDef, extract_params_from_raw_route, get_route_file_path,
-        get_route_type_from_route_params, get_route_url,
-    },
 };
 use colored::{ColoredString, Colorize};
 use log::{debug, info, trace};
@@ -161,8 +157,7 @@ pub async fn build(
     // Create a directory for the output
     trace!(target: "build", "Setting up required directories...");
     let dist_dir = PathBuf::from_str(&options.output_dir)?;
-    let assets_dir = PathBuf::from_str(&options.output_dir)?.join(&options.assets_dir);
-    let tmp_dir = dist_dir.join("_tmp");
+    let final_assets_dir = PathBuf::from_str(&options.output_dir)?.join(&options.assets_dir);
     let static_dir = PathBuf::from_str(&options.static_dir)?;
 
     let old_dist_tmp_dir = if options.clean_output_dir {
@@ -183,13 +178,13 @@ pub async fn build(
     });
 
     fs::create_dir_all(&dist_dir)?;
-    fs::create_dir_all(&assets_dir)?;
+    fs::create_dir_all(&final_assets_dir)?;
 
     info!(target: "build", "Output directory: {}", dist_dir.to_string_lossy());
 
     let content_sources_start = Instant::now();
     print_title("initializing content sources");
-    content_sources.0.iter_mut().for_each(|source| {
+    content_sources.sources_mut().iter_mut().for_each(|source| {
         let source_start = Instant::now();
         source.init();
 
@@ -224,7 +219,6 @@ pub async fn build(
         ..Default::default()
     };
 
-    #[allow(clippy::mutable_key_type)] // Image's Hash does not depend on mutable fields
     let mut build_pages_images: FxHashSet<assets::Image> = FxHashSet::default();
     let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
     let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
@@ -235,43 +229,27 @@ pub async fn build(
     // faster in all cases, making it sometimes even slower due to the overhead. It'd be great to investigate and benchmark
     // this.
     for route in routes {
-        let params_def = extract_params_from_raw_route(&route.route_raw());
-        let route_type = get_route_type_from_route_params(&params_def);
-        match route_type {
+        match route.route_type() {
             RouteType::Static => {
                 let route_start = Instant::now();
-                let mut page_assets = assets::PageAssets {
-                    assets_dir: options.assets_dir.clone().into(),
-                    ..Default::default()
-                };
 
-                let params = RouteParams(FxHashMap::default());
+                let content = PageContent::new(content_sources);
+                let mut page_assets = PageAssets::new(options.assets_dir.clone().into());
 
-                let mut content = Content::new(&content_sources.0);
-                let mut ctx = RouteContext {
-                    raw_params: &params,
-                    content: &mut content,
-                    assets: &mut page_assets,
-                    current_url: get_route_url(&route.route_raw(), &params_def, &params),
+                let params = RouteParams::default();
+                let url = route.url(&params);
 
-                    // Static routes have no params or props
-                    params: &(),
-                    props: &(),
-                };
+                let result = route.build(&mut RouteContext::from_static_route(
+                    &content,
+                    &mut page_assets,
+                    url.clone(),
+                ))?;
 
-                let (file_path, mut file) =
-                    create_route_file(*route, &params_def, &params, &dist_dir)?;
-                let result = route.render_internal(&mut ctx);
+                let file_path = &dist_dir.join(route.file_path(&params));
 
-                finish_route(
-                    result,
-                    &mut file,
-                    &page_assets.included_styles,
-                    &page_assets.included_scripts,
-                    route.route_raw(),
-                )?;
+                write_route_file(&result, file_path)?;
 
-                info!(target: "pages", "{} -> {} {}", get_route_url(&route.route_raw(), &params_def, &params), file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
+                info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
                 build_pages_images.extend(page_assets.images);
                 build_pages_scripts.extend(page_assets.scripts);
@@ -286,12 +264,9 @@ pub async fn build(
                 page_count += 1;
             }
             RouteType::Dynamic => {
-                let mut dynamic_content = Content::new(&content_sources.0);
-                let mut dynamic_route_context = DynamicRouteContext {
-                    content: &mut dynamic_content,
-                };
-
-                let routes = route.routes_internal(&mut dynamic_route_context);
+                let routes = route.routes_internal(&DynamicRouteContext {
+                    content: &PageContent::new(content_sources),
+                });
 
                 if routes.is_empty() {
                     info!(target: "build", "{} is a dynamic route, but its implementation of Page::routes returned an empty Vec. No pages will be generated for this route.", route.route_raw().to_string().bold());
@@ -300,46 +275,36 @@ pub async fn build(
                     info!(target: "build", "{}", route.route_raw().to_string().bold());
                 }
 
-                for (params, typed_params, props) in routes {
-                    let mut pages_assets = assets::PageAssets {
-                        assets_dir: options.assets_dir.clone().into(),
-                        ..Default::default()
-                    };
+                let content = PageContent::new(content_sources);
+                for dynamic_route in routes {
                     let route_start = Instant::now();
-                    let mut content = Content::new(&content_sources.0);
-                    let mut ctx = RouteContext {
-                        raw_params: &params,
-                        params: typed_params.as_ref(),
-                        props: props.as_ref(),
-                        content: &mut content,
-                        assets: &mut pages_assets,
-                        current_url: get_route_url(&route.route_raw(), &params_def, &params),
-                    };
 
-                    let (file_path, mut file) =
-                        create_route_file(*route, &params_def, &params, &dist_dir)?;
+                    let mut page_assets = PageAssets::new(options.assets_dir.clone().into());
 
-                    let result = route.render_internal(&mut ctx);
+                    let url = route.url(&dynamic_route.0);
+
+                    let content = route.build(&mut RouteContext::from_dynamic_route(
+                        &dynamic_route,
+                        &content,
+                        &mut page_assets,
+                        url,
+                    ))?;
+
+                    let file_path = &dist_dir.join(route.file_path(&dynamic_route.0));
+
+                    write_route_file(&content, file_path)?;
+
+                    info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
+
+                    build_pages_images.extend(page_assets.images);
+                    build_pages_scripts.extend(page_assets.scripts);
+                    build_pages_styles.extend(page_assets.styles);
 
                     build_metadata.add_page(
                         route.route_raw().to_string(),
                         file_path.to_string_lossy().to_string(),
-                        Some(params.0),
+                        Some(dynamic_route.0.0),
                     );
-
-                    finish_route(
-                        result,
-                        &mut file,
-                        &pages_assets.included_styles,
-                        &pages_assets.included_scripts,
-                        route.route_raw(),
-                    )?;
-
-                    info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
-
-                    build_pages_images.extend(pages_assets.images);
-                    build_pages_scripts.extend(pages_assets.scripts);
-                    build_pages_styles.extend(pages_assets.styles);
 
                     page_count += 1;
                 }
@@ -398,7 +363,7 @@ pub async fn build(
                 BundlerOptions {
                     input: Some(bundler_inputs),
                     minify: Some(rolldown::RawMinifyOptions::Bool(!is_dev())),
-                    dir: Some(assets_dir.to_string_lossy().to_string()),
+                    dir: Some(final_assets_dir.to_string_lossy().to_string()),
                     module_types: Some(module_types_hashmap),
 
                     ..Default::default()
@@ -434,7 +399,7 @@ pub async fn build(
         let start_time = Instant::now();
         build_pages_images.par_iter().for_each(|image| {
             let start_process = Instant::now();
-            let dest_path = assets_dir.join(image.final_file_name());
+            let dest_path = final_assets_dir.join(image.final_file_name());
 
             if let Some(image_options) = &image.options {
                 let final_filename = image.final_file_name();
@@ -489,9 +454,6 @@ pub async fn build(
         info!(target: "build", "{}", format!("Assets copied in {}", format_elapsed_time(assets_start.elapsed(), &FormatElapsedTimeOptions::default())).bold());
     }
 
-    // Remove temporary files
-    let _ = remove_dir_all(&tmp_dir);
-
     info!(target: "SKIP_FORMAT", "{}", "");
     info!(target: "build", "{}", format!("Build completed in {}", format_elapsed_time(build_start.elapsed(), &section_format_options)).bold());
 
@@ -531,48 +493,35 @@ fn copy_recursively(
     Ok(())
 }
 
-fn create_route_file(
-    route: &dyn FullPage,
-    params_def: &Vec<ParameterDef>,
-    params: &RouteParams,
-    dist_dir: &Path,
-) -> Result<(PathBuf, File), Box<dyn std::error::Error>> {
-    let file_path = dist_dir.join(get_route_file_path(
-        &route.route_raw(),
-        params_def,
-        params,
-        route.is_endpoint(),
-    ));
-
+fn write_route_file(content: &[u8], file_path: &PathBuf) -> Result<(), io::Error> {
     // Create the parent directories if it doesn't exist
     if let Some(parent_dir) = file_path.parent() {
         fs::create_dir_all(parent_dir)?
     }
 
-    // Create file
-    let file = File::create(file_path.clone())?;
+    fs::write(file_path, content)?;
 
-    Ok((file_path, file))
+    Ok(())
 }
 
-fn finish_route(
+pub fn finish_route(
     render_result: RenderResult,
-    file: &mut File,
-    included_styles: &[assets::Style],
-    included_scripts: &[assets::Script],
+    page_assets: &assets::PageAssets,
     route: String,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     match render_result {
         RenderResult::Text(html) => {
+            let included_styles: Vec<_> = page_assets.included_styles().collect();
+            let included_scripts: Vec<_> = page_assets.included_scripts().collect();
+
             if included_scripts.is_empty() && included_styles.is_empty() {
-                file.write_all(html.as_bytes())?;
-                return Ok(());
+                return Ok(html.into_bytes());
             }
 
             let element_content_handlers = vec![
                 // Add included scripts and styles to the head
                 element!("head", |el| {
-                    for style in included_styles {
+                    for style in &included_styles {
                         el.append(
                             &format!(
                                 "<link rel=\"stylesheet\" href=\"{}\">",
@@ -585,7 +534,7 @@ fn finish_route(
                         );
                     }
 
-                    for script in included_scripts {
+                    for script in &included_scripts {
                         el.append(
                             &format!(
                                 "<script src=\"{}\" type=\"module\"></script>",
@@ -610,16 +559,17 @@ fn finish_route(
                 },
             )?;
 
-            file.write_all(output.as_bytes())?;
+            Ok(output.into_bytes())
         }
         RenderResult::Raw(content) => {
+            let included_styles: Vec<_> = page_assets.included_styles().collect();
+            let included_scripts: Vec<_> = page_assets.included_scripts().collect();
+
             if !included_scripts.is_empty() || !included_styles.is_empty() {
                 Err(BuildError::InvalidRenderResult { route })?;
             }
 
-            file.write_all(&content)?;
+            Ok(content)
         }
     }
-
-    Ok(())
 }

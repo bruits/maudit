@@ -83,7 +83,7 @@ macro_rules! archetypes {
                                 blog_entry_render(ctx, $name, stringify!($ident)).into()
                             }
 
-                            fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<Route<BlogEntryParams>> {
+                            fn routes(&self, ctx: &DynamicRouteContext) -> Routes<BlogEntryParams> {
                                 blog_entry_routes(ctx, stringify!($ident))
                             }
                         }
@@ -139,7 +139,7 @@ pub fn forget(
     let mut content_sources_archetypes = Vec::new();
 
     content_sources
-        .0
+        .sources_mut()
         .push(generate_archetype_store(&archetypes));
 
     for (_name, _stringified_ident, pages, content_source) in archetypes {
@@ -147,7 +147,9 @@ pub fn forget(
         combined_routes.extend(pages);
     }
 
-    content_sources.0.extend(content_sources_archetypes);
+    content_sources
+        .sources_mut()
+        .extend(content_sources_archetypes);
 
     // At the end of the day, we are just a Maudit wrapper.
     coronate(&combined_routes, content_sources, options)

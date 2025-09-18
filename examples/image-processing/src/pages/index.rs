@@ -13,7 +13,7 @@ impl Page for Index {
             ImageOptions {
                 width: Some(200),
                 height: Some(200),
-                format: Some(maudit::assets::ImageFormat::Webp),
+                format: Some(maudit::assets::ImageFormat::WebP),
             },
         );
 

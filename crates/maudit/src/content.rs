@@ -133,7 +133,7 @@ pub use maudit_macros::markdown_entry;
 ///      article.render(ctx).into()
 ///   }
 ///
-///   fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<ArticleParams> {
+///   fn routes(&self, ctx: &DynamicRouteContext) -> Vec<ArticleParams> {
 ///     let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///
 ///     articles.into_params(|entry| ArticleParams {
@@ -142,13 +142,15 @@ pub use maudit_macros::markdown_entry;
 ///   }
 /// }
 /// ```
-pub struct Content<'a> {
+pub struct PageContent<'a> {
     sources: &'a [Box<dyn ContentSourceInternal>],
 }
 
-impl Content<'_> {
-    pub fn new(sources: &'_ [Box<dyn ContentSourceInternal>]) -> Content<'_> {
-        Content { sources }
+impl PageContent<'_> {
+    pub fn new(sources: &'_ ContentSources) -> PageContent<'_> {
+        PageContent {
+            sources: sources.sources(),
+        }
     }
 
     pub fn get_untyped_source(&self, name: &str) -> &ContentSource<Untyped> {
@@ -311,7 +313,7 @@ pub type Untyped = FxHashMap<String, String>;
 /// pub fn content_sources() -> ContentSources {
 ///   content_sources!["docs" => glob_markdown::<ArticleContent>("content/docs/*.md", None)]
 /// }
-pub struct ContentSources(pub Vec<Box<dyn ContentSourceInternal>>);
+pub struct ContentSources(pub(crate) Vec<Box<dyn ContentSourceInternal>>);
 
 impl From<Vec<Box<dyn ContentSourceInternal>>> for ContentSources {
     fn from(content_sources: Vec<Box<dyn ContentSourceInternal>>) -> Self {
@@ -322,6 +324,20 @@ impl From<Vec<Box<dyn ContentSourceInternal>>> for ContentSources {
 impl ContentSources {
     pub fn new(content_sources: Vec<Box<dyn ContentSourceInternal>>) -> Self {
         Self(content_sources)
+    }
+
+    pub fn sources(&self) -> &Vec<Box<dyn ContentSourceInternal>> {
+        &self.0
+    }
+
+    pub fn sources_mut(&mut self) -> &mut Vec<Box<dyn ContentSourceInternal>> {
+        &mut self.0
+    }
+
+    pub fn init_all(&mut self) {
+        for source in &mut self.0 {
+            source.init();
+        }
     }
 }
 
@@ -364,7 +380,10 @@ impl<T> ContentSource<T> {
         self.entries.iter().map(cb).collect()
     }
 
-    pub fn into_routes<Params, Props>(&self, cb: impl Fn(&ContentEntry<T>) -> crate::page::Route<Params, Props>) -> Vec<crate::page::Route<Params, Props>>
+    pub fn into_routes<Params, Props>(
+        &self,
+        cb: impl Fn(&ContentEntry<T>) -> crate::page::Route<Params, Props>,
+    ) -> Vec<crate::page::Route<Params, Props>>
     where
         Params: Into<RouteParams>,
     {

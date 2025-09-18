@@ -1,0 +1,13 @@
+[package]
+name = "maudit-example-library"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[package.metadata.maudit]
+intended_version = "0.5.0"
+
+[dependencies]
+maudit = { workspace = true }
+maud = "0.26.0"
+serde = { version = "1.0.216" }

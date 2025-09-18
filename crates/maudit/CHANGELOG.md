@@ -6,7 +6,6 @@
 
 - [9cd5fdd](https://github.com/bruits/maudit/commit/9cd5fdd8abe3044bd09d48b96217e3a0d2878b13) Updates default quality for webp to 80 to match sharp — Thanks @Princesseuh!
 
-
 ## 0.5.0
 
 ### Minor changes
@@ -14,15 +13,15 @@
 - [d5a7fad](https://github.com/bruits/maudit/commit/d5a7fad563e9642be46b24d8db500e753c1175f5) The data URI and average RGBA for thumbnails is now calculated lazily, as such the `average_rgba` and `data_uri` fields have been replaced by methods. — Thanks @Princesseuh!
 - [0403ac9](https://github.com/bruits/maudit/commit/0403ac9996f9d4e79945758fe06e7510729e383e) Add `is_dev()` function to allow one to toggle off things whenever running in dev — Thanks @Princesseuh!
 - [39db004](https://github.com/bruits/maudit/commit/39db004b63ab7aa582a92593082e1261bae55b92) Added support for shortcodes in Markdown. Shortcodes allows you to substitute custom content in your Markdown files. This feature is useful for embedding dynamic content or reusable components within your Markdown documents.
-  
+
   For instance, you might define a shortcode for embedding YouTube videos using only the video ID, or for inserting custom alerts or notes.
-  
+
   ```markdown
   {{ youtube id="FbJ63spk48s" }}
   ```
-  
+
   Would render to:
-  
+
   ```html
   <iframe
     width="560"
@@ -35,12 +34,12 @@
     allowfullscreen
   ></iframe>
   ```
-  
+
   To define and register shortcodes, pass a MarkdownShortcodes instance to the MarkdownOptions when rendering Markdown content.
-  
+
   ```rust
   let mut shortcodes = MarkdownShortcodes::new();
-  
+
   shortcodes.register("youtube", |args, _ctx| {
       let id: String = args.get_required("id");
       format!(
@@ -48,21 +47,20 @@
           id
       )
   });
-  
+
   MarkdownOptions {
       shortcodes,
       ..Default::default()
   }
-  
+
   // Then pass options to, i.e. glob_markdown in a content source
   ```
-  
+
   Note that shortcodes are expanded before Markdown is rendered, so you can use shortcodes anywhere in your Markdown content, for instance in your frontmatter. Additionally, shortcodes may expand to Markdown content, which will then be rendered as part of the overall Markdown rendering process. — Thanks @Princesseuh!
 
 ### Patch changes
 
 - [d5a7fad](https://github.com/bruits/maudit/commit/d5a7fad563e9642be46b24d8db500e753c1175f5) Added caching mechanism to placeholder and image transformation — Thanks @Princesseuh!
-
 
 ## 0.4.0
 
@@ -96,6 +94,7 @@ impl Page for ImagePage {
 ```
 
 See the [Assets documentation](https://maudit.org/docs/assets/) for more details. — Thanks @Princesseuh!
+
 - [52eda9e](https://github.com/bruits/maudit/commit/52eda9ea4eac8efd3efd945d00f39a1b99f284ab) Adds support for dynamic routes with properties. In addition to its parameters, a dynamic route can now provide additional properties that can be used during rendering.
 
 ```rs
@@ -126,7 +125,7 @@ impl Page<Params, Props> for Post {
     ).into()
   }
 
-  fn routes(&self, ctx: &mut DynamicRouteContext) -> Routes<Params, Props> {
+  fn routes(&self, ctx: &DynamicRouteContext) -> Routes<Params, Props> {
     vec![Route::from_params_and_props(
       Params {
         slug: "hello-world".to_string(),
@@ -145,4 +144,3 @@ For more information on dynamic routes, see the [Routing documentation](https://
 ### Patch changes
 
 - Updated dependencies: maudit-macros@0.4.0
-

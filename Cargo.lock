@@ -2888,6 +2888,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "maudit-example-library"
+version = "0.1.0"
+dependencies = [
+ "maud",
+ "maudit",
+ "serde",
+]
+
+[[package]]
 name = "maudit-example-markdown-components"
 version = "0.1.0"
 dependencies = [
