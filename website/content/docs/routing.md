@@ -4,7 +4,7 @@ description: "How to create pages and routes in Maudit"
 section: "core-concepts"
 ---
 
-### Static Routes
+## Static Routes
 
 To create a new page in your Maudit project, create a struct and implement the `Page` trait for it, adding the `#[route]` attribute to the struct definition with the path of the route as an argument. The path can be any Rust expression, as long as it returns a `String`.
 
@@ -25,7 +25,7 @@ The `Page` trait requires the implementation of a `render` method that returns a
 
 Finally, make sure to [register the page](#registering-routes) in the `coronate` function for it to be built.
 
-### Ergonomic returns
+## Ergonomic returns
 
 The `Page` trait accepts a generic parameter in third position for the return type of the `render` method. This type must implement `Into<RenderResult>`, enabling more ergonomic returns in certain cases.
 
@@ -42,7 +42,7 @@ Maudit implements `Into<RenderResult>` for the following types:
 - `String`, `Vec<u8>`, `&str`, `&[u8]`
 - [Various templating libraries](/docs/templating/)
 
-### Dynamic Routes
+## Dynamic Routes
 
 Maudit supports creating dynamic routes with parameters. Allowing one to create many pages that share the same structure and logic, but with different content. For example, a blog where each post has a unique URL, e.g., `/posts/my-blog-post`.
 
@@ -106,7 +106,7 @@ The struct used for the parameters must implement `Into<RouteParams>`, which can
 
 Like static routes, dynamic routes must be [registered](#registering-routes) in the `coronate` function in order for them to be built.
 
-### Endpoints
+## Endpoints
 
 Maudit supports returning other types of content besides HTML, such as JSON, plain text or binary data. To do this, simply add a file extension to the route path and return the content in the `render` method.
 
@@ -153,7 +153,7 @@ impl Page<Params> for PostJson {
 
 Endpoints must also be [registered](#registering-routes) in the `coronate` function in order for them to be built.
 
-### Registering Routes
+## Registering Routes
 
 All kinds of routes must be passed to the `coronate` function in [the entrypoint](/docs/entrypoint) in order to be built.
 

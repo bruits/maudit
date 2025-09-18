@@ -44,7 +44,7 @@ fn render(&self, ctx: &mut RouteContext) -> Markup {
 }
 ```
 
-#### Tailwind support
+## Tailwind support
 
 Maudit includes built-in support for [Tailwind CSS](https://tailwindcss.com/). To use it, use `add_style_with_options()` or `include_style_with_options()` with the `StyleOptions { tailwind: true }` option.
 
@@ -60,7 +60,7 @@ fn render(&self, ctx: &mut RouteContext) -> Markup {
 }
 ```
 
-Maudit will automatically run Tailwind (using the binary provided at [`BuildOptions#tailwind_binary_path`](https://docs.rs/maudit/0.3.2/maudit/struct.BuildOptions.html#structfield.tailwind_binary_path)) on the specified CSS file.
+Maudit will automatically run Tailwind (using the binary provided at [`BuildOptions#tailwind_binary_path`](https://docs.rs/maudit/latest/maudit/struct.BuildOptions.html#structfield.tailwind_binary_path)) on the specified CSS file.
 
 Tailwind can then be configured normally, through native CSS in Tailwind 4.0, or through a `tailwind.config.js` file in earlier versions.
 

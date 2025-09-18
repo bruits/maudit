@@ -22,7 +22,8 @@ pub fn left_sidebar(ctx: &mut RouteContext) -> Markup {
         match section {
             DocsSection::GettingStarted => 0,
             DocsSection::CoreConcepts => 1,
-            DocsSection::Advanced => 2,
+            DocsSection::Guide => 2,
+            DocsSection::Advanced => 3,
         }
     });
 
@@ -68,16 +69,39 @@ pub fn left_sidebar(ctx: &mut RouteContext) -> Markup {
 }
 
 pub fn right_sidebar(headings: &[MarkdownHeading]) -> Markup {
-    let html_headings: Vec<maud::PreEscaped<String>> = headings
-        .iter()
-        .map(|heading| {
-            html! {
-                li {
-                    a href=(format!("#{}", heading.id)) { (heading.title) }
-                }
+    let mut html_headings: Vec<maud::PreEscaped<String>> = Vec::new();
+    let mut i = 0;
+    let mut seen_h2 = false;
+    while i < headings.len() {
+        let heading = &headings[i];
+        let (pad, border) = match heading.level {
+            2 => ("pl-0", ""),                           // h2
+            3 => ("pl-4", "border-l-2 border-borders"),  // h3
+            4 => ("pl-8", "border-l-2 border-borders"),  // h4
+            5 => ("pl-12", "border-l-2 border-borders"), // h5
+            6 => ("pl-16", "border-l-2 border-borders"), // h6
+            _ => ("pl-0", ""),                           // fallback
+        };
+        let next_level = if i + 1 < headings.len() {
+            headings[i + 1].level
+        } else {
+            0
+        };
+        let margin_top = if heading.level == 2 && next_level > 2 && seen_h2 {
+            "mt-4"
+        } else {
+            ""
+        };
+        if heading.level == 2 {
+            seen_h2 = true;
+        }
+        html_headings.push(html! {
+            li.(pad).(border).(margin_top) {
+                a href=(format!("#{}", heading.id)) { (heading.title) }
             }
-        })
-        .collect();
+        });
+        i += 1;
+    }
 
     html!(
         h2.text-lg.font-bold { "On This Page" }

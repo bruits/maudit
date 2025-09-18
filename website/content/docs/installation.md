@@ -4,7 +4,7 @@ description: "How to install Maudit"
 section: "getting-started"
 ---
 
-### Prerequisites
+## Prerequisites
 
 - [Rust (1.83 or later)](https://www.rust-lang.org)
 - A code editor (e.g. Visual Studio Code, RustRover, Helix, etc.)
@@ -18,7 +18,7 @@ Once Rust is installed, run the following command to ensure the latest stable ve
 rustup default stable
 ```
 
-### Installing Maudit
+## Installing Maudit
 
 Maudit provides a CLI tool for interacting with websites created using the library and generating new ones. To install the CLI tool, run the following command:
 
@@ -30,7 +30,7 @@ This will install the `maudit` binary in your Cargo bin directory. You can now r
 
 If you do not wish to use the CLI, or are integrating Maudit into an existing project, follow the instructions in the [manual installation guide](/docs/manual-install).
 
-### Creating a new project
+## Creating a new project
 
 To create a new Maudit project, run the following command:
 
