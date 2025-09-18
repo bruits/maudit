@@ -5,8 +5,7 @@ use crate::assets::PageAssets;
 use crate::build::finish_route;
 use crate::content::PageContent;
 use crate::route::{
-    extract_params_from_raw_route, get_route_type_from_route_params, get_route_url,
-    guess_if_route_is_endpoint,
+    extract_params_from_raw_route, get_route_type_from_route_params, guess_if_route_is_endpoint,
 };
 use rustc_hash::FxHashMap;
 use std::any::Any;
@@ -207,7 +206,6 @@ pub fn get_page_slice<'a, T>(
 ///   }
 /// }
 pub struct RouteContext<'a> {
-    pub raw_params: &'a RouteParams,
     pub params: &'a dyn Any,
     pub props: &'a dyn Any,
     pub content: &'a PageContent<'a>,
@@ -216,6 +214,20 @@ pub struct RouteContext<'a> {
 }
 
 impl<'a> RouteContext<'a> {
+    pub fn from_static_route(
+        content: &'a PageContent,
+        assets: &'a mut PageAssets,
+        current_url: String,
+    ) -> Self {
+        Self {
+            params: &(),
+            props: &(),
+            content,
+            assets,
+            current_url,
+        }
+    }
+
     pub fn from_dynamic_route(
         dynamic_route: &'a RouteResult,
         content: &'a PageContent,
@@ -223,7 +235,6 @@ impl<'a> RouteContext<'a> {
         current_url: String,
     ) -> Self {
         Self {
-            raw_params: &dynamic_route.0,
             params: dynamic_route.1.as_ref(),
             props: dynamic_route.2.as_ref(),
             content,
@@ -365,7 +376,6 @@ where
     }
 }
 
-#[doc(hidden)]
 #[derive(PartialEq, Eq, Debug)]
 /// Used internally by Maudit and should not be implemented by the user.
 /// We expose it because [`maudit_macros::route`] implements it for the user behind the scenes.
@@ -384,11 +394,70 @@ pub trait InternalPage {
     }
     fn route_type(&self) -> RouteType {
         let params_def = extract_params_from_raw_route(&self.route_raw());
+
         get_route_type_from_route_params(&params_def)
+    }
+
+    fn url(&self, params: &RouteParams) -> String {
+        let params_def = extract_params_from_raw_route(&self.route_raw());
+
+        // Replace every param_def with the value from the params hashmap for said key
+        // So, ex: "/articles/[article]" (params: Hashmap {article: "truc"}) -> "/articles/truc"
+        let mut route = self.route_raw();
+
+        for param_def in params_def {
+            let value = params.0.get(&param_def.key);
+
+            match value {
+                Some(value) => {
+                    route.replace_range(param_def.index..param_def.index + param_def.length, value);
+                }
+                None => {
+                    panic!(
+                        "Route {:?} is missing parameter {:?}",
+                        self.route_raw(),
+                        param_def.key
+                    );
+                }
+            }
+        }
+
+        route
+    }
+
+    fn file_path(&self, params: &RouteParams) -> String {
+        let params_def = extract_params_from_raw_route(&self.route_raw());
+        let mut route = self.route_raw();
+
+        for param_def in params_def {
+            let value = params.0.get(&param_def.key);
+
+            match value {
+                Some(value) => {
+                    route.replace_range(param_def.index..param_def.index + param_def.length, value);
+                }
+                None => {
+                    panic!(
+                        "Route {:?} is missing parameter {:?}",
+                        self.route_raw(),
+                        param_def.key
+                    );
+                }
+            }
+        }
+
+        let cleaned_raw_route = route.trim_start_matches('/').to_string();
+
+        match self.is_endpoint() {
+            true => cleaned_raw_route,
+            false => match cleaned_raw_route.is_empty() {
+                true => "index.html".to_string(),
+                false => format!("{}/index.html", cleaned_raw_route),
+            },
+        }
     }
 }
 
-#[doc(hidden)]
 /// Used internally by Maudit and should not be implemented by the user.
 /// We expose it because [`maudit_macros::route`] implements it for the user behind the scenes.
 pub trait FullPage: InternalPage + Sync + Send {
@@ -410,11 +479,7 @@ pub type RouteProps = Box<dyn Any + Send + Sync>;
 pub type RouteTypedParams = Box<dyn Any + Send + Sync>;
 
 pub fn get_page_url<T: Into<RouteParams>>(route: &impl FullPage, params: T) -> String {
-    let params_defs = extract_params_from_raw_route(&route.route_raw());
-    format!(
-        "/{}",
-        get_route_url(&route.route_raw(), &params_defs, &params.into())
-    )
+    format!("/{}", route.url(&params.into()).trim_start_matches('/'))
 }
 
 pub mod prelude {

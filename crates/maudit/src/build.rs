@@ -1,7 +1,7 @@
 use core::panic;
 use std::{
     env,
-    fs::{self, remove_dir_all},
+    fs::{self},
     io::{self},
     path::{Path, PathBuf},
     process::Command,
@@ -22,7 +22,6 @@ use crate::{
     is_dev,
     logging::print_title,
     page::{DynamicRouteContext, FullPage, RenderResult, RouteContext, RouteParams, RouteType},
-    route::{extract_params_from_raw_route, get_route_file_path, get_route_url},
 };
 use colored::{ColoredString, Colorize};
 use log::{debug, info, trace};
@@ -158,8 +157,7 @@ pub async fn build(
     // Create a directory for the output
     trace!(target: "build", "Setting up required directories...");
     let dist_dir = PathBuf::from_str(&options.output_dir)?;
-    let assets_dir = PathBuf::from_str(&options.output_dir)?.join(&options.assets_dir);
-    let tmp_dir = dist_dir.join("_tmp");
+    let final_assets_dir = PathBuf::from_str(&options.output_dir)?.join(&options.assets_dir);
     let static_dir = PathBuf::from_str(&options.static_dir)?;
 
     let old_dist_tmp_dir = if options.clean_output_dir {
@@ -180,13 +178,13 @@ pub async fn build(
     });
 
     fs::create_dir_all(&dist_dir)?;
-    fs::create_dir_all(&assets_dir)?;
+    fs::create_dir_all(&final_assets_dir)?;
 
     info!(target: "build", "Output directory: {}", dist_dir.to_string_lossy());
 
     let content_sources_start = Instant::now();
     print_title("initializing content sources");
-    content_sources.sources_mut().iter_mut().for_each(|source| {
+    content_sources.sources_mut().par_iter_mut().for_each(|source| {
         let source_start = Instant::now();
         source.init();
 
@@ -231,38 +229,27 @@ pub async fn build(
     // faster in all cases, making it sometimes even slower due to the overhead. It'd be great to investigate and benchmark
     // this.
     for route in routes {
-        let params_def = extract_params_from_raw_route(&route.route_raw());
         match route.route_type() {
             RouteType::Static => {
                 let route_start = Instant::now();
-                let mut page_assets = PageAssets::new(assets_dir.clone());
 
-                let params = RouteParams(FxHashMap::default());
+                let content = PageContent::new(content_sources);
+                let mut page_assets = PageAssets::new(options.assets_dir.clone().into());
 
-                let mut content = PageContent::new(content_sources);
-                let mut ctx = RouteContext {
-                    content: &mut content,
-                    assets: &mut page_assets,
-                    current_url: get_route_url(&route.route_raw(), &params_def, &params),
+                let params = RouteParams::default();
+                let url = route.url(&params);
 
-                    // Static routes have no params or props
-                    raw_params: &params,
-                    params: &(),
-                    props: &(),
-                };
+                let result = route.build(&mut RouteContext::from_static_route(
+                    &content,
+                    &mut page_assets,
+                    url.clone(),
+                ))?;
 
-                let result = route.build(&mut ctx)?;
-
-                let file_path = &dist_dir.join(get_route_file_path(
-                    &route.route_raw(),
-                    &params_def,
-                    &params,
-                    route.is_endpoint(),
-                ));
+                let file_path = &dist_dir.join(route.file_path(&params));
 
                 write_route_file(&result, file_path)?;
 
-                info!(target: "pages", "{} -> {} {}", get_route_url(&route.route_raw(), &params_def, &params), file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
+                info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
                 build_pages_images.extend(page_assets.images);
                 build_pages_scripts.extend(page_assets.scripts);
@@ -288,25 +275,22 @@ pub async fn build(
                     info!(target: "build", "{}", route.route_raw().to_string().bold());
                 }
 
+                let content = PageContent::new(content_sources);
                 for dynamic_route in routes {
                     let route_start = Instant::now();
 
-                    let content = PageContent::new(content_sources);
-                    let mut page_assets = PageAssets::new(assets_dir.clone());
+                    let mut page_assets = PageAssets::new(options.assets_dir.clone().into());
+
+                    let url = route.url(&dynamic_route.0);
 
                     let content = route.build(&mut RouteContext::from_dynamic_route(
                         &dynamic_route,
                         &content,
                         &mut page_assets,
-                        get_route_url(&route.route_raw(), &params_def, &dynamic_route.0),
+                        url,
                     ))?;
 
-                    let file_path = &dist_dir.join(get_route_file_path(
-                        &route.route_raw(),
-                        &params_def,
-                        &dynamic_route.0,
-                        route.is_endpoint(),
-                    ));
+                    let file_path = &dist_dir.join(route.file_path(&dynamic_route.0));
 
                     write_route_file(&content, file_path)?;
 
@@ -379,7 +363,7 @@ pub async fn build(
                 BundlerOptions {
                     input: Some(bundler_inputs),
                     minify: Some(rolldown::RawMinifyOptions::Bool(!is_dev())),
-                    dir: Some(assets_dir.to_string_lossy().to_string()),
+                    dir: Some(final_assets_dir.to_string_lossy().to_string()),
                     module_types: Some(module_types_hashmap),
 
                     ..Default::default()
@@ -415,7 +399,7 @@ pub async fn build(
         let start_time = Instant::now();
         build_pages_images.par_iter().for_each(|image| {
             let start_process = Instant::now();
-            let dest_path = assets_dir.join(image.final_file_name());
+            let dest_path = final_assets_dir.join(image.final_file_name());
 
             if let Some(image_options) = &image.options {
                 let final_filename = image.final_file_name();
@@ -469,9 +453,6 @@ pub async fn build(
 
         info!(target: "build", "{}", format!("Assets copied in {}", format_elapsed_time(assets_start.elapsed(), &FormatElapsedTimeOptions::default())).bold());
     }
-
-    // Remove temporary files
-    let _ = remove_dir_all(&tmp_dir);
 
     info!(target: "SKIP_FORMAT", "{}", "");
     info!(target: "build", "{}", format!("Build completed in {}", format_elapsed_time(build_start.elapsed(), &section_format_options)).bold());

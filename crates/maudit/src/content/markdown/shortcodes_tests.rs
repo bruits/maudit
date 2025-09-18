@@ -59,12 +59,9 @@ mod tests {
         use crate::{
             assets::PageAssets,
             content::{ContentSources, PageContent},
-            page::RouteParams,
         };
-        use rustc_hash::FxHashMap;
         use std::path::PathBuf;
 
-        let params = RouteParams(FxHashMap::default());
         let content_sources = ContentSources::new(vec![]);
         let content = PageContent::new(&content_sources);
         let mut page_assets = PageAssets {
@@ -73,7 +70,6 @@ mod tests {
         };
 
         let mut ctx = RouteContext {
-            raw_params: &params,
             content: &content,
             assets: &mut page_assets,
             current_url: "/test".to_string(),

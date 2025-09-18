@@ -17,9 +17,9 @@ pub use style::{Style, StyleOptions};
 
 #[derive(Default)]
 pub struct PageAssets {
-    pub(crate) images: FxHashSet<Image>,
-    pub(crate) scripts: FxHashSet<Script>,
-    pub(crate) styles: FxHashSet<Style>,
+    pub images: FxHashSet<Image>,
+    pub scripts: FxHashSet<Script>,
+    pub styles: FxHashSet<Style>,
 
     pub(crate) assets_dir: PathBuf,
 }
@@ -30,6 +30,14 @@ impl PageAssets {
             assets_dir,
             ..Default::default()
         }
+    }
+
+    pub fn assets(&self) -> impl Iterator<Item = &dyn Asset> {
+        self.images
+            .iter()
+            .map(|asset| asset as &dyn Asset)
+            .chain(self.scripts.iter().map(|asset| asset as &dyn Asset))
+            .chain(self.styles.iter().map(|asset| asset as &dyn Asset))
     }
 
     /// Get all styles that are marked as included
