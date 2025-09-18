@@ -1,12 +1,12 @@
 use std::path::Path;
 
-use crate::page::{RouteParams, RouteType};
+use crate::page::RouteType;
 
 #[derive(Debug, PartialEq)]
 pub struct ParameterDef {
-    key: String,
-    index: usize,
-    length: usize,
+    pub(crate) key: String,
+    pub(crate) index: usize,
+    pub(crate) length: usize,
 }
 
 pub fn extract_params_from_raw_route(raw_route: &str) -> Vec<ParameterDef> {
@@ -63,72 +63,6 @@ pub fn get_route_type_from_route_params(params_def: &[ParameterDef]) -> RouteTyp
     }
 }
 
-/// "/articles/[article]" (params: Hashmap {article: "truc"}) -> "articles/truc/index.html"
-pub fn get_route_file_path(
-    raw_route: &str,
-    params_def: &Vec<ParameterDef>,
-    params: &RouteParams,
-    is_endpoint: bool,
-) -> String {
-    // Replace every param_def with the value from the params hashmap for said key
-    // So, ex: "/articles/[article]" (params: Hashmap {article: "truc"}) -> "/articles/truc"
-    let mut route = String::from(raw_route);
-
-    for param_def in params_def {
-        let value = params.0.get(&param_def.key);
-
-        match value {
-            Some(value) => {
-                route.replace_range(param_def.index..param_def.index + param_def.length, value);
-            }
-            None => {
-                panic!(
-                    "Route {:?} is missing parameter {:?}",
-                    raw_route, param_def.key
-                );
-            }
-        }
-    }
-
-    let cleaned_raw_route = route.trim_start_matches('/').to_string();
-
-    match is_endpoint {
-        true => cleaned_raw_route,
-        false => match cleaned_raw_route.is_empty() {
-            true => "index.html".to_string(),
-            false => format!("{}/index.html", cleaned_raw_route),
-        },
-    }
-}
-
-pub fn get_route_url(
-    raw_route: &str,
-    params_def: &Vec<ParameterDef>,
-    params: &RouteParams,
-) -> String {
-    // Replace every param_def with the value from the params hashmap for said key
-    // So, ex: "/articles/[article]" (params: Hashmap {article: "truc"}) -> "/articles/truc"
-    let mut route = String::from(raw_route);
-
-    for param_def in params_def {
-        let value = params.0.get(&param_def.key);
-
-        match value {
-            Some(value) => {
-                route.replace_range(param_def.index..param_def.index + param_def.length, value);
-            }
-            None => {
-                panic!(
-                    "Route {:?} is missing parameter {:?}",
-                    raw_route, param_def.key
-                );
-            }
-        }
-    }
-
-    route
-}
-
 pub fn guess_if_route_is_endpoint(raw_route: &str) -> bool {
     let real_path = Path::new(&raw_route);
 
@@ -138,11 +72,8 @@ pub fn guess_if_route_is_endpoint(raw_route: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use crate::{
-        page::{RouteParams, RouteType},
-        route::{
-            extract_params_from_raw_route, get_route_file_path, get_route_type_from_route_params,
-            ParameterDef,
-        },
+        page::RouteType,
+        route::{ParameterDef, extract_params_from_raw_route, get_route_type_from_route_params},
     };
 
     #[test]
@@ -259,23 +190,6 @@ mod tests {
         assert_eq!(
             get_route_type_from_route_params(&params_def),
             RouteType::Dynamic
-        );
-    }
-
-    #[test]
-    fn test_get_route_file_path() {
-        let raw_route = "/articles/[article]";
-        let is_endpoint = false;
-        let params_def = extract_params_from_raw_route(raw_route);
-        let mut params = RouteParams::default();
-
-        params
-            .0
-            .insert("article".to_string(), "something".to_string());
-
-        assert_eq!(
-            get_route_file_path(raw_route, &params_def, &params, is_endpoint),
-            "articles/something/index.html"
         );
     }
 }

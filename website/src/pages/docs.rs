@@ -45,7 +45,7 @@ struct DocsPageParams {
 }
 
 impl Page<DocsPageParams> for DocsPage {
-    fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<Route<DocsPageParams>> {
+    fn routes(&self, ctx: &DynamicRouteContext) -> Routes<DocsPageParams> {
         let content = ctx.content.get_source::<DocsContent>("docs");
 
         content.into_routes(|entry| {

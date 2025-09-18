@@ -11,7 +11,7 @@ pub struct Params {
 }
 
 impl Page<Params> for DynamicExample {
-    fn routes(&self, _: &mut DynamicRouteContext) -> Vec<Route<Params>> {
+    fn routes(&self, _: &DynamicRouteContext) -> Routes<Params> {
         (0..1)
             .map(|i| Route::from_params(Params { page: i }))
             .collect()

@@ -8,7 +8,7 @@ use crate::assets::{Asset, Image, ImageFormat, ImageOptions};
 pub fn process_image(image: &Image, dest_path: &Path, image_options: &ImageOptions) {
     let mut img = ImageReader::open(image.path()).unwrap().decode().unwrap();
 
-    let new_format = image_options.format.clone().unwrap_or(ImageFormat::Webp);
+    let new_format = image_options.format.clone().unwrap_or(ImageFormat::WebP);
     let new_width = image_options.width.unwrap_or(img.width());
     let new_height = image_options.height.unwrap_or(img.height());
 
@@ -19,7 +19,7 @@ pub fn process_image(image: &Image, dest_path: &Path, image_options: &ImageOptio
     // image doesn't support lossy WebP encoding, so we'll use webp directly for that to avoid huge files
     // TODO: Add a feature so that people can choose not to depend on libwebp
     // TODO: Add a way for people to choose lossless WebP encoding, despite the larger file sizes
-    if new_format == ImageFormat::Webp {
+    if new_format == ImageFormat::WebP {
         let encoder: Encoder = Encoder::from_image(&img).unwrap();
         let webp: WebPMemory = encoder.encode(80f32); // TODO: Allow configuring quality
         std::fs::write(dest_path, &*webp).unwrap();
