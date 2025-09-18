@@ -184,7 +184,7 @@ pub async fn build(
 
     let content_sources_start = Instant::now();
     print_title("initializing content sources");
-    content_sources.sources_mut().par_iter_mut().for_each(|source| {
+    content_sources.sources_mut().iter_mut().for_each(|source| {
         let source_start = Instant::now();
         source.init();
 
