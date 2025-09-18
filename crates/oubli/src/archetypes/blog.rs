@@ -43,7 +43,7 @@ pub struct BlogEntryParams {
     pub entry: String,
 }
 
-pub fn blog_entry_routes(ctx: &DynamicRouteContext, name: &str) -> Vec<Route<BlogEntryParams>> {
+pub fn blog_entry_routes(ctx: &DynamicRouteContext, name: &str) -> Routes<BlogEntryParams> {
     let blog_entries = ctx.content.get_source::<BlogEntryContent>(name);
 
     blog_entries.into_routes(|entry| {

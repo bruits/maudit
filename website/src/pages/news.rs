@@ -87,7 +87,7 @@ struct NewsPageParams {
 }
 
 impl Page<NewsPageParams> for NewsPage {
-    fn routes(&self, ctx: &DynamicRouteContext) -> Vec<Route<NewsPageParams>> {
+    fn routes(&self, ctx: &DynamicRouteContext) -> Routes<NewsPageParams> {
         let content = ctx.content.get_source::<NewsContent>("news");
 
         content.into_routes(|entry| {

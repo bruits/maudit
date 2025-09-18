@@ -142,7 +142,7 @@ pub fn paginate_content<T, Params>(
     entries: &[crate::content::ContentEntry<T>],
     per_page: usize,
     mut params_fn: impl FnMut(usize) -> Params,
-) -> Vec<Route<Params, PaginationMeta>>
+) -> Routes<Params, PaginationMeta>
 where
     Params: Into<RouteParams>,
 {
@@ -335,7 +335,7 @@ where
     Props: 'static,
     T: Into<RenderResult>,
 {
-    fn routes(&self, _ctx: &DynamicRouteContext) -> Vec<Route<Params, Props>> {
+    fn routes(&self, _ctx: &DynamicRouteContext) -> Routes<Params, Props> {
         Vec::new()
     }
     fn render(&self, ctx: &mut RouteContext) -> T;

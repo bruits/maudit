@@ -9,7 +9,7 @@ struct Params {
 }
 
 impl Page<Params> for Article {
-    fn routes(&self, context: &DynamicRouteContext) -> Vec<Route<Params>> {
+    fn routes(&self, context: &DynamicRouteContext) -> Routes<Params> {
         context
             .content
             .get_source::<UntypedMarkdownContent>("articles")
