@@ -31,6 +31,7 @@ impl Page for IndexPage {
                     }
                 }
             }
-        }.into()
+        }
+        .into()
     }
 }

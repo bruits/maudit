@@ -1,4 +1,3 @@
-use ::image::image_dimensions;
 use dyn_eq::DynEq;
 use log::debug;
 use rustc_hash::FxHashSet;
@@ -71,14 +70,9 @@ impl PageAssets {
             return image.clone();
         }
 
-        let (width, height) = image_dimensions(&image_path).unwrap_or((0, 0));
-
         let image = Image {
             path: image_path.clone(),
-            width,
-            height,
             assets_dir: self.assets_dir.clone(),
-            // TODO: This is gonna re-read the file, even though we already had to in order to get dimensions, perhaps we can re-use the same data?
             hash: calculate_hash(&image_path, Some(HashConfig::Image(&options))),
             options: if options == ImageOptions::default() {
                 None

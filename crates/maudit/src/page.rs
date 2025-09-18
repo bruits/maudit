@@ -10,7 +10,7 @@ use crate::route::{
 use rustc_hash::FxHashMap;
 use std::any::Any;
 
-/// Represents the result of a page render, can be either text or raw bytes.
+/// The result of a page render, can be either text or raw bytes.
 ///
 /// Typically used through the [`Into<RenderResult>`](std::convert::Into) and [`From<RenderResult>`](std::convert::From) implementations for common types.
 /// End users should rarely need to interact with this enum directly.
@@ -458,6 +458,32 @@ pub trait InternalPage {
     }
 }
 
+/// Extension trait providing generic convenience methods on an instance of a page
+pub trait PageExt<Params = RouteParams, Props = (), T = RenderResult>:
+    Page<Params, Props, T> + InternalPage
+where
+    Params: Into<RouteParams>,
+    Props: 'static,
+    T: Into<RenderResult>,
+{
+    /// Get the URL for this page with the given parameters
+    ///
+    /// Note that this method merely generates the URL based on the route pattern and parameters, it does not verify if a corresponding route actually exists.
+    fn url(&self, params: Params) -> String {
+        InternalPage::url(self, &params.into())
+    }
+}
+
+// Blanket implementation for all Page implementors that also implement InternalPage
+impl<U, Params, Props, T> PageExt<Params, Props, T> for U
+where
+    U: Page<Params, Props, T> + InternalPage,
+    Params: Into<RouteParams>,
+    Props: 'static,
+    T: Into<RenderResult>,
+{
+}
+
 /// Used internally by Maudit and should not be implemented by the user.
 /// We expose it because [`maudit_macros::route`] implements it for the user behind the scenes.
 pub trait FullPage: InternalPage + Sync + Send {
@@ -478,10 +504,6 @@ pub type RoutesResult = Vec<RouteResult>;
 pub type RouteProps = Box<dyn Any + Send + Sync>;
 pub type RouteTypedParams = Box<dyn Any + Send + Sync>;
 
-pub fn get_page_url<T: Into<RouteParams>>(route: &impl FullPage, params: T) -> String {
-    format!("/{}", route.url(&params.into()).trim_start_matches('/'))
-}
-
 pub mod prelude {
     //! Re-exports of the most commonly used types and traits for defining pages.
     //!
@@ -492,8 +514,8 @@ pub mod prelude {
     //! use maudit::page::prelude::*;
     //! ```
     pub use super::{
-        DynamicRouteContext, Page, PaginationMeta, RenderResult, Route, RouteContext, RouteParams,
-        Routes, get_page_slice, get_page_url, paginate_content,
+        DynamicRouteContext, FullPage, Page, PageExt, PaginationMeta, RenderResult, Route,
+        RouteContext, RouteParams, Routes, get_page_slice, paginate_content,
     };
     pub use crate::assets::{Asset, Image, Style, StyleOptions};
     pub use crate::content::MarkdownContent;

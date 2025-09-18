@@ -19,7 +19,7 @@ pub fn blog_index_content<T: FullPage>(
     let markup = html! {
         main {
             @for entry in &blog_entries.entries {
-                a href=(get_page_url(&route, BlogEntryParams { entry: entry.id.clone() })) {
+                a href=(route.url(&BlogEntryParams { entry: entry.id.clone() }.into())) {
                     h2 { (entry.data(ctx).title) }
                     p { (entry.data(ctx).description) }
                 }

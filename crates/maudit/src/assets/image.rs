@@ -2,7 +2,7 @@ use std::hash::Hash;
 use std::{path::PathBuf, sync::OnceLock, time::Instant};
 
 use base64::Engine;
-use image::GenericImageView;
+use image::{GenericImageView, image_dimensions};
 use log::debug;
 use thumbhash::{rgba_to_thumb_hash, thumb_hash_to_average_rgba, thumb_hash_to_rgba};
 
@@ -63,8 +63,6 @@ pub struct ImageOptions {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Image {
     pub path: PathBuf,
-    pub width: u32,
-    pub height: u32,
     pub(crate) assets_dir: PathBuf,
     pub(crate) hash: String,
     pub(crate) options: Option<ImageOptions>,
@@ -76,6 +74,10 @@ impl Image {
     /// This uses the [ThumbHash](https://evanw.github.io/thumbhash/) algorithm to generate a very small placeholder image.
     pub fn placeholder(&self) -> ImagePlaceholder {
         get_placeholder(&self.path)
+    }
+
+    pub fn dimensions(&self) -> (u32, u32) {
+        image_dimensions(&self.path).unwrap_or((0, 0))
     }
 }
 

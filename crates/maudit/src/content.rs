@@ -196,7 +196,7 @@ impl PageContent<'_> {
     }
 }
 
-/// Represents a single entry in a [`ContentSource`].
+/// A single entry of a [`ContentSource`].
 ///
 /// ## Example
 /// ```rs

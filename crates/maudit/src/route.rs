@@ -11,44 +11,36 @@ pub struct ParameterDef {
 
 pub fn extract_params_from_raw_route(raw_route: &str) -> Vec<ParameterDef> {
     let mut params = Vec::new();
-    let mut start = false;
-    let mut escape = false;
-    let mut current_value = String::new();
+    let mut start = 0;
 
-    for (i, c) in raw_route.char_indices() {
-        if escape {
-            escape = false;
-            if start {
-                current_value.push(c);
-            }
+    while let Some(bracket_pos) = raw_route[start..].find('[') {
+        let abs_pos = start + bracket_pos;
+
+        // Check if escaped by counting preceding backslashes
+        let backslash_count = raw_route[..abs_pos]
+            .chars()
+            .rev()
+            .take_while(|&c| c == '\\')
+            .count();
+
+        if backslash_count % 2 == 1 {
+            start = abs_pos + 1;
             continue;
         }
 
-        match c {
-            '\\' => {
-                escape = true;
-            }
-            '[' => {
-                if !escape {
-                    start = true;
-                    current_value.clear();
-                }
-            }
-            ']' => {
-                if start {
-                    params.push(ParameterDef {
-                        key: current_value.clone(),
-                        index: i - (current_value.len() + 1), // -1 for the starting [
-                        length: current_value.len() + 2,      // +2 for the [ and ]
-                    });
-                    start = false;
-                }
-            }
-            _ => {
-                if start {
-                    current_value.push(c);
-                }
-            }
+        if let Some(end_bracket) = raw_route[abs_pos + 1..].find(']') {
+            let end_pos = abs_pos + 1 + end_bracket;
+            let key = raw_route[abs_pos + 1..end_pos].to_string();
+
+            params.push(ParameterDef {
+                key,
+                index: abs_pos,
+                length: end_pos - abs_pos + 1,
+            });
+
+            start = end_pos + 1;
+        } else {
+            break;
         }
     }
 

@@ -2,7 +2,7 @@ use std::{path::Path, sync::Arc};
 
 use glob::glob as glob_fs;
 use log::warn;
-use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd, html::push_html};
+use pulldown_cmark::{html::push_html, CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use serde::de::DeserializeOwned;
 
 pub mod components;
@@ -12,11 +12,11 @@ use components::{LinkType, ListType, MarkdownComponents, TableAlignment};
 
 use crate::{
     assets::Asset,
-    content::shortcodes::{MarkdownShortcodes, preprocess_shortcodes},
+    content::shortcodes::{preprocess_shortcodes, MarkdownShortcodes},
     page::RouteContext,
 };
 
-use super::{ContentEntry, highlight::CodeBlock, slugger};
+use super::{highlight::CodeBlock, slugger, ContentEntry};
 
 #[cfg(test)]
 mod shortcodes_tests;

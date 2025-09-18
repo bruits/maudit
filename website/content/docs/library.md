@@ -20,22 +20,7 @@ cd library
 cargo add maudit
 ```
 
-and we'll create a simple Maudit page in `src/pages/index.rs`:
-
-```rs
-use maudit::page::prelude::*;
-
-#[route("/")]
-pub struct Index;
-
-impl Page for Index {
-  fn render(&self, _: &mut RouteContext) -> RenderResult {
-    "Hello, Maudit!".into()
-  }
-}
-```
-
-We'll now start building our own entrypoint in `src/build.rs`, which will contain a `build_website` function, taking the same parameters as `coronate`:
+And setup a `build_website` function in `src/main.rs` taking the same arguments as `coronate`:
 
 ```rs
 use maudit::page::FullPage;
@@ -49,17 +34,6 @@ pub fn build_website(
   // Implementation will go here
 
   Ok(())
-}
-```
-
-Finally, we'll modify `src/main.rs` to call our `build_website` function:
-
-```rs
-mod build;
-
-mod pages {
-  mod index;
-  pub use index::Index;
 }
 
 fn main() {
@@ -245,4 +219,6 @@ for route in routes {
 }
 ```
 
-And with that, you've succesfully rebuilt Maudit at home! There's a few more things that can be done to improve this implementation, like adding logging, copying static assets, asset processing, better error handling, parallelization, caching, etc, etc. But, this is a fully functional implementation that can be used as a starting point for more advanced use cases... or just as a learning exercise to understand how Maudit works under the hood.
+And with that, you've succesfully rebuilt Maudit at home! There's a few more things that can be done to improve this implementation, like adding logging, copying static assets, asset processing, better error handling, parallelization, caching, etc, etc.
+
+But, this is a fully functional implementation that can be used as a starting point for more advanced use cases... or just as a learning exercise to understand how Maudit works under the hood.

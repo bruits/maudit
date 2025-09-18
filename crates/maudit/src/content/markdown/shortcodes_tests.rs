@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{
-        content::shortcodes::{MarkdownShortcodes, preprocess_shortcodes},
+        content::shortcodes::{preprocess_shortcodes, MarkdownShortcodes},
         page::RouteContext,
     };
 
@@ -300,11 +300,9 @@ console.log("Hello, Nested!");
             preprocess_shortcodes_with_ctx(content, &shortcodes, route_ctx)
         });
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .contains("Unknown shortcode: 'unknown_shortcode'")
-        );
+        assert!(result
+            .unwrap_err()
+            .contains("Unknown shortcode: 'unknown_shortcode'"));
     }
 
     #[test]
