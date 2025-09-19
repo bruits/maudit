@@ -12,6 +12,7 @@ pub struct StyleOptions {
 pub struct Style {
     pub path: PathBuf,
     pub(crate) assets_dir: PathBuf,
+    pub(crate) output_assets_dir: PathBuf,
     pub(crate) hash: String,
     pub(crate) tailwind: bool,
     pub(crate) included: bool,
@@ -21,18 +22,13 @@ impl InternalAsset for Style {
     fn assets_dir(&self) -> &PathBuf {
         &self.assets_dir
     }
+
+    fn output_assets_dir(&self) -> &PathBuf {
+        &self.output_assets_dir
+    }
 }
 
 impl Asset for Style {
-    fn url(&self) -> Option<String> {
-        format!(
-            "/{}/{}",
-            self.assets_dir().to_string_lossy(),
-            self.final_file_name()
-        )
-        .into()
-    }
-
     fn path(&self) -> &PathBuf {
         &self.path
     }

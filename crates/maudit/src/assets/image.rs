@@ -64,6 +64,7 @@ pub struct ImageOptions {
 pub struct Image {
     pub path: PathBuf,
     pub(crate) assets_dir: PathBuf,
+    pub(crate) output_assets_dir: PathBuf,
     pub(crate) hash: String,
     pub(crate) options: Option<ImageOptions>,
 }
@@ -385,18 +386,13 @@ impl InternalAsset for Image {
     fn assets_dir(&self) -> &PathBuf {
         &self.assets_dir
     }
+
+    fn output_assets_dir(&self) -> &PathBuf {
+        &self.output_assets_dir
+    }
 }
 
 impl Asset for Image {
-    fn url(&self) -> Option<String> {
-        format!(
-            "/{}/{}",
-            self.assets_dir().to_string_lossy(),
-            self.final_file_name()
-        )
-        .into()
-    }
-
     fn path(&self) -> &PathBuf {
         &self.path
     }

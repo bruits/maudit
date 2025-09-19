@@ -14,8 +14,7 @@ pub use image::{Image, ImageFormat, ImageOptions};
 pub use script::Script;
 pub use style::{Style, StyleOptions};
 
-use crate::AssetHashingStrategy;
-use crate::build::options::AssetsOptions;
+use crate::{AssetHashingStrategy, BuildOptions};
 
 #[derive(Default)]
 pub struct PageAssets {
@@ -29,15 +28,19 @@ pub struct PageAssets {
 #[derive(Clone)]
 pub struct PageAssetsOptions {
     pub assets_dir: PathBuf,
+    pub output_assets_dir: PathBuf,
     pub hashing_strategy: AssetHashingStrategy,
 }
 
 impl Default for PageAssetsOptions {
     fn default() -> Self {
-        let default_assets_options = AssetsOptions::default();
+        let default_build_options = BuildOptions::default();
+        let page_assets_optiosn = default_build_options.page_assets_options();
+
         Self {
-            assets_dir: default_assets_options.assets_dir,
-            hashing_strategy: default_assets_options.hashing_strategy,
+            assets_dir: default_build_options.assets.assets_dir,
+            output_assets_dir: page_assets_optiosn.assets_dir,
+            hashing_strategy: page_assets_optiosn.hashing_strategy,
         }
     }
 }
@@ -92,6 +95,7 @@ impl PageAssets {
         let image = Image {
             path: image_path.clone(),
             assets_dir: self.options.assets_dir.clone(),
+            output_assets_dir: self.options.output_assets_dir.clone(),
             hash: calculate_hash(
                 &image_path,
                 Some(&HashConfig {
@@ -132,6 +136,7 @@ impl PageAssets {
         let script = Script {
             path: path.clone(),
             assets_dir: self.options.assets_dir.clone(),
+            output_assets_dir: self.options.output_assets_dir.clone(),
             hash: calculate_hash(&path, None),
             included: false,
         };
@@ -154,6 +159,7 @@ impl PageAssets {
         let script = Script {
             path: path.clone(),
             assets_dir: self.options.assets_dir.clone(),
+            output_assets_dir: self.options.output_assets_dir.clone(),
             hash: calculate_hash(&path, None),
             included: true,
         };
@@ -187,6 +193,7 @@ impl PageAssets {
         let style = Style {
             path: path.clone(),
             assets_dir: self.options.assets_dir.clone(),
+            output_assets_dir: self.options.output_assets_dir.clone(),
             hash: calculate_hash(
                 &path,
                 Some(&HashConfig {
@@ -235,6 +242,7 @@ impl PageAssets {
         let style = Style {
             path: path.clone(),
             assets_dir: self.options.assets_dir.clone(),
+            output_assets_dir: self.options.output_assets_dir.clone(),
             hash,
             tailwind: options.tailwind,
             included: true,
@@ -247,11 +255,18 @@ impl PageAssets {
 #[allow(private_bounds)] // Users never interact with the internal trait, so it's fine
 pub trait Asset: DynEq + InternalAsset + Sync + Send {
     fn build_path(&self) -> PathBuf {
-        self.assets_dir().join(self.final_file_name())
+        self.output_assets_dir().join(self.final_file_name())
     }
-    fn url(&self) -> Option<String>;
-    fn path(&self) -> &PathBuf;
+    fn url(&self) -> Option<String> {
+        format!(
+            "/{}/{}",
+            self.assets_dir().to_string_lossy(),
+            self.final_file_name()
+        )
+        .into()
+    }
 
+    fn path(&self) -> &PathBuf;
     fn hash(&self) -> String;
 
     // TODO: I don't like these next two methods for scripts and styles, we should get this from Rolldown somehow, but I don't know how.
@@ -359,6 +374,7 @@ fn calculate_hash(path: &PathBuf, options: Option<&HashConfig>) -> String {
 
 trait InternalAsset {
     fn assets_dir(&self) -> &PathBuf;
+    fn output_assets_dir(&self) -> &PathBuf;
 }
 
 impl Hash for dyn Asset {
@@ -649,6 +665,7 @@ mod tests {
         let style2 = Style {
             path: style_path.clone(),
             assets_dir: assets_options.assets_dir.clone(),
+            output_assets_dir: assets_options.output_assets_dir.clone(),
             hash: calculate_hash(
                 &style_path,
                 Some(&HashConfig {

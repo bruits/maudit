@@ -313,7 +313,7 @@ pub async fn build(
         || !build_pages_styles.is_empty()
         || !build_pages_scripts.is_empty()
     {
-        fs::create_dir_all(&page_assets_options.assets_dir)?;
+        fs::create_dir_all(&page_assets_options.output_assets_dir)?;
     }
 
     if !build_pages_styles.is_empty() || !build_pages_scripts.is_empty() {
@@ -365,7 +365,12 @@ pub async fn build(
                 BundlerOptions {
                     input: Some(bundler_inputs),
                     minify: Some(rolldown::RawMinifyOptions::Bool(!is_dev())),
-                    dir: Some(page_assets_options.assets_dir.to_string_lossy().to_string()),
+                    dir: Some(
+                        page_assets_options
+                            .output_assets_dir
+                            .to_string_lossy()
+                            .to_string(),
+                    ),
                     module_types: Some(module_types_hashmap),
                     ..Default::default()
                 },
