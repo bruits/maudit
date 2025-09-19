@@ -72,7 +72,7 @@ pub struct AssetsOptions {
     /// This is commonly set to `./node_modules/.bin/tailwindcss` or similar, in order to use a locally installed version.
     pub tailwind_binary_path: PathBuf,
 
-    /// Directory inside the output directory to place built assets in. This directory will be created if it doesn't exist.
+    /// Directory inside the output directory to place built assets in.
     /// Defaults to `_maudit`.
     ///
     /// Note that this value is not automatically joined with the `output_dir` in `BuildOptions`. Use [`BuildOptions::page_assets_options()`] to get a `PageAssetsOptions` with the correct final path.
@@ -80,7 +80,7 @@ pub struct AssetsOptions {
 
     /// Strategy to use when hashing assets for fingerprinting.
     ///
-    /// Defaults to [`AssetHashingStrategy::Precise`] in production builds, and [`AssetHashingStrategy::FastImprecise`] in development builds.
+    /// Defaults to [`AssetHashingStrategy::Precise`] in production builds, and [`AssetHashingStrategy::FastImprecise`] in development builds. Note that this means that the cache isn't shared between dev and prod builds by default, if you have a lot of assets you may want to set this to the same value in both environments.
     pub hashing_strategy: AssetHashingStrategy,
 }
 
