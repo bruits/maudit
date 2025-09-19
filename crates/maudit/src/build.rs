@@ -357,17 +357,6 @@ pub async fn build(
             module_types_hashmap.insert("woff".to_string(), ModuleType::Asset);
             module_types_hashmap.insert("woff2".to_string(), ModuleType::Asset);
 
-            println!("Bundling {} assets...", bundler_inputs.len());
-
-            // print all items
-            for item in &bundler_inputs {
-                println!(
-                    " - {} ({})",
-                    item.import,
-                    item.name.as_deref().unwrap_or("no name")
-                );
-            }
-
             let mut bundler = Bundler::with_plugins(
                 BundlerOptions {
                     input: Some(bundler_inputs),

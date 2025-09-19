@@ -66,7 +66,6 @@ pub fn build_website(
 
         let content = route.build(&mut ctx)?;
 
-        // FullPage.file_path() returns a path that does not include the output directory, so we need to join it with dist_dir.
         let route_filepath = route.file_path(&params, &options.output_dir);
 
         // On some platforms, creating a file in a nested directory requires that the directory already exists or the file creation will fail.
