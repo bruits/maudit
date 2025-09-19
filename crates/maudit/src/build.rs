@@ -175,9 +175,6 @@ pub async fn build(
 
     let page_assets_options = options.page_assets_options();
 
-    fs::create_dir_all(&options.output_dir)?;
-    fs::create_dir_all(&page_assets_options.assets_dir)?;
-
     info!(target: "build", "Output directory: {}", options.output_dir.display());
 
     let content_sources_start = Instant::now();
@@ -311,6 +308,13 @@ pub async fn build(
     }
 
     info!(target: "pages", "{}", format!("generated {} pages in {}", page_count,  format_elapsed_time(pages_start.elapsed(), &section_format_options)).bold());
+
+    if (!build_pages_images.is_empty())
+        || !build_pages_styles.is_empty()
+        || !build_pages_scripts.is_empty()
+    {
+        fs::create_dir_all(&page_assets_options.assets_dir)?;
+    }
 
     if !build_pages_styles.is_empty() || !build_pages_scripts.is_empty() {
         let assets_start = Instant::now();
