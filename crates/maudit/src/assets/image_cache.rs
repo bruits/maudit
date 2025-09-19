@@ -8,6 +8,7 @@ use base64::Engine;
 use log::debug;
 use rustc_hash::FxHashMap;
 
+// TODO: Make this configurable
 pub const IMAGE_CACHE_DIR: &str = "target/maudit_cache/images";
 pub const MANIFEST_VERSION: u32 = 1;
 

@@ -166,7 +166,7 @@ ContentEntry::new(
 
 ## Markdown rendering
 
-Either through loaders or by using the `render_markdown` function directly, Maudit supports rendering local and remote Markdown and enriching it with shortcodes and custom components.
+Either through loaders or by using the [`render_markdown`](https://docs.rs/maudit/latest/maudit/content/markdown/fn.render_markdown.html) function directly, Maudit supports rendering local and remote Markdown and enriching it with shortcodes and custom components.
 
 ### Shortcodes
 

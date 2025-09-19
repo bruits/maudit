@@ -6,125 +6,74 @@ section: "advanced"
 
 [Maudit is built as a library, not a framework](/docs/philosophy/#maudit-is-a-library-not-a-framework). It is absolutely primordial to us that Maudit does not feel like this black box that you cannot inspect or understand. You should be able to see how everything works, and make it work for you.
 
-As such, in this guide, we'll be building our own minimal [entrypoint](/docs/entrypoint/) to replace the built-in [`coronate`](https://docs.rs/maudit/latest/maudit/fn.coronate.html) function. This will give us a better understanding of how Maudit works, and allow us to customize it to our needs.
+As such, in this guide, we'll be building our own minimal [entrypoint](/docs/entrypoint/) to replace the built-in [`coronate`](https://docs.rs/maudit/latest/maudit/fn.coronate.html) function. This will give us a better understanding of how Maudit works, and allow us to pick apart the different pieces and customize them to our needs.
 
 > The result of this guide is available in the [library example](https://github.com/bruits/maudit/tree/main/examples/library) in the Maudit repository.
 
-## Setting up the project
+## Function signature
 
-We'll start by creating a new Rust project with Maudit as a dependency:
-
-```bash
-cargo new library --bin
-cd library
-cargo add maudit
-```
-
-and we'll create a simple Maudit page in `src/pages/index.rs`:
+The built-in `coronate` function takes a list of routes (which all implements the [FullPage](https://docs.rs/maudit/latest/maudit/page/trait.FullPage.html) trait), content sources, and some build options. We'll do the same.
 
 ```rs
-use maudit::page::prelude::*;
-
-#[route("/")]
-pub struct Index;
-
-impl Page for Index {
-  fn render(&self, _: &mut RouteContext) -> RenderResult {
-    "Hello, Maudit!".into()
-  }
-}
-```
-
-We'll now start building our own entrypoint in `src/build.rs`, which will contain a `build_website` function, taking the same parameters as `coronate`:
-
-```rs
-use maudit::page::FullPage;
-use maudit::{content::ContentSources, BuildOptions};
-
-pub fn build_website(
-  routes: &[&dyn FullPage],
-  mut content_sources: ContentSources,
-  options: BuildOptions,
-) -> Result<(), Box<dyn std::error::Error>> {
-  // Implementation will go here
-
-  Ok(())
-}
-```
-
-Finally, we'll modify `src/main.rs` to call our `build_website` function:
-
-```rs
-mod build;
-
-mod pages {
-  mod index;
-  pub use index::Index;
-}
-
-fn main() {
-  let _ = build_website(
-    routes![Index],
-    content_sources![],
-    BuildOptions::default(),
-  );
-}
-```
-
-Now that we have our project set up, let's implement the `build_website` function step by step.
-
-## Building pages
-
-The first step in building our own entrypoint is to iterate over the routes and build each page. Routes can either be static (i.e. `/index`) or dynamic (i.e. `/articles/[id]`). For now, we'll only handle static routes.
-
-```rs
-use std::fs;
-use std::path::PathBuf;
-use std::str::FromStr;
-
 use maudit::{
-  assets::PageAssets,
-  content::{ContentSources, PageContent},
-  page::{FullPage, RouteContext, RouteParams, RouteType},
+  content::ContentSources,
+  page::{FullPage, PageAssets, PageContent},
+  route::{DynamicRouteContext, RouteContext, RouteParams, RouteType},
   BuildOptions,
 };
 
 pub fn build_website(
   routes: &[&dyn FullPage],
   mut content_sources: ContentSources,
+  options: BuildOptions
+) -> Result<(), Box<dyn std::error::Error>> {
+  // We'll fill this in later.
+  Ok(())
+}
+```
+
+`Box<dyn std::error::Error>` is typically seen as an anti-pattern in Rust, as it makes it hard to handle specific error types. But, for the sake of simplicity, we'll use it here.
+
+## Building pages
+
+The first step in building our own entrypoint is to iterate over the routes and build each page. Routes can either be static (i.e. `/index`) or dynamic (i.e. `/articles/[id]`). For now, we'll only handle static routes.
+
+```rs
+pub fn build_website(
+  routes: &[&dyn FullPage],
+  mut content_sources: ContentSources,
   options: BuildOptions,
 ) -> Result<(), Box<dyn std::error::Error>> {
-  let dist_dir = PathBuf::from_str(&options.output_dir)?;
+
+  // Options we'll be passing to PageAssets instances.
+  // This value automatically has the paths joined based on the output directory in BuildOptions for us, so we don't have to do it ourselves.
+  let page_assets_options = options.page_assets_options();
 
   for route in routes {
     match route.route_type() {
       RouteType::Static => {
         // Our page does not include content or assets, but we'll set those up for future use.
         let content = PageContent::new(&content_sources);
-        let mut page_assets = PageAssets::new(options.assets_dir.clone().into());
+        let mut page_assets = PageAssets::new(&page_assets_options);
 
         // Static and dynamic routes share the same interface for building, but static routes do not require any parameters.
         // As such, we can just pass an empty set of parameters (the default for RouteParams).
         let params = RouteParams::default();
 
         // Every page has a RouteContext, which contains information about the current route, as well as access to content and assets.
-        let mut ctx = RouteContext::from_static_route(
-            &content,
-            &mut page_assets,
-            route.url(&params).clone(),
-        );
+        let url = route.url(&params);
+        let mut ctx = RouteContext::from_static_route(&content, &mut page_assets, &url);
 
         let content = route.build(&mut ctx)?;
 
-        // FullPage.file_path() returns a path that does not include the output directory, so we need to join it with dist_dir.
-        let final_filepath = dist_dir.join(route.file_path(&params));
+        let route_filepath = route.file_path(&params, &options.output_dir);
 
-        // On some platforms, creating a file in a nested directory requires that the directory already exists or `fs::write` will fail.
-        if let Some(parent_dir) = final_filepath.parent() {
-          fs::create_dir_all(parent_dir)?
+        // On some platforms, creating a file in a nested directory requires that the directory already exists or the file creation will fail.
+        if let Some(parent_dir) = route_filepath.parent() {
+            fs::create_dir_all(parent_dir)?
         }
 
-        fs::write(final_filepath, content)?;
+        fs::write(route_filepath, content)?;
       }
       RouteType::Dynamic => {
         unimplemented!("We'll handle dynamic routes later");
@@ -136,113 +85,85 @@ pub fn build_website(
 }
 ```
 
-And with just this code, we can already build our first page! Running `cargo run` should create a `dist/index.html` file with the content `Hello, Maudit!`. But, if you try to use assets, you'll notice that they are not copied to the output directory. And similarly, if you try to use content, you'll notice that it'll always throw an error saying that the content source is not found. Let's fix that!
+And with just this code, we can already build our first page! Adding a static Maudit page to the routes and running your custom entrypoint will generate the page in the output directory, as expected.
+
+But, if you try to use assets, you'll notice that your pages are pointing to non-existing assets. And similarly, if you try to use content in your page, you'll never be able to get any entries from your sources. Let's fix that!
 
 ## Handling assets
 
-We won't be implementing any asset processing (like bundling or minification) in this guide, but we'll be implementing the logic to copy assets from the assets directory to the output directory.
+Implementing asset processing is a bit outside of the scope of this guide, but we'll at least make sure that assets are working by copying them to the output directory.
+
+This can be done by iterating over the assets registered in `page_assets` and copying them to their build path after having called `route.build()` (which registers the assets used by the page):
 
 ```rs
-pub fn build_website(
-    routes: &[&dyn FullPage],
-    mut content_sources: ContentSources,
-    options: BuildOptions,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let dist_dir = PathBuf::from_str(&options.output_dir)?;
-
-    let mut all_assets: HashSet<(PathBuf, PathBuf)> = HashSet::new();
-
-    for route in routes {
-        match route.route_type() {
-            RouteType::Static => {
-                // ... Same as before ...
-
-                // Collect all assets used by this page.
-                all_assets.extend(page_assets.assets().map(|asset| {
-                    (
-                        dist_dir.join(asset.build_path()),
-                        asset.path().to_path_buf(),
-                    )
-                }));
-            }
-            RouteType::Dynamic => {
-                unimplemented!("We'll handle dynamic routes later");
-            }
-        }
-    }
-
-    // Copy all assets to the output directory.
-    for (dest_path, src_path) in all_assets {
-        // Similar to pages, we need to ensure the parent directory exists or `fs::copy` will fail.
-        if let Some(parent) = dest_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::copy(src_path, dest_path)?;
-    }
-
-    Ok(())
+for asset in page_assets.assets() {
+    fs::copy(asset.path(), asset.build_path())?;
 }
 ```
 
-This is enough to get us started with assets. Any pages using assets will now have them copied to the output directory. This is a basic implementation, but it is all we need to get assets working. `route.build` already takes care of automatically including scripts and styles in the page, so we don't need to do anything special for that. Additionally, `asset.build_path()` already takes care of adding hashes to filenames in a performant way, so we don't need to worry about that either.
+And that's it! Now, any asset used in a page will be copied to the output directory when building the page. Onto content.
 
 ## Handling content
 
-As said previously, our current implementation does not handle content sources. Currently any pages trying to use content would panic with an error saying the requested content source does not exist. To fix this, we need to make sure that the content sources are properly loaded before building the pages.
+In the current implementation, trying to use content will result in an empty list of entries. Despite what the syntax might suggest, content sources are not automatically initialized when creating a `ContentSources` instance through the `content_sources![]` macro.
 
-If you've copied the previous snippets, you might have noticed that Rust has been complaining about `content_sources` being mutable but never mutated. We'll fix that now by initializing each content source before building the pages:
+If you've copied the previous snippets, you might have noticed that Rust has been complaining about `content_sources` being mutable but never mutated.
+
+We'll fix that now by initializing each content source by adding the following line before the loop over routes:
 
 ```rs
 content_sources.init_all();
 ```
 
-That's all. Now, any content source used in a page will be properly loaded and available for use. This is the most straightforward way to initialize content sources, but a more advanced implementation could for instance initialize content sources in parallel, lazily when a page actually requests content from a source or using advanced caching strategies.
+That's all! Now, any content source used in a page will be properly loaded and available for use. This is the most straightforward way to initialize content sources, but a more advanced implementation could for instance initialize content sources in parallel, lazily when a page actually requests content from a source or using advanced caching strategies.
 
 ## Dynamic routes
 
-A dynamic route is a route that generates multiple pages based on some parameters. For instance, a blog post page might have a dynamic route `/posts/[id]`, where `[id]` is a parameter that can take different values for each blog post. Each individual page is essentially a static route, but it has a slightly different context available to it.
+A dynamic route is a route that generates multiple pages based on parameters. For instance, a blog might have a dynamic route `/posts/[slug]`, where `[slug]` is a parameter that can take different values for each blog post.
+
+Each individual page is essentially a static route, but it has a slightly different context available to it.
 
 ```rs
-for route in routes {
-  match route.route_type() {
-    RouteType::Static => {
-      // No changes here, same as before.
-    }
-    RouteType::Dynamic => {
-      // The `routes` method returns all the possible routes for this page, along with their parameters and properties.
-      // It is very common for dynamic pages to be based on content, for instance a blog post page that has one route per blog post.
-      // As such, we create a mini RouteContext that includes the content sources, so that the page can use them to generate its routes.
+// No changes before this block.
 
-      let dynamic_ctx = DynamicRouteContext {
-          content: &PageContent::new(&content_sources),
-      };
+RouteType::Dynamic => {
+  // The `get_routes` method returns all the possible routes for this page, along with their parameters and properties.
+  // It is very common for dynamic pages to be based on content, for instance a blog post page that has one route per blog post.
+  // As such, we create essentially a mini `RouteContext` through `DynamicRouteContext` that includes the content sources, so that the page can use them to generate its routes.
 
-      let routes = route.routes_internal(&dynamic_ctx);
+  let dynamic_ctx = DynamicRouteContext {
+      content: &PageContent::new(&content_sources),
+  };
 
-      // Every page can share the same PageContent instance, as it is just a view into the content sources.
-      let content = PageContent::new(&content_sources);
+  let routes = route.get_routes(&dynamic_ctx);
 
-      for dynamic_route in routes {
-          // However, since page assets is a mutable structure that tracks which assets have been used, we need a new instance for each route.
-          // This is especially relevant if we were to parallelize this loop in the future.
-          let mut page_assets = PageAssets::new(options.assets_dir.clone().into());
+  // Every page can share a reference to the same PageContent instance, as it is just a view into the content sources.
+  let content = PageContent::new(&content_sources);
 
-          // The dynamic route includes the parameters for this specific route.
-          let params = &dynamic_route.0;
+  for dynamic_route in routes {
+      // However, since page assets is a mutable structure that tracks which assets have been used, we need a new instance for each route.
+      // This is especially relevant if we were to parallelize this loop in the future.
+      let mut page_assets = PageAssets::new(&page_assets_options);
 
-          // Here the context is created from a dynamic route, as the context has to include the route parameters and properties.
-          let mut ctx = RouteContext::from_dynamic_route(
-              &dynamic_route,
-              &content,
-              &mut page_assets,
-              route.url(params),
-          );
+      // The dynamic route includes the parameters for this specific route.
+      let params = &dynamic_route.0;
 
-          // Everything after this is the same as for static routes, making sure to use the route parameters when getting the file path.
-      }
-    }
+      // Here the context is created from a dynamic route, as the context has to include the route parameters and properties.
+      let url = route.url(params);
+      let mut ctx = RouteContext::from_dynamic_route(
+          &dynamic_route,
+          &content,
+          &mut page_assets,
+          &url,
+      );
+
+      // Everything after this is the same as for static routes.
   }
 }
 ```
 
-And with that, you've succesfully rebuilt Maudit at home! There's a few more things that can be done to improve this implementation, like adding logging, copying static assets, asset processing, better error handling, parallelization, caching, etc, etc. But, this is a fully functional implementation that can be used as a starting point for more advanced use cases... or just as a learning exercise to understand how Maudit works under the hood.
+## Conclusion
+
+And with that, you've succesfully rebuilt Maudit at home! There's a few more things that can be done to improve this implementation, like adding logging, copying static assets (from `options.static_dir`), asset processing, better error handling, parallelization, caching, etc, etc.
+
+But, this is a fully functional implementation that can be used as a starting point for more advanced use cases... or just as a learning exercise to understand how Maudit works under the hood.

@@ -18,8 +18,8 @@ pub struct Style {
 }
 
 impl InternalAsset for Style {
-    fn assets_dir(&self) -> PathBuf {
-        self.assets_dir.clone()
+    fn assets_dir(&self) -> &PathBuf {
+        &self.assets_dir
     }
 }
 

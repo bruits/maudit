@@ -1,5 +1,5 @@
 use content::content_sources;
-use maudit::{coronate, routes, BuildOptions, BuildOutput};
+use maudit::{coronate, routes, AssetsOptions, BuildOptions, BuildOutput};
 
 mod content;
 mod layout;
@@ -21,7 +21,10 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
         ],
         content_sources(),
         BuildOptions {
-            tailwind_binary_path: "../node_modules/.bin/tailwindcss".to_string(),
+            assets: AssetsOptions {
+                tailwind_binary_path: "../node_modules/.bin/tailwindcss".into(),
+                ..Default::default()
+            },
             ..Default::default()
         },
     )

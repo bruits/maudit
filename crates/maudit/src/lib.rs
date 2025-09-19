@@ -15,9 +15,10 @@ mod route;
 
 // Exports for end-users
 pub use build::metadata::{BuildOutput, PageOutput, StaticAssetOutput};
-pub use build::options::BuildOptions;
+pub use build::options::{AssetHashingStrategy, AssetsOptions, BuildOptions};
 
-// Re-exported dependencies for user convenience
+// Re-export FxHashMap so that macro-generated code can use it without requiring users to add it as a dependency.
+#[doc(hidden)]
 pub use rustc_hash::FxHashMap;
 
 mod build;
@@ -26,7 +27,7 @@ mod templating;
 #[cfg(feature = "maud")]
 #[cfg_attr(docsrs, doc(cfg(feature = "maud")))]
 pub mod maud {
-    //! Allows to use [Maud](https://maud.lambda.xyz), a macro for writing HTML templates, ergonomically in your Maudit pages.
+    //! Traits and methods for [Maud](https://maud.lambda.xyz), a macro for writing HTML templates.
     //!
     //! ## Example
     //! ```rs
@@ -174,6 +175,13 @@ macro_rules! content_sources {
 /// The version of Maudit being used.
 ///
 /// Can be used to create a generator tag in the output HTML.
+///
+/// ## Example
+/// ```rs
+/// use maudit::GENERATOR;
+///
+/// format!("<meta name=\"generator\" content=\"{}\">", GENERATOR);
+/// ```
 pub const GENERATOR: &str = concat!("Maudit v", env!("CARGO_PKG_VERSION"));
 
 /// 👑 Maudit entrypoint. Starts the build process and generates the output files.

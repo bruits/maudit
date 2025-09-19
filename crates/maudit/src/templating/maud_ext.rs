@@ -23,8 +23,9 @@ impl Render for Script {
 
 impl Render for Image {
     fn render(&self) -> Markup {
+        let (width, height) = self.dimensions();
         html! {
-            img src=(self.url().unwrap()) width=(self.width) height=(self.height) loading="lazy" decoding="async";
+            img src=(self.url().unwrap()) width=(width) height=(height) loading="lazy" decoding="async";
         }
     }
 }

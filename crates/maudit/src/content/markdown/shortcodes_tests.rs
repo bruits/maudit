@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{
+        assets::PageAssetsOptions,
         content::shortcodes::{MarkdownShortcodes, preprocess_shortcodes},
         page::RouteContext,
     };
@@ -60,19 +61,18 @@ mod tests {
             assets::PageAssets,
             content::{ContentSources, PageContent},
         };
-        use std::path::PathBuf;
 
         let content_sources = ContentSources::new(vec![]);
         let content = PageContent::new(&content_sources);
-        let mut page_assets = PageAssets {
-            assets_dir: PathBuf::from("assets"),
+        let mut page_assets = PageAssets::new(&PageAssetsOptions {
+            assets_dir: "assets".into(),
             ..Default::default()
-        };
+        });
 
         let mut ctx = RouteContext {
             content: &content,
             assets: &mut page_assets,
-            current_url: "/test".to_string(),
+            current_url: &"/test".to_string(),
             params: &(),
             props: &(),
         };
