@@ -1,11 +1,11 @@
 use std::sync::OnceLock;
 use syntect::{
+    Error,
     easy::HighlightLines,
     highlighting::ThemeSet,
-    html::{styled_line_to_highlighted_html, IncludeBackground},
+    html::{IncludeBackground, styled_line_to_highlighted_html},
     parsing::SyntaxSet,
     util::LinesWithEndings,
-    Error,
 };
 
 static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
@@ -88,7 +88,7 @@ impl CodeBlock {
 
         let mut highlighted = String::new();
         for line in LinesWithEndings::from(content) {
-            let regions = h.highlight_line(line, ss).unwrap();
+            let regions = h.highlight_line(line, ss)?;
             let html = styled_line_to_highlighted_html(&regions, IncludeBackground::No)?; // TODO: Handle the background coloring
             highlighted.push_str(&html);
         }

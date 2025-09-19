@@ -9,6 +9,7 @@ use crate::route::{
 };
 use rustc_hash::FxHashMap;
 use std::any::Any;
+use std::path::{Path, PathBuf};
 
 /// The result of a page render, can be either text or raw bytes.
 ///
@@ -210,14 +211,14 @@ pub struct RouteContext<'a> {
     pub props: &'a dyn Any,
     pub content: &'a PageContent<'a>,
     pub assets: &'a mut PageAssets,
-    pub current_url: String,
+    pub current_url: &'a String,
 }
 
 impl<'a> RouteContext<'a> {
     pub fn from_static_route(
         content: &'a PageContent,
         assets: &'a mut PageAssets,
-        current_url: String,
+        current_url: &'a String,
     ) -> Self {
         Self {
             params: &(),
@@ -232,7 +233,7 @@ impl<'a> RouteContext<'a> {
         dynamic_route: &'a RouteResult,
         content: &'a PageContent,
         assets: &'a mut PageAssets,
-        current_url: String,
+        current_url: &'a String,
     ) -> Self {
         Self {
             params: dynamic_route.1.as_ref(),
@@ -425,7 +426,7 @@ pub trait InternalPage {
         route
     }
 
-    fn file_path(&self, params: &RouteParams) -> String {
+    fn file_path(&self, params: &RouteParams, output_dir: &Path) -> PathBuf {
         let params_def = extract_params_from_raw_route(&self.route_raw());
         let mut route = self.route_raw();
 
@@ -448,13 +449,13 @@ pub trait InternalPage {
 
         let cleaned_raw_route = route.trim_start_matches('/').to_string();
 
-        match self.is_endpoint() {
+        output_dir.join(match self.is_endpoint() {
             true => cleaned_raw_route,
             false => match cleaned_raw_route.is_empty() {
-                true => "index.html".to_string(),
+                true => "index.html".into(),
                 false => format!("{}/index.html", cleaned_raw_route),
             },
-        }
+        })
     }
 }
 
@@ -487,8 +488,14 @@ where
 /// Used internally by Maudit and should not be implemented by the user.
 /// We expose it because [`maudit_macros::route`] implements it for the user behind the scenes.
 pub trait FullPage: InternalPage + Sync + Send {
+    #[doc(hidden)]
     fn render_internal(&self, ctx: &mut RouteContext) -> RenderResult;
+    #[doc(hidden)]
     fn routes_internal(&self, context: &DynamicRouteContext) -> RoutesResult;
+
+    fn get_routes(&self, context: &DynamicRouteContext) -> RoutesResult {
+        self.routes_internal(context)
+    }
 
     fn build(&self, ctx: &mut RouteContext) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let result = self.render_internal(ctx);

@@ -14,19 +14,38 @@ pub use image::{Image, ImageFormat, ImageOptions};
 pub use script::Script;
 pub use style::{Style, StyleOptions};
 
+use crate::AssetHashingStrategy;
+use crate::build::options::AssetsOptions;
+
 #[derive(Default)]
 pub struct PageAssets {
     pub images: FxHashSet<Image>,
     pub scripts: FxHashSet<Script>,
     pub styles: FxHashSet<Style>,
 
-    pub(crate) assets_dir: PathBuf,
+    pub(crate) options: PageAssetsOptions,
+}
+
+#[derive(Clone)]
+pub struct PageAssetsOptions {
+    pub assets_dir: PathBuf,
+    pub hashing_strategy: AssetHashingStrategy,
+}
+
+impl Default for PageAssetsOptions {
+    fn default() -> Self {
+        let default_assets_options = AssetsOptions::default();
+        Self {
+            assets_dir: default_assets_options.assets_dir,
+            hashing_strategy: default_assets_options.hashing_strategy,
+        }
+    }
 }
 
 impl PageAssets {
-    pub fn new(assets_dir: PathBuf) -> Self {
+    pub fn new(assets_options: &PageAssetsOptions) -> Self {
         Self {
-            assets_dir,
+            options: assets_options.clone(),
             ..Default::default()
         }
     }
@@ -72,8 +91,14 @@ impl PageAssets {
 
         let image = Image {
             path: image_path.clone(),
-            assets_dir: self.assets_dir.clone(),
-            hash: calculate_hash(&image_path, Some(HashConfig::Image(&options))),
+            assets_dir: self.options.assets_dir.clone(),
+            hash: calculate_hash(
+                &image_path,
+                Some(&HashConfig {
+                    asset_type: HashAssetType::Image(&options),
+                    hashing_strategy: &self.options.hashing_strategy,
+                }),
+            ),
             options: if options == ImageOptions::default() {
                 None
             } else {
@@ -106,7 +131,7 @@ impl PageAssets {
         let path = script_path.into();
         let script = Script {
             path: path.clone(),
-            assets_dir: self.assets_dir.clone(),
+            assets_dir: self.options.assets_dir.clone(),
             hash: calculate_hash(&path, None),
             included: false,
         };
@@ -128,7 +153,7 @@ impl PageAssets {
         let path = script_path.into();
         let script = Script {
             path: path.clone(),
-            assets_dir: self.assets_dir.clone(),
+            assets_dir: self.options.assets_dir.clone(),
             hash: calculate_hash(&path, None),
             included: true,
         };
@@ -161,8 +186,14 @@ impl PageAssets {
         let path = style_path.into();
         let style = Style {
             path: path.clone(),
-            assets_dir: self.assets_dir.clone(),
-            hash: calculate_hash(&path, Some(HashConfig::Style(&options))),
+            assets_dir: self.options.assets_dir.clone(),
+            hash: calculate_hash(
+                &path,
+                Some(&HashConfig {
+                    asset_type: HashAssetType::Style(&options),
+                    hashing_strategy: &self.options.hashing_strategy,
+                }),
+            ),
             tailwind: options.tailwind,
             included: false,
         };
@@ -194,10 +225,16 @@ impl PageAssets {
         P: Into<PathBuf>,
     {
         let path = style_path.into();
-        let hash = calculate_hash(&path, Some(HashConfig::Style(&options)));
+        let hash = calculate_hash(
+            &path,
+            Some(&HashConfig {
+                asset_type: HashAssetType::Style(&options),
+                hashing_strategy: &self.options.hashing_strategy,
+            }),
+        );
         let style = Style {
             path: path.clone(),
-            assets_dir: self.assets_dir.clone(),
+            assets_dir: self.options.assets_dir.clone(),
             hash,
             tailwind: options.tailwind,
             included: true,
@@ -215,10 +252,7 @@ pub trait Asset: DynEq + InternalAsset + Sync + Send {
     fn url(&self) -> Option<String>;
     fn path(&self) -> &PathBuf;
 
-    fn hash(&self) -> String {
-        // This will be overridden by each implementation to return the cached hash
-        String::new()
-    }
+    fn hash(&self) -> String;
 
     // TODO: I don't like these next two methods for scripts and styles, we should get this from Rolldown somehow, but I don't know how.
     // Our architecture is such that bundling runs after pages, so we can't know the final extension until then. We can't, and I don't want
@@ -251,15 +285,40 @@ pub trait Asset: DynEq + InternalAsset + Sync + Send {
     }
 }
 
-enum HashConfig<'a> {
+struct HashConfig<'a> {
+    asset_type: HashAssetType<'a>,
+    hashing_strategy: &'a AssetHashingStrategy,
+}
+
+enum HashAssetType<'a> {
     Image(&'a ImageOptions),
     Style(&'a StyleOptions),
 }
 
-fn calculate_hash(path: &PathBuf, options: Option<HashConfig>) -> String {
+fn calculate_hash(path: &PathBuf, options: Option<&HashConfig>) -> String {
     let start_time = Instant::now();
-    let content =
-        fs::read(path).unwrap_or_else(|_| panic!("Failed to read asset file: {:?}", path));
+    let content = if options
+        .is_some_and(|cfg| *cfg.hashing_strategy == AssetHashingStrategy::FastImprecise)
+    {
+        let metadata = fs::metadata(path).unwrap();
+
+        let mut buf = Vec::with_capacity(16);
+        buf.extend_from_slice(
+            &metadata
+                .modified()
+                .unwrap()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                .to_le_bytes(),
+        );
+
+        buf.extend_from_slice(&metadata.len().to_le_bytes());
+
+        buf
+    } else {
+        fs::read(path).unwrap_or_else(|_| panic!("Failed to read asset file: {:?}", path))
+    };
 
     // Pre-allocate a single buffer to hash at once
     let mut buf = Vec::with_capacity(content.len() + 256);
@@ -267,8 +326,8 @@ fn calculate_hash(path: &PathBuf, options: Option<HashConfig>) -> String {
     buf.extend_from_slice(path.to_string_lossy().as_bytes());
 
     if let Some(options) = options {
-        match options {
-            HashConfig::Image(opts) => {
+        match options.asset_type {
+            HashAssetType::Image(opts) => {
                 if let Some(width) = opts.width {
                     buf.extend_from_slice(&width.to_le_bytes());
                 }
@@ -279,7 +338,7 @@ fn calculate_hash(path: &PathBuf, options: Option<HashConfig>) -> String {
                     buf.extend_from_slice(&format.to_hash_value().to_le_bytes());
                 }
             }
-            HashConfig::Style(opts) => {
+            HashAssetType::Style(opts) => {
                 buf.push(opts.tailwind as u8);
             }
         }
@@ -299,7 +358,7 @@ fn calculate_hash(path: &PathBuf, options: Option<HashConfig>) -> String {
 }
 
 trait InternalAsset {
-    fn assets_dir(&self) -> PathBuf;
+    fn assets_dir(&self) -> &PathBuf;
 }
 
 impl Hash for dyn Asset {
@@ -329,10 +388,7 @@ mod tests {
     #[test]
     fn test_add_style() {
         let temp_dir = setup_temp_dir();
-        let mut page_assets = PageAssets {
-            assets_dir: PathBuf::from("assets"),
-            ..Default::default()
-        };
+        let mut page_assets = PageAssets::default();
         page_assets.add_style(temp_dir.join("style.css"));
 
         assert!(page_assets.styles.len() == 1);
@@ -341,10 +397,7 @@ mod tests {
     #[test]
     fn test_include_style() {
         let temp_dir = setup_temp_dir();
-        let mut page_assets = PageAssets {
-            assets_dir: PathBuf::from("assets"),
-            ..Default::default()
-        };
+        let mut page_assets = PageAssets::default();
 
         page_assets.include_style(temp_dir.join("style.css"));
 
@@ -355,10 +408,7 @@ mod tests {
     #[test]
     fn test_add_script() {
         let temp_dir = setup_temp_dir();
-        let mut page_assets = PageAssets {
-            assets_dir: PathBuf::from("assets"),
-            ..Default::default()
-        };
+        let mut page_assets = PageAssets::default();
 
         page_assets.add_script(temp_dir.join("script.js"));
         assert!(page_assets.scripts.len() == 1);
@@ -367,10 +417,7 @@ mod tests {
     #[test]
     fn test_include_script() {
         let temp_dir = setup_temp_dir();
-        let mut page_assets = PageAssets {
-            assets_dir: PathBuf::from("assets"),
-            ..Default::default()
-        };
+        let mut page_assets = PageAssets::default();
 
         page_assets.include_script(temp_dir.join("script.js"));
 
@@ -381,10 +428,7 @@ mod tests {
     #[test]
     fn test_add_image() {
         let temp_dir = setup_temp_dir();
-        let mut page_assets = PageAssets {
-            assets_dir: PathBuf::from("assets"),
-            ..Default::default()
-        };
+        let mut page_assets = PageAssets::default();
 
         page_assets.add_image(temp_dir.join("image.png"));
         assert!(page_assets.images.len() == 1);
@@ -393,10 +437,7 @@ mod tests {
     #[test]
     fn test_asset_has_leading_slash() {
         let temp_dir = setup_temp_dir();
-        let mut page_assets = PageAssets {
-            assets_dir: PathBuf::from("assets"),
-            ..Default::default()
-        };
+        let mut page_assets = PageAssets::default();
 
         let image = page_assets.add_image(temp_dir.join("image.png"));
         assert_eq!(image.url().unwrap().chars().next(), Some('/'));
@@ -411,10 +452,7 @@ mod tests {
     #[test]
     fn test_asset_url_include_hash() {
         let temp_dir = setup_temp_dir();
-        let mut page_assets = PageAssets {
-            assets_dir: PathBuf::from("assets"),
-            ..Default::default()
-        };
+        let mut page_assets = PageAssets::default();
 
         let image = page_assets.add_image(temp_dir.join("image.png"));
         let image_hash = image.hash.clone();
@@ -432,10 +470,7 @@ mod tests {
     #[test]
     fn test_asset_path_include_hash() {
         let temp_dir = setup_temp_dir();
-        let mut page_assets = PageAssets {
-            assets_dir: PathBuf::from("assets"),
-            ..Default::default()
-        };
+        let mut page_assets = PageAssets::default();
 
         let image = page_assets.add_image(temp_dir.join("image.png"));
         let image_hash = image.hash.clone();
@@ -465,10 +500,7 @@ mod tests {
         ];
         std::fs::write(&image_path, png_data).unwrap();
 
-        let mut page_assets = PageAssets {
-            assets_dir: PathBuf::from("assets"),
-            ..Default::default()
-        };
+        let mut page_assets = PageAssets::default();
 
         // Test that different options produce different hashes
         let image_default = page_assets.add_image(&image_path);
@@ -531,10 +563,7 @@ mod tests {
         ];
         std::fs::write(&image_path, png_data).unwrap();
 
-        let mut page_assets = PageAssets {
-            assets_dir: PathBuf::from("assets"),
-            ..Default::default()
-        };
+        let mut page_assets = PageAssets::default();
 
         // Same options should produce same hash
         let image1 = page_assets.add_image_with_options(
@@ -566,10 +595,7 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let style_path = temp_dir.join("style.css");
 
-        let mut page_assets = PageAssets {
-            assets_dir: PathBuf::from("assets"),
-            ..Default::default()
-        };
+        let mut page_assets = PageAssets::new(&PageAssetsOptions::default());
 
         // Test that different tailwind options produce different hashes
         let style_default = page_assets.add_style(&style_path);
@@ -594,10 +620,7 @@ mod tests {
         std::fs::write(&style1_path, content).unwrap();
         std::fs::write(&style2_path, content).unwrap();
 
-        let mut page_assets = PageAssets {
-            assets_dir: PathBuf::from("assets"),
-            ..Default::default()
-        };
+        let mut page_assets = PageAssets::new(&PageAssetsOptions::default());
 
         let style1 = page_assets.add_style(&style1_path);
         let style2 = page_assets.add_style(&style2_path);
@@ -613,10 +636,8 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let style_path = temp_dir.join("dynamic_style.css");
 
-        let mut page_assets = PageAssets {
-            assets_dir: PathBuf::from("assets"),
-            ..Default::default()
-        };
+        let assets_options = PageAssetsOptions::default();
+        let mut page_assets = PageAssets::new(&assets_options);
 
         // Write first content and get hash
         std::fs::write(&style_path, "body { background: red; }").unwrap();
@@ -627,10 +648,13 @@ mod tests {
         std::fs::write(&style_path, "body { background: green; }").unwrap();
         let style2 = Style {
             path: style_path.clone(),
-            assets_dir: PathBuf::from("assets"),
+            assets_dir: assets_options.assets_dir.clone(),
             hash: calculate_hash(
                 &style_path,
-                Some(HashConfig::Style(&StyleOptions::default())),
+                Some(&HashConfig {
+                    asset_type: HashAssetType::Style(&StyleOptions::default()),
+                    hashing_strategy: &AssetHashingStrategy::Precise,
+                }),
             ),
             tailwind: false,
             included: false,

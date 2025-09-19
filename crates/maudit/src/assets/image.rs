@@ -382,8 +382,8 @@ fn thumbhash_to_png(thumbhash_rgba: &(usize, usize, Vec<u8>)) -> Vec<u8> {
 }
 
 impl InternalAsset for Image {
-    fn assets_dir(&self) -> PathBuf {
-        self.assets_dir.clone()
+    fn assets_dir(&self) -> &PathBuf {
+        &self.assets_dir
     }
 }
 

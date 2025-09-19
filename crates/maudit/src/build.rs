@@ -5,7 +5,6 @@ use std::{
     io::{self},
     path::{Path, PathBuf},
     process::Command,
-    str::FromStr,
     sync::Arc,
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
@@ -44,7 +43,7 @@ pub mod options;
 
 #[derive(Debug)]
 struct TailwindPlugin {
-    tailwind_path: String,
+    tailwind_path: PathBuf,
     tailwind_entries: Vec<PathBuf>,
 }
 
@@ -93,7 +92,7 @@ impl Plugin for TailwindPlugin {
                         };
                         panic!(
                             "Failed to execute Tailwind CSS command, is it installed and is the path to its binary correct?\nCommand: '{}', Args: {}. Error: {}",
-                            &self.tailwind_path,
+                            &self.tailwind_path.display(),
                             args_str,
                             e
                         )
@@ -156,15 +155,12 @@ pub async fn build(
 
     // Create a directory for the output
     trace!(target: "build", "Setting up required directories...");
-    let dist_dir = PathBuf::from_str(&options.output_dir)?;
-    let final_assets_dir = PathBuf::from_str(&options.output_dir)?.join(&options.assets_dir);
-    let static_dir = PathBuf::from_str(&options.static_dir)?;
 
     let old_dist_tmp_dir = if options.clean_output_dir {
         let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         let num = (duration.as_secs() + duration.subsec_nanos() as u64) % 100000;
         let new_dir_for_old_dist = env::temp_dir().join(format!("maudit_old_dist_{}", num));
-        let _ = fs::rename(&dist_dir, &new_dir_for_old_dist);
+        let _ = fs::rename(&options.output_dir, &new_dir_for_old_dist);
         Some(new_dir_for_old_dist)
     } else {
         None
@@ -177,10 +173,12 @@ pub async fn build(
         }
     });
 
-    fs::create_dir_all(&dist_dir)?;
-    fs::create_dir_all(&final_assets_dir)?;
+    let page_assets_options = options.page_assets_options();
 
-    info!(target: "build", "Output directory: {}", dist_dir.to_string_lossy());
+    fs::create_dir_all(&options.output_dir)?;
+    fs::create_dir_all(&page_assets_options.assets_dir)?;
+
+    info!(target: "build", "Output directory: {}", options.output_dir.display());
 
     let content_sources_start = Instant::now();
     print_title("initializing content sources");
@@ -234,7 +232,7 @@ pub async fn build(
                 let route_start = Instant::now();
 
                 let content = PageContent::new(content_sources);
-                let mut page_assets = PageAssets::new(options.assets_dir.clone().into());
+                let mut page_assets = PageAssets::new(&page_assets_options);
 
                 let params = RouteParams::default();
                 let url = route.url(&params);
@@ -242,12 +240,12 @@ pub async fn build(
                 let result = route.build(&mut RouteContext::from_static_route(
                     &content,
                     &mut page_assets,
-                    url.clone(),
+                    &url,
                 ))?;
 
-                let file_path = &dist_dir.join(route.file_path(&params));
+                let file_path = route.file_path(&params, &options.output_dir);
 
-                write_route_file(&result, file_path)?;
+                write_route_file(&result, &file_path)?;
 
                 info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
@@ -264,7 +262,7 @@ pub async fn build(
                 page_count += 1;
             }
             RouteType::Dynamic => {
-                let routes = route.routes_internal(&DynamicRouteContext {
+                let routes = route.get_routes(&DynamicRouteContext {
                     content: &PageContent::new(content_sources),
                 });
 
@@ -279,7 +277,7 @@ pub async fn build(
                 for dynamic_route in routes {
                     let route_start = Instant::now();
 
-                    let mut page_assets = PageAssets::new(options.assets_dir.clone().into());
+                    let mut page_assets = PageAssets::new(&page_assets_options);
 
                     let url = route.url(&dynamic_route.0);
 
@@ -287,12 +285,12 @@ pub async fn build(
                         &dynamic_route,
                         &content,
                         &mut page_assets,
-                        url,
+                        &url,
                     ))?;
 
-                    let file_path = &dist_dir.join(route.file_path(&dynamic_route.0));
+                    let file_path = route.file_path(&dynamic_route.0, &options.output_dir);
 
-                    write_route_file(&content, file_path)?;
+                    write_route_file(&content, &file_path)?;
 
                     info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
@@ -359,17 +357,27 @@ pub async fn build(
             module_types_hashmap.insert("woff".to_string(), ModuleType::Asset);
             module_types_hashmap.insert("woff2".to_string(), ModuleType::Asset);
 
+            println!("Bundling {} assets...", bundler_inputs.len());
+
+            // print all items
+            for item in &bundler_inputs {
+                println!(
+                    " - {} ({})",
+                    item.import,
+                    item.name.as_deref().unwrap_or("no name")
+                );
+            }
+
             let mut bundler = Bundler::with_plugins(
                 BundlerOptions {
                     input: Some(bundler_inputs),
                     minify: Some(rolldown::RawMinifyOptions::Bool(!is_dev())),
-                    dir: Some(final_assets_dir.to_string_lossy().to_string()),
+                    dir: Some(page_assets_options.assets_dir.to_string_lossy().to_string()),
                     module_types: Some(module_types_hashmap),
-
                     ..Default::default()
                 },
                 vec![Arc::new(TailwindPlugin {
-                    tailwind_path: options.tailwind_binary_path.clone(),
+                    tailwind_path: options.assets.tailwind_binary_path.clone(),
                     tailwind_entries: build_pages_styles
                         .iter()
                         .filter_map(|style| {
@@ -399,7 +407,7 @@ pub async fn build(
         let start_time = Instant::now();
         build_pages_images.par_iter().for_each(|image| {
             let start_process = Instant::now();
-            let dest_path = final_assets_dir.join(image.final_file_name());
+            let dest_path: PathBuf = image.build_path();
 
             if let Some(image_options) = &image.options {
                 let final_filename = image.final_file_name();
@@ -444,12 +452,16 @@ pub async fn build(
     }
 
     // Check if static directory exists
-    if static_dir.exists() {
+    if options.static_dir.exists() {
         let assets_start = Instant::now();
         print_title("copying assets");
 
         // Copy the static directory to the dist directory
-        copy_recursively(&static_dir, &dist_dir, &mut build_metadata)?;
+        copy_recursively(
+            &options.static_dir,
+            &options.output_dir,
+            &mut build_metadata,
+        )?;
 
         info!(target: "build", "{}", format!("Assets copied in {}", format_elapsed_time(assets_start.elapsed(), &FormatElapsedTimeOptions::default())).bold());
     }
