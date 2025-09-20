@@ -1,5 +1,14 @@
 # maudit
 
+## 0.5.2
+
+### Patch changes
+
+- [4496b9b](https://github.com/bruits/maudit/commit/4496b9bcd8bbcdde7bd2d3b9b347aada6d182c0f) Improve hashing performance for assets — Thanks @Princesseuh!
+- [4496b9b](https://github.com/bruits/maudit/commit/4496b9bcd8bbcdde7bd2d3b9b347aada6d182c0f) Changed syntax for self-closing shortcodes to require an explicit closing slash, ex: `{{ image /}}` — Thanks @Princesseuh!
+- [4496b9b](https://github.com/bruits/maudit/commit/4496b9bcd8bbcdde7bd2d3b9b347aada6d182c0f) Adds width and height properties to images and generated html — Thanks @Princesseuh!
+
+
 ## 0.5.1
 
 ### Patch changes
