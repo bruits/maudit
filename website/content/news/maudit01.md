@@ -25,7 +25,7 @@ We hope to make Maudit the go-to choice if you want a static site generator that
 
 ## Not quite your overlord
 
-Maudit is built like a library, not a framework. A Maudit project is a normal Rust project, nothing more, nothing less. A Maudit page is a normal Rust struct in a normal `.rs` file.
+[Maudit is built like a library, not a framework.](/docs/philosophy/#maudit-is-a-library-not-a-framework) A Maudit project is a normal Rust project, nothing more, nothing less. A Maudit page is a normal Rust struct in a normal `.rs` file.
 
 ```rs
 use maudit::page::prelude::*;

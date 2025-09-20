@@ -4,9 +4,10 @@ pub(crate) mod server;
 
 mod filterer;
 
+use colored::Colorize;
 use filterer::DevServerFilterer;
 use quanta::Instant;
-use server::WebSocketMessage;
+use server::{update_status, WebSocketMessage};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{debug, error, info};
@@ -24,30 +25,69 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> io::Result<()> {
 
     // Do initial sync build
     info!(name: "build", "Doing initial build…");
-    let command = std::process::Command::new("cargo")
+
+    let child = std::process::Command::new("cargo")
         .args(["run", "--quiet"])
-        .envs([("MAUDIT_DEV", "true"), ("MAUDIT_QUIET", "true")])
-        .output()
+        .envs([
+            ("MAUDIT_DEV", "true"),
+            ("MAUDIT_QUIET", "true"),
+            ("CARGO_TERM_COLOR", "always"),
+        ])
+        .stderr(std::process::Stdio::piped())
+        .spawn()
         .unwrap();
+
+    // Start a timer task to show warning after X seconds
+    let warning_task = tokio::spawn(async {
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await; // Adjust timeout as needed
+        info!(name: "build", "{}", "This can take some time on the first run, or if there are uncached dependencies or assets..".dimmed());
+    });
+
+    // Wait for the command to finish
+    let output = child.wait_with_output().unwrap();
+
+    // Cancel the warning task since the command finished
+    warning_task.abort();
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
     let duration = start_time.elapsed();
     let formatted_elasped_time =
         format_elapsed_time(duration, &FormatElapsedTimeOptions::default_dev());
 
-    if command.status.success() {
+    if output.status.success() {
         info!(name: "build", "Initial build finished {}", formatted_elasped_time);
     } else {
+        error!(name: "build", "{}", stderr);
         error!(name: "build", "Initial build failed with errors {}", formatted_elasped_time);
     }
 
     let (sender_websocket, _) = broadcast::channel::<WebSocketMessage>(100);
 
-    let web_server_thread: tokio::task::JoinHandle<()> = tokio::spawn(
-        server::start_dev_web_server(start_time, sender_websocket.clone(), host),
-    );
+    // Create shared status state
+    let current_status = Arc::new(tokio::sync::RwLock::new(if !output.status.success() {
+        Some(stderr.to_string())
+    } else {
+        None
+    }));
+
+    let web_server_thread: tokio::task::JoinHandle<()> =
+        tokio::spawn(server::start_dev_web_server(
+            start_time,
+            sender_websocket.clone(),
+            host,
+            if !output.status.success() {
+                Some(stderr.to_string())
+            } else {
+                None
+            },
+            current_status.clone(),
+        ));
 
     let wx = Watchexec::new_async(move |mut action| {
         Box::new({
             let browser_websocket = sender_websocket.clone();
+            let current_status = current_status.clone();
 
             async move {
                 if action.signals().next().is_some() {
@@ -72,8 +112,15 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> io::Result<()> {
                         },
                         options: Default::default(),
                     }));
+
                     job.set_error_handler(|err| {
                         eprintln!("Error: {:?}", err);
+                    });
+                    job.set_spawn_hook(|pre_spawn, _| {
+                        let command: &mut tokio::process::Command = pre_spawn.command_mut();
+
+                        command.stdout(std::process::Stdio::inherit()); // Show stdout in real-time with colors
+                        command.stderr(std::process::Stdio::piped()); // Capture stderr for WebSocket
                     });
                     job.start();
                     job.to_wait().await;
@@ -91,7 +138,6 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> io::Result<()> {
                             return;
                         };
 
-
                         let duration = *finished - *started;
                         let formatted_elasped_time =
                             format_elapsed_time(duration, &FormatElapsedTimeOptions::default_dev());
@@ -99,21 +145,26 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> io::Result<()> {
                         match status {
                             watchexec_events::ProcessEnd::ExitError(_) => {
                                 error!(name: "build", "Rebuild failed with errors {}", formatted_elasped_time);
+
+                                // Update status and send error message to browser
+                                let websocket = browser_websocket.clone();
+                                let status = current_status.clone();
+                                tokio::spawn(async move {
+                                    update_status(&websocket, status, "error", "Build failed with errors").await;
+                                });
                             },
                             watchexec_events::ProcessEnd::Success => {
                                 info!(name: "build", "Rebuild finished {}", formatted_elasped_time);
+
+                                // Update status and send success message to browser
+                                let websocket = browser_websocket.clone();
+                                let status = current_status.clone();
+                                tokio::spawn(async move {
+                                    update_status(&websocket, status, "success", "Build completed successfully").await;
+                                });
                             },
                             // TODO: Log the other statuses
                             _ => {}
-                        }
-
-                        match browser_websocket.send(WebSocketMessage {
-                            data: "done".into(),
-                        }) {
-                            Ok(_) => {}
-                            Err(e) => {
-                                debug!("Error sending message to browser: {:?}", e);
-                            }
                         }
                     });
                 }

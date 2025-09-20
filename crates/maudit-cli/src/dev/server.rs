@@ -16,6 +16,7 @@ use tokio::{net::TcpSocket, signal, sync::broadcast};
 use tracing::{debug, Level};
 
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 use tower_http::{
     services::ServeDir,
     trace::{DefaultMakeSpan, TraceLayer},
@@ -37,6 +38,7 @@ pub struct WebSocketMessage {
 #[derive(Clone)]
 struct AppState {
     tx: broadcast::Sender<WebSocketMessage>,
+    current_status: Arc<tokio::sync::RwLock<Option<String>>>,
 }
 
 fn inject_live_reload_script(html_content: &str, socket_addr: SocketAddr, host: bool) -> String {
@@ -63,9 +65,21 @@ pub async fn start_dev_web_server(
     start_time: Instant,
     tx: broadcast::Sender<WebSocketMessage>,
     host: bool,
+    initial_error: Option<String>,
+    current_status: Arc<tokio::sync::RwLock<Option<String>>>,
 ) {
     // TODO: The dist dir should be configurable
     let dist_dir = "dist";
+
+    // Send initial error if present
+    if let Some(error) = initial_error {
+        let _ = tx.send(WebSocketMessage {
+            data: format!(
+                r#"{{"type": "error", "message": "{}"}}"#,
+                error.replace("\"", "\\\"")
+            ),
+        });
+    }
 
     async fn handle_404(socket_addr: SocketAddr, host: bool, dist_dir: &str) -> impl IntoResponse {
         let content = match fs::read_to_string(format!("{}/404.html", dist_dir)).await {
@@ -117,7 +131,10 @@ pub async fn start_dev_web_server(
                 .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
                 .on_response(CustomOnResponse),
         )
-        .with_state(AppState { tx });
+        .with_state(AppState {
+            tx: tx.clone(),
+            current_status: current_status.clone(),
+        });
 
     log_server_start(
         start_time,
@@ -133,6 +150,34 @@ pub async fn start_dev_web_server(
     .with_graceful_shutdown(shutdown_signal())
     .await
     .unwrap();
+}
+
+pub async fn update_status(
+    tx: &broadcast::Sender<WebSocketMessage>,
+    current_status: Arc<tokio::sync::RwLock<Option<String>>>,
+    status_type: &str,
+    message: &str,
+) {
+    let status_message = if status_type == "success" {
+        None // Clear the status on success
+    } else {
+        Some(message.to_string())
+    };
+
+    // Update the stored status
+    {
+        let mut status = current_status.write().await;
+        *status = status_message;
+    }
+
+    // Send the message
+    let _ = tx.send(WebSocketMessage {
+        data: format!(
+            r#"{{"type": "{}", "message": "{}"}}"#,
+            status_type,
+            message.replace("\"", "\\\"")
+        ),
+    });
 }
 
 async fn add_dev_client_script(
@@ -177,15 +222,32 @@ async fn ws_handler(
     debug!("`{addr} connected.");
     // finalize the upgrade process by returning upgrade callback.
     // we can customize the callback by sending additional info such as address.
-    ws.on_upgrade(move |socket| handle_socket(socket, addr, state.tx))
+    ws.on_upgrade(move |socket| handle_socket(socket, addr, state.tx, state.current_status))
 }
 
 async fn handle_socket(
     socket: WebSocket,
     who: SocketAddr,
     tx: broadcast::Sender<WebSocketMessage>,
+    current_status: Arc<tokio::sync::RwLock<Option<String>>>,
 ) {
     let (mut sender, mut receiver) = socket.split();
+
+    // Send current status to new connection if there is one
+    {
+        let status = current_status.read().await;
+        if let Some(error_message) = status.as_ref() {
+            let _ = sender
+                .send(Message::Text(
+                    format!(
+                        r#"{{"type": "error", "message": "{}"}}"#,
+                        error_message.replace("\"", "\\\"")
+                    )
+                    .into(),
+                ))
+                .await;
+        }
+    }
 
     let mut rx = tx.subscribe();
 
