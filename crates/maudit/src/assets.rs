@@ -2,6 +2,7 @@ use dyn_eq::DynEq;
 use log::debug;
 use rustc_hash::FxHashSet;
 use std::hash::Hash;
+use std::path::Path;
 use std::time::Instant;
 use std::{fs, path::PathBuf};
 use xxhash_rust::xxh3::xxh3_64;
@@ -92,23 +93,15 @@ impl PageAssets {
             return image.clone();
         }
 
-        let image = Image {
-            path: image_path.clone(),
-            assets_dir: self.options.assets_dir.clone(),
-            output_assets_dir: self.options.output_assets_dir.clone(),
-            hash: calculate_hash(
-                &image_path,
-                Some(&HashConfig {
-                    asset_type: HashAssetType::Image(&options),
-                    hashing_strategy: &self.options.hashing_strategy,
-                }),
-            ),
-            options: if options == ImageOptions::default() {
+        let image = Image::new(
+            image_path,
+            if options == ImageOptions::default() {
                 None
             } else {
                 Some(options)
             },
-        };
+            &self.options,
+        );
 
         self.images.insert(image.clone());
 
@@ -132,14 +125,7 @@ impl PageAssets {
     where
         P: Into<PathBuf>,
     {
-        let path = script_path.into();
-        let script = Script {
-            path: path.clone(),
-            assets_dir: self.options.assets_dir.clone(),
-            output_assets_dir: self.options.output_assets_dir.clone(),
-            hash: calculate_hash(&path, None),
-            included: false,
-        };
+        let script = Script::new(script_path.into(), false, &self.options);
 
         self.scripts.insert(script.clone());
 
@@ -155,14 +141,7 @@ impl PageAssets {
     where
         P: Into<PathBuf>,
     {
-        let path = script_path.into();
-        let script = Script {
-            path: path.clone(),
-            assets_dir: self.options.assets_dir.clone(),
-            output_assets_dir: self.options.output_assets_dir.clone(),
-            hash: calculate_hash(&path, None),
-            included: true,
-        };
+        let script = Script::new(script_path.into(), true, &self.options);
 
         self.scripts.insert(script);
     }
@@ -189,21 +168,7 @@ impl PageAssets {
     where
         P: Into<PathBuf>,
     {
-        let path = style_path.into();
-        let style = Style {
-            path: path.clone(),
-            assets_dir: self.options.assets_dir.clone(),
-            output_assets_dir: self.options.output_assets_dir.clone(),
-            hash: calculate_hash(
-                &path,
-                Some(&HashConfig {
-                    asset_type: HashAssetType::Style(&options),
-                    hashing_strategy: &self.options.hashing_strategy,
-                }),
-            ),
-            tailwind: options.tailwind,
-            included: false,
-        };
+        let style = Style::new(style_path.into(), false, &options, &self.options);
 
         self.styles.insert(style.clone());
 
@@ -231,74 +196,44 @@ impl PageAssets {
     where
         P: Into<PathBuf>,
     {
-        let path = style_path.into();
-        let hash = calculate_hash(
-            &path,
-            Some(&HashConfig {
-                asset_type: HashAssetType::Style(&options),
-                hashing_strategy: &self.options.hashing_strategy,
-            }),
-        );
-        let style = Style {
-            path: path.clone(),
-            assets_dir: self.options.assets_dir.clone(),
-            output_assets_dir: self.options.output_assets_dir.clone(),
-            hash,
-            tailwind: options.tailwind,
-            included: true,
-        };
+        let style = Style::new(style_path.into(), true, &options, &self.options);
 
         self.styles.insert(style);
     }
 }
 
-#[allow(private_bounds)] // Users never interact with the internal trait, so it's fine
-pub trait Asset: DynEq + InternalAsset + Sync + Send {
-    fn build_path(&self) -> PathBuf {
-        self.output_assets_dir().join(self.final_file_name())
-    }
-    fn url(&self) -> Option<String> {
-        format!(
-            "/{}/{}",
-            self.assets_dir().to_string_lossy(),
-            self.final_file_name()
-        )
-        .into()
-    }
-
+pub trait Asset: DynEq + Sync + Send {
+    fn build_path(&self) -> &PathBuf;
+    fn url(&self) -> Option<&String>;
     fn path(&self) -> &PathBuf;
-    fn hash(&self) -> String;
-
-    // TODO: I don't like these next two methods for scripts and styles, we should get this from Rolldown somehow, but I don't know how.
-    // Our architecture is such that bundling runs after pages, so we can't know the final extension until then. We can't, and I don't want
-    // to make it so we get assets beforehand because it'd make it less convenient and essentially cause us to act like a bundling framework.
-    //
-    // Perhaps it should be done as a post-processing step, like includes, but that'd require moving route finalization to after bundling,
-    // which I'm not sure I want to do either. Plus, it'd be pretty slow if you have a layout on every page that includes a style/script (a fairly common case).
-    //
-    // An additional benefit would with that would also be to be able to avoid generating hashes for these files, but that's a smaller win.
-    //
-    // I don't know! - erika, 2025-09-01
-
-    fn final_extension(&self) -> String {
-        self.path()
-            .extension()
-            .map(|ext| ext.to_str().unwrap())
-            .unwrap_or_default()
-            .to_owned()
-    }
-
-    fn final_file_name(&self) -> String {
-        let file_stem = self.path().file_stem().unwrap().to_str().unwrap();
-        let extension = self.final_extension();
-
-        if extension.is_empty() {
-            format!("{}.{}", file_stem, self.hash())
-        } else {
-            format!("{}.{}.{}", file_stem, self.hash(), extension)
-        }
-    }
+    fn filename(&self) -> &PathBuf;
 }
+
+macro_rules! implement_asset_trait {
+    ($type:ty) => {
+        impl Asset for $type {
+            fn path(&self) -> &PathBuf {
+                &self.path
+            }
+
+            fn filename(&self) -> &PathBuf {
+                &self.filename
+            }
+
+            fn build_path(&self) -> &PathBuf {
+                &self.build_path
+            }
+
+            fn url(&self) -> Option<&String> {
+                Some(&self.url)
+            }
+        }
+    };
+}
+
+implement_asset_trait!(Image);
+implement_asset_trait!(Script);
+implement_asset_trait!(Style);
 
 struct HashConfig<'a> {
     asset_type: HashAssetType<'a>,
@@ -308,9 +243,31 @@ struct HashConfig<'a> {
 enum HashAssetType<'a> {
     Image(&'a ImageOptions),
     Style(&'a StyleOptions),
+    Script,
 }
 
-fn calculate_hash(path: &PathBuf, options: Option<&HashConfig>) -> String {
+fn make_filename(path: &Path, hash: &String, extension: Option<&str>) -> PathBuf {
+    let file_stem = path.file_stem().unwrap();
+
+    let mut filename = PathBuf::new();
+    filename.push(format!("{}.{}", file_stem.to_str().unwrap(), hash));
+
+    if let Some(extension) = extension {
+        filename.set_extension(format!("{}.{}", hash, extension));
+    }
+
+    filename
+}
+
+fn make_final_url(assets_dir: &Path, file_name: &Path) -> String {
+    format!("/{}/{}", assets_dir.display(), file_name.display())
+}
+
+fn make_final_path(output_assets_dir: &Path, file_name: &Path) -> PathBuf {
+    output_assets_dir.join(file_name)
+}
+
+fn calculate_hash(path: &Path, options: Option<&HashConfig>) -> String {
     let start_time = Instant::now();
     let content = if options
         .is_some_and(|cfg| *cfg.hashing_strategy == AssetHashingStrategy::FastImprecise)
@@ -356,6 +313,7 @@ fn calculate_hash(path: &PathBuf, options: Option<&HashConfig>) -> String {
             HashAssetType::Style(opts) => {
                 buf.push(opts.tailwind as u8);
             }
+            HashAssetType::Script => { /* No extra options for scripts yet */ }
         }
     }
 
@@ -370,11 +328,6 @@ fn calculate_hash(path: &PathBuf, options: Option<&HashConfig>) -> String {
     // TODO: This works, but perhaps we can generate prettier hashes, see https://github.com/rolldown/rolldown/blob/abf62c45d7a69b42dab4bff92095e320b418e9b8/crates/rolldown_utils/src/xxhash.rs
     let hex = format!("{:016x}", hash);
     hex[..5].to_string()
-}
-
-trait InternalAsset {
-    fn assets_dir(&self) -> &PathBuf;
-    fn output_assets_dir(&self) -> &PathBuf;
 }
 
 impl Hash for dyn Asset {
@@ -471,16 +424,13 @@ mod tests {
         let mut page_assets = PageAssets::default();
 
         let image = page_assets.add_image(temp_dir.join("image.png"));
-        let image_hash = image.hash.clone();
-        assert!(image.url().unwrap().contains(&image_hash));
+        assert!(image.url().unwrap().contains(&image.hash));
 
         let script = page_assets.add_script(temp_dir.join("script.js"));
-        let script_hash = script.hash.clone();
-        assert!(script.url().unwrap().contains(&script_hash));
+        assert!(script.url().unwrap().contains(&script.hash));
 
         let style = page_assets.add_style(temp_dir.join("style.css"));
-        let style_hash = style.hash.clone();
-        assert!(style.url().unwrap().contains(&style_hash));
+        assert!(style.url().unwrap().contains(&style.hash));
     }
 
     #[test]
@@ -489,16 +439,13 @@ mod tests {
         let mut page_assets = PageAssets::default();
 
         let image = page_assets.add_image(temp_dir.join("image.png"));
-        let image_hash = image.hash.clone();
-        assert!(image.build_path().to_string_lossy().contains(&image_hash));
+        assert!(image.build_path().to_string_lossy().contains(&image.hash));
 
         let script = page_assets.add_script(temp_dir.join("script.js"));
-        let script_hash = script.hash.clone();
-        assert!(script.build_path().to_string_lossy().contains(&script_hash));
+        assert!(script.build_path().to_string_lossy().contains(&script.hash));
 
         let style = page_assets.add_style(temp_dir.join("style.css"));
-        let style_hash = style.hash.clone();
-        assert!(style.build_path().to_string_lossy().contains(&style_hash));
+        assert!(style.build_path().to_string_lossy().contains(&style.hash));
     }
 
     #[test]
@@ -658,27 +605,15 @@ mod tests {
         // Write first content and get hash
         std::fs::write(&style_path, "body { background: red; }").unwrap();
         let style1 = page_assets.add_style(&style_path);
-        let hash1 = style1.hash.clone();
+        let hash1 = style1.hash;
 
         // Write different content and get new hash
         std::fs::write(&style_path, "body { background: green; }").unwrap();
-        let style2 = Style {
-            path: style_path.clone(),
-            assets_dir: assets_options.assets_dir.clone(),
-            output_assets_dir: assets_options.output_assets_dir.clone(),
-            hash: calculate_hash(
-                &style_path,
-                Some(&HashConfig {
-                    asset_type: HashAssetType::Style(&StyleOptions::default()),
-                    hashing_strategy: &AssetHashingStrategy::Precise,
-                }),
-            ),
-            tailwind: false,
-            included: false,
-        };
+        let style2 = page_assets.add_style(&style_path);
+        let hash2 = style2.hash;
 
         assert_ne!(
-            hash1, style2.hash,
+            hash1, hash2,
             "Different content should produce different hashes"
         );
     }

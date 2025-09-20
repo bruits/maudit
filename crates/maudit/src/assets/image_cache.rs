@@ -28,7 +28,7 @@ struct CacheManifest {
     /// Cache for placeholder data (thumbhash, etc.)
     placeholders: FxHashMap<PathBuf, PlaceholderCacheEntry>,
     /// Cache for transformed images (path + options -> cached file path)
-    transformed: FxHashMap<String, TransformedImageCacheEntry>,
+    transformed: FxHashMap<PathBuf, TransformedImageCacheEntry>,
 }
 
 pub struct ImageCache {
@@ -114,7 +114,7 @@ impl ImageCache {
                         let entry = TransformedImageCacheEntry {
                             cached_path: PathBuf::from(cached_path_str),
                         };
-                        manifest.transformed.insert(cache_key.to_string(), entry);
+                        manifest.transformed.insert(PathBuf::from(cache_key), entry);
                     }
                 }
                 _ => {}
@@ -161,7 +161,7 @@ impl ImageCache {
         for (cache_key, entry) in &self.manifest.transformed {
             content.push_str(&format!(
                 "{}={}\n",
-                cache_key,
+                cache_key.to_string_lossy(),
                 entry.cached_path.to_string_lossy()
             ));
         }
@@ -195,7 +195,7 @@ impl ImageCache {
     }
 
     /// Get cached transformed image path or None if not found
-    pub fn get_transformed_image(final_filename: &str) -> Option<PathBuf> {
+    pub fn get_transformed_image(final_filename: &Path) -> Option<PathBuf> {
         let cache = Self::get().lock().ok()?;
         let entry = cache.manifest.transformed.get(final_filename)?;
 
@@ -210,14 +210,14 @@ impl ImageCache {
 
         debug!(
             "Transformed image cache hit for {} -> {}",
-            final_filename,
+            final_filename.display(),
             entry.cached_path.display()
         );
         Some(entry.cached_path.clone())
     }
 
     /// Cache a transformed image
-    pub fn cache_transformed_image(final_filename: &str, cached_path: PathBuf) {
+    pub fn cache_transformed_image(final_filename: &Path, cached_path: PathBuf) {
         if let Ok(mut cache) = Self::get().lock() {
             let entry = TransformedImageCacheEntry {
                 cached_path: cached_path.clone(),
@@ -226,18 +226,18 @@ impl ImageCache {
             cache
                 .manifest
                 .transformed
-                .insert(final_filename.to_string(), entry);
+                .insert(final_filename.to_path_buf(), entry);
             cache.save_manifest();
             debug!(
                 "Cached transformed image {} -> {}",
-                final_filename,
+                final_filename.display(),
                 cached_path.display()
             );
         }
     }
 
     /// Generate a cache path for a transformed image
-    pub fn generate_cache_path(final_filename: &str) -> PathBuf {
+    pub fn generate_cache_path(final_filename: &Path) -> PathBuf {
         if let Ok(cache) = Self::get().lock() {
             cache.cache_dir.join(final_filename)
         } else {

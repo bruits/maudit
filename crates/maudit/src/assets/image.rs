@@ -7,7 +7,10 @@ use log::debug;
 use thumbhash::{rgba_to_thumb_hash, thumb_hash_to_average_rgba, thumb_hash_to_rgba};
 
 use super::image_cache::ImageCache;
-use crate::assets::{Asset, InternalAsset};
+use crate::assets::{
+    HashAssetType, HashConfig, PageAssetsOptions, calculate_hash, make_filename, make_final_path,
+    make_final_url,
+};
 use crate::is_dev;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -63,13 +66,56 @@ pub struct ImageOptions {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Image {
     pub path: PathBuf,
-    pub(crate) assets_dir: PathBuf,
-    pub(crate) output_assets_dir: PathBuf,
     pub(crate) hash: String,
     pub(crate) options: Option<ImageOptions>,
+
+    pub(crate) filename: PathBuf,
+    pub(crate) url: String,
+    pub(crate) build_path: PathBuf,
 }
 
 impl Image {
+    pub fn new(
+        path: PathBuf,
+        image_options: Option<ImageOptions>,
+        page_assets_options: &PageAssetsOptions,
+    ) -> Self {
+        let hash = calculate_hash(
+            &path,
+            Some(&HashConfig {
+                asset_type: HashAssetType::Image(
+                    image_options.as_ref().unwrap_or(&ImageOptions::default()),
+                ),
+                hashing_strategy: &page_assets_options.hashing_strategy,
+            }),
+        );
+
+        let filename = make_filename(
+            &path,
+            &hash,
+            image_options
+                .as_ref()
+                .and_then(|opts| opts.format.as_ref().map(|f| f.extension().into()))
+                .or_else(|| {
+                    path.extension()
+                        .and_then(|ext| ext.to_str())
+                        .map(|s| s.to_lowercase())
+                })
+                .as_deref(),
+        );
+        let build_path = make_final_path(&page_assets_options.output_assets_dir, &filename);
+        let url = make_final_url(&page_assets_options.assets_dir, &filename);
+
+        Self {
+            path,
+            hash,
+            options: image_options.clone(),
+            filename,
+            url,
+            build_path,
+        }
+    }
+
     /// Get a placeholder for the image, which can be used for low-quality image placeholders (LQIP) or similar techniques.
     ///
     /// This uses the [ThumbHash](https://evanw.github.io/thumbhash/) algorithm to generate a very small placeholder image.
@@ -380,38 +426,4 @@ fn thumbhash_to_png(thumbhash_rgba: &(usize, usize, Vec<u8>)) -> Vec<u8> {
     }
 
     bytes
-}
-
-impl InternalAsset for Image {
-    fn assets_dir(&self) -> &PathBuf {
-        &self.assets_dir
-    }
-
-    fn output_assets_dir(&self) -> &PathBuf {
-        &self.output_assets_dir
-    }
-}
-
-impl Asset for Image {
-    fn path(&self) -> &PathBuf {
-        &self.path
-    }
-
-    fn hash(&self) -> String {
-        self.hash.clone()
-    }
-
-    fn final_extension(&self) -> String {
-        if let Some(options) = &self.options
-            && let Some(format) = &options.format
-        {
-            format.extension()
-        } else {
-            self.path()
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .unwrap_or_default()
-        }
-        .to_string()
-    }
 }
