@@ -325,16 +325,9 @@ pub async fn build(
             .map(|style| InputItem {
                 name: Some(
                     style
-                        .final_file_name()
-                        .strip_suffix(&format!(
-                            ".{}",
-                            style
-                                .path()
-                                .extension()
-                                .map(|ext| ext.to_str().unwrap())
-                                .unwrap_or("")
-                        ))
-                        .unwrap_or(&style.final_file_name())
+                        .filename()
+                        .with_extension("")
+                        .to_string_lossy()
                         .to_string(),
                 ),
                 import: { style.path().to_string_lossy().to_string() },
@@ -347,9 +340,9 @@ pub async fn build(
                 import: script.path().to_string_lossy().to_string(),
                 name: Some(
                     script
-                        .final_file_name()
-                        .strip_suffix(&format!(".{}", script.final_extension()))
-                        .unwrap_or(&script.final_file_name())
+                        .filename()
+                        .with_extension("")
+                        .to_string_lossy()
                         .to_string(),
                 ),
             })
@@ -405,36 +398,36 @@ pub async fn build(
         let start_time = Instant::now();
         build_pages_images.par_iter().for_each(|image| {
             let start_process = Instant::now();
-            let dest_path: PathBuf = image.build_path();
+            let dest_path: &PathBuf = image.build_path();
 
             if let Some(image_options) = &image.options {
-                let final_filename = image.final_file_name();
+                let final_filename = image.filename();
 
                 // Check cache for transformed images
-                if let Some(cached_path) = ImageCache::get_transformed_image(&final_filename) {
+                if let Some(cached_path) = ImageCache::get_transformed_image(final_filename) {
                     // Copy from cache instead of processing
-                    if fs::copy(&cached_path, &dest_path).is_ok() {
+                    if fs::copy(&cached_path, dest_path).is_ok() {
                         info!(target: "assets", "{} -> {} (from cache) {}", image.path().to_string_lossy(), dest_path.to_string_lossy().dimmed(), format_elapsed_time(start_process.elapsed(), &route_format_options).dimmed());
                         return;
                     }
                 }
 
                 // Generate cache path for transformed image
-                let cache_path = ImageCache::generate_cache_path(&final_filename);
+                let cache_path = ImageCache::generate_cache_path(final_filename);
 
                 // Process image directly to cache
                 process_image(image, &cache_path, image_options);
 
                 // Copy from cache to destination
-                if fs::copy(&cache_path, &dest_path).is_ok() {
+                if fs::copy(&cache_path, dest_path).is_ok() {
                     // Cache the processed image path
-                    ImageCache::cache_transformed_image(&final_filename, cache_path);
+                    ImageCache::cache_transformed_image(final_filename, cache_path);
                 } else {
                     debug!("Failed to copy from cache {} to dest {}", cache_path.display(), dest_path.display());
                 }
             } else if !dest_path.exists() {
                 // TODO: Check if copying should be done in this parallel iterator, I/O doesn't benefit from parallelism so having those tasks here might just be slowing processing
-                fs::copy(image.path(), &dest_path).unwrap_or_else(|e| {
+                fs::copy(image.path(), dest_path).unwrap_or_else(|e| {
                     panic!(
                         "Failed to copy image from {} to {}: {}",
                         image.path().to_string_lossy(),
