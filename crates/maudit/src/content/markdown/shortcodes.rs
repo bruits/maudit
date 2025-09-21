@@ -1,10 +1,10 @@
 use rustc_hash::FxHashMap;
 use std::str::FromStr;
 
-use crate::page::RouteContext;
+use crate::page::PageContext;
 
 pub type ShortcodeFn =
-    Box<dyn Fn(&ShortcodeArgs, Option<&mut RouteContext>) -> String + Send + Sync>;
+    Box<dyn Fn(&ShortcodeArgs, Option<&mut PageContext>) -> String + Send + Sync>;
 
 #[derive(Default)]
 pub struct MarkdownShortcodes(FxHashMap<String, ShortcodeFn>);
@@ -16,7 +16,7 @@ impl MarkdownShortcodes {
 
     pub fn register<F>(&mut self, name: &str, func: F)
     where
-        F: Fn(&ShortcodeArgs, Option<&mut RouteContext>) -> String + Send + Sync + 'static,
+        F: Fn(&ShortcodeArgs, Option<&mut PageContext>) -> String + Send + Sync + 'static,
     {
         self.0.insert(name.to_string(), Box::new(func));
     }
@@ -58,7 +58,7 @@ fn is_valid_shortcode_name(name: &str) -> bool {
 pub fn preprocess_shortcodes(
     content: &str,
     shortcodes: &MarkdownShortcodes,
-    mut route_ctx: Option<&mut RouteContext>,
+    mut route_ctx: Option<&mut PageContext>,
     markdown_path: Option<&str>,
 ) -> Result<String, String> {
     let mut output = String::new();

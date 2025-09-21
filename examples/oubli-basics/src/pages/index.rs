@@ -5,8 +5,8 @@ use maudit::page::prelude::*;
 #[route("/")]
 pub struct Index;
 
-impl Page for Index {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Route for Index {
+    fn render(&self, ctx: &mut PageContext) -> RenderResult {
         let logo = ctx.assets.add_image("images/logo.svg");
 
         let archetype_store = ctx

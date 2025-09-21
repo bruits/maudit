@@ -6,8 +6,8 @@ use crate::layout::layout;
 #[route("404.html")]
 pub struct NotFound;
 
-impl Page for NotFound {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Route for NotFound {
+    fn render(&self, ctx: &mut PageContext) -> RenderResult {
         layout(
             html! {
                 div.container.mx-auto.text-center.my-50.flex.items-center.flex-col."gap-y-4"."px-8"."sm:px-0" {

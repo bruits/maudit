@@ -3,8 +3,8 @@ use maudit::page::prelude::*;
 #[route("/")]
 pub struct Index;
 
-impl Page for Index {
-    fn render(&self, _ctx: &mut RouteContext) -> RenderResult {
+impl Route for Index {
+    fn render(&self, _ctx: &mut PageContext) -> RenderResult {
         "Hello, world!".into()
     }
 }

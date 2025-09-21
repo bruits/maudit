@@ -10,14 +10,14 @@ pub struct Params {
     pub page: u128,
 }
 
-impl Page<Params> for DynamicExample {
-    fn routes(&self, _: &DynamicRouteContext) -> Routes<Params> {
+impl Route<Params> for DynamicExample {
+    fn pages(&self, _: &mut DynamicRouteContext) -> Pages<Params> {
         (0..1)
             .map(|i| Route::from_params(Params { page: i }))
             .collect()
     }
 
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> RenderResult {
         let params = ctx.params::<Params>();
         let image = ctx.assets.add_image("data/social-card.png");
         ctx.assets

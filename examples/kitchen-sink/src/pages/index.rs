@@ -7,8 +7,8 @@ use super::dynamic::{DynamicExample, Params as DynamicExampleParams};
 #[route("/")]
 pub struct Index;
 
-impl Page for Index {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Route for Index {
+    fn render(&self, ctx: &mut PageContext) -> RenderResult {
         let image = ctx.assets.add_image("data/logo.svg");
         let script = ctx.assets.add_script("data/some_other_script.js");
         let style = ctx

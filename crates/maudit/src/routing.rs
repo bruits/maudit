@@ -65,7 +65,7 @@ pub fn guess_if_route_is_endpoint(raw_route: &str) -> bool {
 mod tests {
     use crate::{
         page::RouteType,
-        route::{ParameterDef, extract_params_from_raw_route, get_route_type_from_route_params},
+        routing::{ParameterDef, extract_params_from_raw_route, get_route_type_from_route_params},
     };
 
     #[test]

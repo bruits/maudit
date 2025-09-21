@@ -9,7 +9,10 @@ mod highlight;
 pub mod markdown;
 mod slugger;
 
-use crate::page::{RouteContext, RouteParams};
+use crate::{
+    assets::RouteAssets,
+    page::{DynamicRouteContext, PageContext, RouteParams},
+};
 pub use markdown::{
     components::{
         BlockQuoteKind, BlockquoteComponent, CodeComponent, EmphasisComponent, HardBreakComponent,
@@ -126,14 +129,14 @@ pub use maudit_macros::markdown_entry;
 /// }
 ///
 /// impl Page<ArticleParams> for Article {
-///    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+///    fn render(&self, ctx: &mut PageContext) -> RenderResult {
 ///      let params = ctx.params::<ArticleParams>();
 ///      let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///      let article = articles.get_entry(&params.article);
 ///      article.render(ctx).into()
 ///   }
 ///
-///   fn routes(&self, ctx: &DynamicRouteContext) -> Vec<ArticleParams> {
+///   fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<ArticleParams> {
 ///     let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///
 ///     articles.into_params(|entry| ArticleParams {
@@ -142,13 +145,13 @@ pub use maudit_macros::markdown_entry;
 ///   }
 /// }
 /// ```
-pub struct PageContent<'a> {
+pub struct RouteContent<'a> {
     sources: &'a [Box<dyn ContentSourceInternal>],
 }
 
-impl PageContent<'_> {
-    pub fn new(sources: &'_ ContentSources) -> PageContent<'_> {
-        PageContent {
+impl RouteContent<'_> {
+    pub fn new(sources: &'_ ContentSources) -> RouteContent<'_> {
+        RouteContent {
             sources: sources.sources(),
         }
     }
@@ -218,7 +221,7 @@ impl PageContent<'_> {
 /// }
 ///
 /// impl Page for Article {
-///    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+///    fn render(&self, ctx: &mut PageContext) -> RenderResult {
 ///      let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///      let article = articles.get_entry("my-article"); // returns a ContentEntry
 ///      article.render(ctx).into()
@@ -229,16 +232,41 @@ pub struct ContentEntry<T> {
     pub id: String,
     render: OptionalContentRenderFn,
     pub raw_content: Option<String>,
-    data_loader: OptionalDataLoadingFn<T>,
+    data_loader: Option<DataLoadingFn<T>>,
     cached_data: std::sync::OnceLock<T>,
     pub file_path: Option<PathBuf>,
 }
 
-type OptionalDataLoadingFn<T> =
-    Option<Box<dyn Fn(&mut crate::page::RouteContext) -> T + Send + Sync>>;
+/// Trait for contexts that can provide access to content
+pub trait ContentContext {
+    fn content(&self) -> &RouteContent<'_>;
+    fn assets(&mut self) -> &mut RouteAssets;
+}
+
+impl ContentContext for PageContext<'_> {
+    fn content(&self) -> &RouteContent<'_> {
+        self.content
+    }
+
+    fn assets(&mut self) -> &mut RouteAssets {
+        self.assets
+    }
+}
+
+impl ContentContext for DynamicRouteContext<'_> {
+    fn content(&self) -> &RouteContent<'_> {
+        self.content
+    }
+
+    fn assets(&mut self) -> &mut RouteAssets {
+        self.assets
+    }
+}
+
+type DataLoadingFn<T> = Box<dyn Fn(&mut dyn ContentContext) -> T + Send + Sync>;
 
 type OptionalContentRenderFn =
-    Option<Box<dyn Fn(&str, &mut crate::page::RouteContext) -> String + Send + Sync>>;
+    Option<Box<dyn Fn(&str, &mut crate::page::PageContext) -> String + Send + Sync>>;
 
 impl<T> ContentEntry<T> {
     pub fn new(
@@ -262,7 +290,7 @@ impl<T> ContentEntry<T> {
         id: String,
         render: OptionalContentRenderFn,
         raw_content: Option<String>,
-        data_loader: Box<dyn Fn(&mut crate::page::RouteContext) -> T + Send + Sync>,
+        data_loader: DataLoadingFn<T>,
         file_path: Option<PathBuf>,
     ) -> Self {
         Self {
@@ -275,7 +303,7 @@ impl<T> ContentEntry<T> {
         }
     }
 
-    pub fn data(&self, ctx: &mut RouteContext) -> &T {
+    pub fn data<C: ContentContext>(&self, ctx: &mut C) -> &T {
         self.cached_data.get_or_init(|| {
             if let Some(ref loader) = self.data_loader {
                 loader(ctx)
@@ -285,7 +313,7 @@ impl<T> ContentEntry<T> {
         })
     }
 
-    pub fn render(&self, ctx: &mut RouteContext) -> String {
+    pub fn render(&self, ctx: &mut PageContext) -> String {
         (self.render.as_ref().unwrap())(self.raw_content.as_ref().unwrap(), ctx)
     }
 }
@@ -380,10 +408,10 @@ impl<T> ContentSource<T> {
         self.entries.iter().map(cb).collect()
     }
 
-    pub fn into_routes<Params, Props>(
+    pub fn into_pages<Params, Props>(
         &self,
-        cb: impl Fn(&ContentEntry<T>) -> crate::page::Route<Params, Props>,
-    ) -> Vec<crate::page::Route<Params, Props>>
+        cb: impl Fn(&ContentEntry<T>) -> crate::page::Page<Params, Props>,
+    ) -> crate::page::Pages<Params, Props>
     where
         Params: Into<RouteParams>,
     {

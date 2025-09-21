@@ -3,8 +3,8 @@ use maudit::page::prelude::*;
 #[route("/catalogue/data.json")]
 pub struct Endpoint;
 
-impl Page for Endpoint {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Route for Endpoint {
+    fn render(&self, ctx: &mut PageContext) -> RenderResult {
         let image = ctx.assets.add_image("data/logo.svg");
         let some_script = ctx.assets.add_script("data/script.js");
         ctx.assets

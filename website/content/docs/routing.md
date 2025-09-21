@@ -15,7 +15,7 @@ use maudit::page::prelude::*;
 pub struct HelloWorld;
 
 impl Page for HelloWorld {
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+  fn render(&self, ctx: &mut PageContext) -> RenderResult {
     RenderResult::Text("Hello, world!".to_string())
   }
 }
@@ -31,7 +31,7 @@ The `Page` trait accepts a generic parameter in third position for the return ty
 
 ```rs
 impl Page<(), (), String> for HelloWorld {
-  fn render(&self, ctx: &mut RouteContext) -> String {
+  fn render(&self, ctx: &mut PageContext) -> String {
     "Hello, world!".to_string()
   }
 }
@@ -62,12 +62,12 @@ pub struct Params {
 }
 
 impl Page<Params> for Post {
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+  fn render(&self, ctx: &mut PageContext) -> RenderResult {
     let params = ctx.params::<Params>();
     RenderResult::Text(format!("Hello, {}!", params.slug))
   }
 
-  fn routes(&self, ctx: &DynamicRouteContext) -> Routes<Params> {
+  fn routes(&self, ctx: &mut DynamicRouteContext) -> Routes<Params> {
     vec![Route::from_params(Params {
       slug: "hello-world".to_string(),
     })]
@@ -75,7 +75,7 @@ impl Page<Params> for Post {
 }
 ```
 
-The route parameters are automatically extracted from the URL and made available through the `ctx.params::<T>()` method in the `RouteContext` struct, providing type-safe access to the values.
+The route parameters are automatically extracted from the URL and made available through the `ctx.params::<T>()` method in the `PageContext` struct, providing type-safe access to the values.
 
 ```rs
 use maudit::page::prelude::*;
@@ -89,12 +89,12 @@ pub struct Params {
 }
 
 impl Page for Post {
-  fn render(&self, ctx: &mut RouteContext) -> String {
+  fn render(&self, ctx: &mut PageContext) -> String {
     let slug = ctx.params::<Params>().slug;
     format!("Hello, {}!", slug)
   }
 
-  fn routes(&self, ctx: &DynamicRouteContext) -> Routes<Params> {
+  fn routes(&self, ctx: &mut DynamicRouteContext) -> Routes<Params> {
     vec![Route::from_params(Params {
       slug: "hello-world".to_string(),
     })]
@@ -117,7 +117,7 @@ use maudit::page::prelude::*;
 pub struct HelloWorldJson;
 
 impl Page for HelloWorldJson {
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+  fn render(&self, ctx: &mut PageContext) -> RenderResult {
     RenderResult::Text(r#"{"message": "Hello, world!"}"#.to_string())
   }
 }
@@ -137,13 +137,13 @@ pub struct Params {
 }
 
 impl Page<Params> for PostJson {
-  fn routes(&self, ctx: &DynamicRouteContext) -> Routes<Params> {
+  fn routes(&self, ctx: &mut DynamicRouteContext) -> Routes<Params> {
     vec![Route::from_params(Params {
       slug: "hello-world".to_string()
     })]
   }
 
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+  fn render(&self, ctx: &mut PageContext) -> RenderResult {
     let params = ctx.params::<Params>();
 
     RenderResult::Text(format!(r#"{{"message": "Hello, {}!"}}"#, params.slug))

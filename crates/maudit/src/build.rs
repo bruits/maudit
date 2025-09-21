@@ -12,18 +12,18 @@ use std::{
 use crate::{
     BuildOptions, BuildOutput,
     assets::{
-        self, PageAssets,
+        self, RouteAssets,
         image_cache::{IMAGE_CACHE_DIR, ImageCache},
     },
     build::images::process_image,
-    content::{ContentSources, PageContent},
+    content::{ContentSources, RouteContent},
     errors::BuildError,
     is_dev,
     logging::print_title,
-    page::{DynamicRouteContext, FullPage, RenderResult, RouteContext, RouteParams, RouteType},
+    page::{DynamicRouteContext, FullRoute, PageContext, RenderResult, RouteParams, RouteType},
 };
 use colored::{ColoredString, Colorize};
-use log::{debug, info, trace};
+use log::{debug, info, trace, warn};
 use oxc_sourcemap::SourceMap;
 use rolldown::{
     Bundler, BundlerOptions, InputItem, ModuleType,
@@ -137,7 +137,7 @@ impl Plugin for TailwindPlugin {
 }
 
 pub fn execute_build(
-    routes: &[&dyn FullPage],
+    routes: &[&dyn FullRoute],
     content_sources: &mut ContentSources,
     options: &BuildOptions,
     async_runtime: &tokio::runtime::Runtime,
@@ -146,7 +146,7 @@ pub fn execute_build(
 }
 
 pub async fn build(
-    routes: &[&dyn FullPage],
+    routes: &[&dyn FullRoute],
     content_sources: &mut ContentSources,
     options: &BuildOptions,
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
@@ -228,13 +228,13 @@ pub async fn build(
             RouteType::Static => {
                 let route_start = Instant::now();
 
-                let content = PageContent::new(content_sources);
-                let mut page_assets = PageAssets::new(&page_assets_options);
+                let content = RouteContent::new(content_sources);
+                let mut page_assets = RouteAssets::new(&page_assets_options);
 
                 let params = RouteParams::default();
                 let url = route.url(&params);
 
-                let result = route.build(&mut RouteContext::from_static_route(
+                let result = route.build(&mut PageContext::from_static_route(
                     &content,
                     &mut page_assets,
                     &url,
@@ -259,26 +259,27 @@ pub async fn build(
                 page_count += 1;
             }
             RouteType::Dynamic => {
-                let routes = route.get_routes(&DynamicRouteContext {
-                    content: &PageContent::new(content_sources),
+                let content = RouteContent::new(content_sources);
+                let mut page_assets = RouteAssets::new(&page_assets_options);
+
+                let routes = route.get_routes(&mut DynamicRouteContext {
+                    content: &content,
+                    assets: &mut page_assets,
                 });
 
                 if routes.is_empty() {
-                    info!(target: "build", "{} is a dynamic route, but its implementation of Page::routes returned an empty Vec. No pages will be generated for this route.", route.route_raw().to_string().bold());
+                    warn!(target: "build", "{} is a dynamic route, but its implementation of Page::routes returned an empty Vec. No pages will be generated for this route.", route.route_raw().to_string().bold());
                     continue;
                 } else {
                     info!(target: "build", "{}", route.route_raw().to_string().bold());
                 }
 
-                let content = PageContent::new(content_sources);
                 for dynamic_route in routes {
                     let route_start = Instant::now();
 
-                    let mut page_assets = PageAssets::new(&page_assets_options);
-
                     let url = route.url(&dynamic_route.0);
 
-                    let content = route.build(&mut RouteContext::from_dynamic_route(
+                    let content = route.build(&mut PageContext::from_dynamic_route(
                         &dynamic_route,
                         &content,
                         &mut page_assets,
@@ -291,10 +292,6 @@ pub async fn build(
 
                     info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
-                    build_pages_images.extend(page_assets.images);
-                    build_pages_scripts.extend(page_assets.scripts);
-                    build_pages_styles.extend(page_assets.styles);
-
                     build_metadata.add_page(
                         route.route_raw().to_string(),
                         file_path.to_string_lossy().to_string(),
@@ -303,6 +300,10 @@ pub async fn build(
 
                     page_count += 1;
                 }
+
+                build_pages_images.extend(page_assets.images);
+                build_pages_scripts.extend(page_assets.scripts);
+                build_pages_styles.extend(page_assets.styles);
             }
         }
     }
@@ -509,7 +510,7 @@ fn write_route_file(content: &[u8], file_path: &PathBuf) -> Result<(), io::Error
 
 pub fn finish_route(
     render_result: RenderResult,
-    page_assets: &assets::PageAssets,
+    page_assets: &assets::RouteAssets,
     route: String,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     match render_result {

@@ -12,8 +12,11 @@ use components::{LinkType, ListType, MarkdownComponents, TableAlignment};
 
 use crate::{
     assets::Asset,
-    content::shortcodes::{MarkdownShortcodes, preprocess_shortcodes},
-    page::RouteContext,
+    content::{
+        ContentContext,
+        shortcodes::{MarkdownShortcodes, preprocess_shortcodes},
+    },
+    page::PageContext,
 };
 
 use super::{ContentEntry, highlight::CodeBlock, slugger};
@@ -41,7 +44,7 @@ mod shortcodes_tests;
 /// pub struct Article;
 ///
 /// impl Page<RouteParams, Markup> for Article {
-///   fn render(&self, ctx: &mut RouteContext) -> Markup {
+///   fn render(&self, ctx: &mut PageContext) -> Markup {
 ///     let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///     let article = articles.get_entry("my-article");
 ///     let headings = article.data(ctx).get_headings(); // returns a Vec<MarkdownHeading>
@@ -209,8 +212,9 @@ where
 
         // Clone content for the closure
         let content_clone = content.clone();
-        let data_loader =
-            Box::new(move |_: &mut RouteContext| parse_markdown_with_frontmatter(&content_clone));
+        let data_loader = Box::new(move |_: &mut dyn ContentContext| {
+            parse_markdown_with_frontmatter(&content_clone)
+        });
 
         // Perhaps not ideal, but I don't know better. We're at the "get it working" stage - erika, 2025-08-24
         // Ideally, we'd at least avoid the allocation here whenever `options` is None, not sure how to do that ergonomically
@@ -306,7 +310,7 @@ pub fn render_markdown(
     content: &str,
     options: Option<&MarkdownOptions>,
     path: Option<&Path>,
-    mut route_ctx: Option<&mut RouteContext>,
+    mut route_ctx: Option<&mut PageContext>,
 ) -> String {
     let content = if let Some(shortcodes) = options.map(|o| &o.shortcodes)
         && !shortcodes.is_empty()

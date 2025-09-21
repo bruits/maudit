@@ -6,8 +6,8 @@ use crate::{content::DocsContent, layout::docs_layout};
 #[route("/docs")]
 pub struct DocsIndex;
 
-impl Page for DocsIndex {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Route for DocsIndex {
+    fn render(&self, ctx: &mut PageContext) -> RenderResult {
         let index_page = ctx
             .content
             .get_source::<DocsContent>("docs")
@@ -19,7 +19,7 @@ impl Page for DocsIndex {
     }
 }
 
-fn render_entry(entry: &ContentEntry<DocsContent>, ctx: &mut RouteContext) -> Markup {
+fn render_entry(entry: &ContentEntry<DocsContent>, ctx: &mut PageContext) -> Markup {
     html! {
         section.mb-4.border-b."border-[#e9e9e7]".pb-2 {
             @if let Some(section) = &entry.data(ctx).section {
@@ -44,18 +44,18 @@ struct DocsPageParams {
     slug: String,
 }
 
-impl Page<DocsPageParams> for DocsPage {
-    fn routes(&self, ctx: &DynamicRouteContext) -> Routes<DocsPageParams> {
+impl Route<DocsPageParams> for DocsPage {
+    fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<DocsPageParams> {
         let content = ctx.content.get_source::<DocsContent>("docs");
 
-        content.into_routes(|entry| {
+        content.into_pages(|entry| {
             Route::from_params(DocsPageParams {
                 slug: entry.id.clone(),
             })
         })
     }
 
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> RenderResult {
         let slug = ctx.params::<DocsPageParams>().slug.clone();
         let entry = ctx
             .content

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::{assets::PageAssetsOptions, is_dev};
+use crate::{assets::RouteAssetsOptions, is_dev};
 
 /// Maudit build options. Should be passed to [`coronate()`](crate::coronate()).
 ///
@@ -57,8 +57,8 @@ pub struct BuildOptions {
 impl BuildOptions {
     /// Returns the fully resolved assets options, with the `output_assets_dir` property resolved to be inside `output_dir`.
     /// e.g. if `output_dir` is `dist` and `assets.assets_dir` is `_maudit`, `output_assets_dir` will return `dist/_maudit`. The user-entered `assets.assets_dir` is also available and unchanged.
-    pub fn page_assets_options(&self) -> PageAssetsOptions {
-        PageAssetsOptions {
+    pub fn page_assets_options(&self) -> RouteAssetsOptions {
+        RouteAssetsOptions {
             assets_dir: self.assets.assets_dir.clone(),
             output_assets_dir: self.output_dir.join(&self.assets.assets_dir),
             hashing_strategy: self.assets.hashing_strategy,
@@ -76,7 +76,7 @@ pub struct AssetsOptions {
     /// Directory inside the output directory to place built assets in.
     /// Defaults to `_maudit`.
     ///
-    /// Note that this value is not automatically joined with the `output_dir` in `BuildOptions`. Use [`BuildOptions::page_assets_options()`] to get a `PageAssetsOptions` with the correct final path.
+    /// Note that this value is not automatically joined with the `output_dir` in `BuildOptions`. Use [`BuildOptions::route_assets_options()`] to get a `RouteAssetsOptions` with the correct final path.
     pub assets_dir: PathBuf,
 
     /// Strategy to use when hashing assets for fingerprinting.

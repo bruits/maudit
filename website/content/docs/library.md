@@ -12,18 +12,18 @@ As such, in this guide, we'll be building our own minimal [entrypoint](/docs/ent
 
 ## Function signature
 
-The built-in `coronate` function takes a list of routes (which all implements the [FullPage](https://docs.rs/maudit/latest/maudit/page/trait.FullPage.html) trait), content sources, and some build options. We'll do the same.
+The built-in `coronate` function takes a list of routes (which all implements the [FullRoute](https://docs.rs/maudit/latest/maudit/page/trait.FullRoute.html) trait), content sources, and some build options. We'll do the same.
 
 ```rs
 use maudit::{
   content::ContentSources,
-  page::{FullPage, PageAssets, PageContent},
-  route::{DynamicRouteContext, RouteContext, RouteParams, RouteType},
+  page::{FullRoute, RouteAssets, RouteContent},
+  route::{DynamicRouteContext, PageContext, RouteParams, RouteType},
   BuildOptions,
 };
 
 pub fn build_website(
-  routes: &[&dyn FullPage],
+  routes: &[&dyn FullRoute],
   mut content_sources: ContentSources,
   options: BuildOptions
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -40,12 +40,12 @@ The first step in building our own entrypoint is to iterate over the routes and 
 
 ```rs
 pub fn build_website(
-  routes: &[&dyn FullPage],
+  routes: &[&dyn FullRoute],
   mut content_sources: ContentSources,
   options: BuildOptions,
 ) -> Result<(), Box<dyn std::error::Error>> {
 
-  // Options we'll be passing to PageAssets instances.
+  // Options we'll be passing to RouteAssets instances.
   // This value automatically has the paths joined based on the output directory in BuildOptions for us, so we don't have to do it ourselves.
   let page_assets_options = options.page_assets_options();
 
@@ -53,16 +53,16 @@ pub fn build_website(
     match route.route_type() {
       RouteType::Static => {
         // Our page does not include content or assets, but we'll set those up for future use.
-        let content = PageContent::new(&content_sources);
-        let mut page_assets = PageAssets::new(&page_assets_options);
+        let content = RouteContent::new(&content_sources);
+        let mut page_assets = RouteAssets::new(&page_assets_options);
 
         // Static and dynamic routes share the same interface for building, but static routes do not require any parameters.
         // As such, we can just pass an empty set of parameters (the default for RouteParams).
         let params = RouteParams::default();
 
-        // Every page has a RouteContext, which contains information about the current route, as well as access to content and assets.
+        // Every page has a PageContext, which contains information about the current route, as well as access to content and assets.
         let url = route.url(&params);
-        let mut ctx = RouteContext::from_static_route(&content, &mut page_assets, &url);
+        let mut ctx = PageContext::from_static_route(&content, &mut page_assets, &url);
 
         let content = route.build(&mut ctx)?;
 
@@ -129,28 +129,27 @@ Each individual page is essentially a static route, but it has a slightly differ
 RouteType::Dynamic => {
   // The `get_routes` method returns all the possible routes for this page, along with their parameters and properties.
   // It is very common for dynamic pages to be based on content, for instance a blog post page that has one route per blog post.
-  // As such, we create essentially a mini `RouteContext` through `DynamicRouteContext` that includes the content sources, so that the page can use them to generate its routes.
+  // As such, we create essentially a mini `PageContext` through `DynamicRouteContext` that includes the content sources, so that the page can use them to generate its routes.
+
+  // Every page of a route may share a reference to the same RouteContent and RouteAssets instance, as it can help with caching.
+  // However, it is not stricly necessary, and you may want to instead create a new instance of RouteAssets especially if you were to parallelize the building of pages.
+  let mut page_assets = RouteAssets::new(&page_assets_options);
+  let content = RouteContent::new(&content_sources);
 
   let dynamic_ctx = DynamicRouteContext {
-      content: &PageContent::new(&content_sources),
+      content: &content,
+      assets: &mut page_assets,
   };
 
   let routes = route.get_routes(&dynamic_ctx);
 
-  // Every page can share a reference to the same PageContent instance, as it is just a view into the content sources.
-  let content = PageContent::new(&content_sources);
-
   for dynamic_route in routes {
-      // However, since page assets is a mutable structure that tracks which assets have been used, we need a new instance for each route.
-      // This is especially relevant if we were to parallelize this loop in the future.
-      let mut page_assets = PageAssets::new(&page_assets_options);
-
       // The dynamic route includes the parameters for this specific route.
       let params = &dynamic_route.0;
 
       // Here the context is created from a dynamic route, as the context has to include the route parameters and properties.
       let url = route.url(params);
-      let mut ctx = RouteContext::from_dynamic_route(
+      let mut ctx = PageContext::from_dynamic_route(
           &dynamic_route,
           &content,
           &mut page_assets,

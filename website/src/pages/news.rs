@@ -9,8 +9,8 @@ use crate::layout::layout;
 #[route("/news")]
 pub struct NewsIndex;
 
-impl Page for NewsIndex {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Route for NewsIndex {
+    fn render(&self, ctx: &mut PageContext) -> RenderResult {
         let content = ctx.content.get_source::<NewsContent>("news");
 
         // Group articles by year
@@ -86,18 +86,18 @@ struct NewsPageParams {
     slug: String,
 }
 
-impl Page<NewsPageParams> for NewsPage {
-    fn routes(&self, ctx: &DynamicRouteContext) -> Routes<NewsPageParams> {
+impl Route<NewsPageParams> for NewsPage {
+    fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<NewsPageParams> {
         let content = ctx.content.get_source::<NewsContent>("news");
 
-        content.into_routes(|entry| {
+        content.into_pages(|entry| {
             Route::from_params(NewsPageParams {
                 slug: entry.id.clone(),
             })
         })
     }
 
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> RenderResult {
         let slug = ctx.params::<NewsPageParams>().slug.clone();
         let entry = ctx
             .content

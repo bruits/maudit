@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::assets::{
-    HashAssetType, HashConfig, PageAssetsOptions, calculate_hash, make_filename, make_final_path,
+    HashAssetType, HashConfig, RouteAssetsOptions, calculate_hash, make_filename, make_final_path,
     make_final_url,
 };
 
@@ -18,7 +18,7 @@ pub struct Script {
 }
 
 impl Script {
-    pub fn new(path: PathBuf, included: bool, page_assets_options: &PageAssetsOptions) -> Self {
+    pub fn new(path: PathBuf, included: bool, page_assets_options: &RouteAssetsOptions) -> Self {
         let hash = calculate_hash(
             &path,
             Some(&HashConfig {

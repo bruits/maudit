@@ -58,7 +58,7 @@ Every page must `impl` the `Page` trait, with the required method `render`.
 
 ```rs
 impl Page for HelloWorld {
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+  fn render(&self, ctx: &mut PageContext) -> RenderResult {
     "Hello, world!".into()
   }
 }
