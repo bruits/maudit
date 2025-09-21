@@ -5,15 +5,36 @@ mod filterer;
 use colored::Colorize;
 use filterer::should_watch_path;
 use notify::{event::ModifyKind, EventKind, RecursiveMode, Watcher};
-use notify_debouncer_full::{new_debouncer, DebounceEventResult};
+use notify_debouncer_full::{new_debouncer, DebounceEventResult, DebouncedEvent};
 use quanta::Instant;
 use server::{update_status, WebSocketMessage};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::broadcast;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
 use crate::logging::{format_elapsed_time, FormatElapsedTimeOptions};
+
+fn should_rebuild_for_event(event: &DebouncedEvent) -> bool {
+    event.paths.iter().any(|path| {
+        should_watch_path(path)
+            && match event.kind {
+                // Only rebuild on actual content modifications, not metadata changes
+                EventKind::Modify(ModifyKind::Data(_)) => true,
+                EventKind::Modify(ModifyKind::Name(_)) => true,
+                EventKind::Modify(ModifyKind::Any) => true,
+                EventKind::Modify(ModifyKind::Other) => true,
+                // Skip metadata-only changes (permissions, timestamps, etc.)
+                EventKind::Modify(ModifyKind::Metadata(_)) => false,
+                // Include file creation and removal
+                EventKind::Create(_) => true,
+                EventKind::Remove(_) => true,
+                // Skip other event types
+                _ => false,
+            }
+    })
+}
 
 pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::error::Error>> {
     let start_time = Instant::now();
@@ -67,6 +88,10 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
         None
     }));
 
+    // Track the current build's cancellation token
+    let current_build_cancel =
+        Arc::new(tokio::sync::RwLock::new(Option::<CancellationToken>::None));
+
     let web_server_thread: tokio::task::JoinHandle<()> =
         tokio::spawn(server::start_dev_web_server(
             start_time,
@@ -99,52 +124,18 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
     tokio::spawn(async move {
         let browser_websocket = sender_websocket.clone();
         let current_status = current_status.clone();
+        let build_cancel_ref = current_build_cancel.clone();
 
         while let Some(result) = rx.recv().await {
             match result {
                 Ok(events) => {
-                    // Filter events to see if we should rebuild
-                    let should_rebuild = events.iter().any(|event| {
-                        event.paths.iter().any(|path| {
-                            should_watch_path(path)
-                                && match event.kind {
-                                    // Only rebuild on actual content modifications, not metadata changes
-                                    EventKind::Modify(ModifyKind::Data(_)) => true,
-                                    EventKind::Modify(ModifyKind::Name(_)) => true,
-                                    EventKind::Modify(ModifyKind::Any) => true,
-                                    EventKind::Modify(ModifyKind::Other) => true,
-                                    // Skip metadata-only changes (permissions, timestamps, etc.)
-                                    EventKind::Modify(ModifyKind::Metadata(_)) => false,
-                                    // Include file creation and removal
-                                    EventKind::Create(_) => true,
-                                    EventKind::Remove(_) => true,
-                                    // Skip other event types
-                                    _ => false,
-                                }
-                        })
-                    });
+                    // Filter events that should trigger a rebuild
+                    let triggering_events: Vec<_> = events
+                        .iter()
+                        .filter(|event| should_rebuild_for_event(event))
+                        .collect();
 
-                    if should_rebuild {
-                        // Log the events that triggered the rebuild
-                        let triggering_events: Vec<_> = events
-                            .iter()
-                            .filter(|event| {
-                                event.paths.iter().any(|path| {
-                                    should_watch_path(path)
-                                        && match event.kind {
-                                            EventKind::Modify(ModifyKind::Data(_)) => true,
-                                            EventKind::Modify(ModifyKind::Name(_)) => true,
-                                            EventKind::Modify(ModifyKind::Any) => true,
-                                            EventKind::Modify(ModifyKind::Other) => true,
-                                            EventKind::Modify(ModifyKind::Metadata(_)) => false,
-                                            EventKind::Create(_) => true,
-                                            EventKind::Remove(_) => true,
-                                            _ => false,
-                                        }
-                                })
-                            })
-                            .collect();
-
+                    if !triggering_events.is_empty() {
                         debug!("File events: {} valid changes", triggering_events.len());
                         for event in &triggering_events {
                             for path in &event.paths {
@@ -153,6 +144,22 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
                         }
 
                         info!(name: "build", "Detected changes. Rebuilding…");
+
+                        // Cancel any ongoing build
+                        {
+                            let mut current_cancel = build_cancel_ref.write().await;
+                            if let Some(cancel_token) = current_cancel.take() {
+                                cancel_token.cancel();
+                                debug!("Cancelled previous build");
+                            }
+                        }
+
+                        // Create new cancellation token for this build
+                        let new_cancel_token = CancellationToken::new();
+                        {
+                            let mut current_cancel = build_cancel_ref.write().await;
+                            *current_cancel = Some(new_cancel_token.clone());
+                        }
 
                         let start_time = Instant::now();
 
@@ -169,43 +176,77 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
                             .spawn();
 
                         match child {
-                            Ok(child) => {
-                                let output = child.wait_with_output();
-                                match output {
-                                    Ok(output) => {
-                                        let duration = start_time.elapsed();
-                                        let formatted_elapsed_time = format_elapsed_time(
-                                            duration,
-                                            &FormatElapsedTimeOptions::default_dev(),
-                                        );
+                            Ok(child_process) => {
+                                // Spawn the build in a separate task so we can cancel it
+                                let build_task = tokio::task::spawn_blocking(move || {
+                                    child_process.wait_with_output()
+                                });
 
-                                        if output.status.success() {
-                                            info!(name: "build", "Rebuild finished {}", formatted_elapsed_time);
-
-                                            // Update status and send success message to browser
-                                            let websocket = browser_websocket.clone();
-                                            let status = current_status.clone();
-                                            tokio::spawn(async move {
-                                                update_status(&websocket, status, "success", "")
-                                                    .await;
-                                            });
-                                        } else {
-                                            let stderr =
-                                                String::from_utf8_lossy(&output.stderr).to_string();
-                                            error!(name: "build", "{}", stderr);
-                                            error!(name: "build", "Rebuild failed with errors {}", formatted_elapsed_time);
-
-                                            // Update status and send error message to browser
-                                            let websocket = browser_websocket.clone();
-                                            let status = current_status.clone();
-                                            tokio::spawn(async move {
-                                                update_status(&websocket, status, "error", &stderr)
-                                                    .await;
-                                            });
+                                // Wait for either process completion or cancellation
+                                let output_result = tokio::select! {
+                                    output = build_task => {
+                                        match output {
+                                            Ok(result) => Some(result),
+                                            Err(e) => {
+                                                error!(name: "build", "Failed to join build task: {}", e);
+                                                None
+                                            }
                                         }
                                     }
-                                    Err(e) => {
-                                        error!(name: "build", "Failed to wait for build process: {}", e);
+                                    _ = new_cancel_token.cancelled() => {
+                                        debug!("Build was cancelled by new file changes");
+                                        None
+                                    }
+                                };
+
+                                // Clear the cancellation token since build is done/cancelled
+                                {
+                                    let mut current_cancel = build_cancel_ref.write().await;
+                                    *current_cancel = None;
+                                }
+
+                                if let Some(output) = output_result {
+                                    match output {
+                                        Ok(output) => {
+                                            let duration = start_time.elapsed();
+                                            let formatted_elapsed_time = format_elapsed_time(
+                                                duration,
+                                                &FormatElapsedTimeOptions::default_dev(),
+                                            );
+
+                                            if output.status.success() {
+                                                info!(name: "build", "Rebuild finished {}", formatted_elapsed_time);
+
+                                                // Update status and send success message to browser
+                                                let websocket = browser_websocket.clone();
+                                                let status = current_status.clone();
+                                                tokio::spawn(async move {
+                                                    update_status(
+                                                        &websocket, status, "success", "",
+                                                    )
+                                                    .await;
+                                                });
+                                            } else {
+                                                let stderr =
+                                                    String::from_utf8_lossy(&output.stderr)
+                                                        .to_string();
+                                                error!(name: "build", "{}", stderr);
+                                                error!(name: "build", "Rebuild failed with errors {}", formatted_elapsed_time);
+
+                                                // Update status and send error message to browser
+                                                let websocket = browser_websocket.clone();
+                                                let status = current_status.clone();
+                                                tokio::spawn(async move {
+                                                    update_status(
+                                                        &websocket, status, "error", &stderr,
+                                                    )
+                                                    .await;
+                                                });
+                                            }
+                                        }
+                                        Err(e) => {
+                                            error!(name: "build", "Failed to wait for build process: {}", e);
+                                        }
                                     }
                                 }
                             }

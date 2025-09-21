@@ -34,6 +34,7 @@ local-ip-address = "0.6.3"
 flate2 = "1.0.35"
 quanta = "0.12.6"
 serde_json = "1.0"
+tokio-util = "0.7"
 
 [build-dependencies]
 rolldown = { package = "brk_rolldown", version = "0.1.4" }
