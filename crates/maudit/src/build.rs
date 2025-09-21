@@ -218,95 +218,165 @@ pub async fn build(
     let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
     let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
 
-    let mut page_count = 0;
-
-    // TODO: This is fully serial. Parallelizing it is trivial with Rayon and stuff, but it doesn't necessarily make it
-    // faster in all cases, making it sometimes even slower due to the overhead. It'd be great to investigate and benchmark
-    // this.
-    for route in routes {
-        match route.route_type() {
-            RouteType::Static => {
-                let route_start = Instant::now();
-
-                let content = RouteContent::new(content_sources);
-                let mut page_assets = RouteAssets::new(&page_assets_options);
-
-                let params = PageParams::default();
-                let url = route.url(&params);
-
-                let result = route.build(&mut PageContext::from_static_route(
-                    &content,
-                    &mut page_assets,
-                    &url,
-                ))?;
-
-                let file_path = route.file_path(&params, &options.output_dir);
-
-                write_route_file(&result, &file_path)?;
-
-                info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
-
-                build_pages_images.extend(page_assets.images);
-                build_pages_scripts.extend(page_assets.scripts);
-                build_pages_styles.extend(page_assets.styles);
-
-                build_metadata.add_page(
-                    route.route_raw().to_string(),
-                    file_path.to_string_lossy().to_string(),
-                    None,
-                );
-
-                page_count += 1;
-            }
-            RouteType::Dynamic => {
-                let content = RouteContent::new(content_sources);
-                let mut page_assets = RouteAssets::new(&page_assets_options);
-
-                let pages = route.get_pages(&mut DynamicRouteContext {
-                    content: &content,
-                    assets: &mut page_assets,
-                });
-
-                if pages.is_empty() {
-                    warn!(target: "build", "{} is a dynamic route, but its implementation of Route::pages returned an empty Vec. No pages will be generated for this route.", route.route_raw().to_string().bold());
-                    continue;
-                } else {
-                    info!(target: "build", "{}", route.route_raw().to_string().bold());
-                }
-
-                for page in pages {
+    // Parallel processing of routes
+    let (page_count, all_images, all_scripts, all_styles, all_metadata) = routes
+        .par_iter()
+        .map(|route| {
+            match route.route_type() {
+                RouteType::Static => {
                     let route_start = Instant::now();
 
-                    let url = route.url(&page.0);
+                    let content = RouteContent::new(content_sources);
+                    let mut page_assets = RouteAssets::new(&page_assets_options);
 
-                    let content = route.build(&mut PageContext::from_dynamic_route(
-                        &page,
+                    let params = PageParams::default();
+                    let url = route.url(&params);
+
+                    let result = route.build(&mut PageContext::from_static_route(
                         &content,
                         &mut page_assets,
                         &url,
-                    ))?;
+                    )).expect("Failed to build static route");
 
-                    let file_path = route.file_path(&page.0, &options.output_dir);
+                    let file_path = route.file_path(&params, &options.output_dir);
 
-                    write_route_file(&content, &file_path)?;
+                    write_route_file(&result, &file_path).expect("Failed to write route file");
 
-                    info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
+                    info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
-                    build_metadata.add_page(
+                    let metadata_entry = (
                         route.route_raw().to_string(),
                         file_path.to_string_lossy().to_string(),
-                        Some(page.0.0),
+                        None,
                     );
 
-                    page_count += 1;
+                    (
+                        1,
+                        page_assets.images,
+                        page_assets.scripts,
+                        page_assets.styles,
+                        vec![metadata_entry],
+                    )
                 }
+                RouteType::Dynamic => {
+                    let content = RouteContent::new(content_sources);
 
-                build_pages_images.extend(page_assets.images);
-                build_pages_scripts.extend(page_assets.scripts);
-                build_pages_styles.extend(page_assets.styles);
+                    // Create a temporary assets context for getting pages
+                    let mut temp_page_assets = RouteAssets::new(&page_assets_options);
+                    let pages = route.get_pages(&mut DynamicRouteContext {
+                        content: &content,
+                        assets: &mut temp_page_assets,
+                    });
+
+                    if pages.is_empty() {
+                        warn!(target: "build", "{} is a dynamic route, but its implementation of Route::pages returned an empty Vec. No pages will be generated for this route.", route.route_raw().to_string().bold());
+                        return (
+                            0,
+                            FxHashSet::default(),
+                            FxHashSet::default(),
+                            FxHashSet::default(),
+                            vec![],
+                        );
+                    } else {
+                        info!(target: "build", "{}", route.route_raw().to_string().bold());
+                    }
+
+                    let page_count = pages.len();
+
+                    let page_results: Vec<_> = pages
+                        .par_iter()
+                        .map(|page| {
+                            let route_start = Instant::now();
+
+                            // Each parallel task gets its own assets
+                            let mut individual_page_assets = RouteAssets::new(&page_assets_options);
+                            let content = RouteContent::new(content_sources);
+
+                            let url = route.url(&page.0);
+
+                            let content = route.build(&mut PageContext::from_dynamic_route(
+                                page,
+                                &content,
+                                &mut individual_page_assets,
+                                &url,
+                            )).expect("Failed to build dynamic route");
+
+                            let file_path = route.file_path(&page.0, &options.output_dir);
+
+                            write_route_file(&content, &file_path).expect("Failed to write route file");
+
+                            info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
+
+                            let metadata_entry = (
+                                route.route_raw().to_string(),
+                                file_path.to_string_lossy().to_string(),
+                                Some(page.0.0.clone()),
+                            );
+
+                            (metadata_entry, individual_page_assets)
+                        })
+                        .collect();
+
+                    // Collect metadata and merge all assets
+                    let mut metadata_entries = Vec::new();
+                    let mut merged_images = FxHashSet::default();
+                    let mut merged_scripts = FxHashSet::default();
+                    let mut merged_styles = FxHashSet::default();
+
+                    // Add assets from the get_pages call
+                    merged_images.extend(temp_page_assets.images);
+                    merged_scripts.extend(temp_page_assets.scripts);
+                    merged_styles.extend(temp_page_assets.styles);
+
+                    for (metadata_entry, assets) in page_results {
+                        metadata_entries.push(metadata_entry);
+                        merged_images.extend(assets.images);
+                        merged_scripts.extend(assets.scripts);
+                        merged_styles.extend(assets.styles);
+                    }
+
+                    (
+                        page_count,
+                        merged_images,
+                        merged_scripts,
+                        merged_styles,
+                        metadata_entries,
+                    )
+                }
             }
-        }
+        })
+        .fold(
+            || (0, FxHashSet::default(), FxHashSet::default(), FxHashSet::default(), Vec::new()),
+            |mut acc, item| {
+                acc.0 += item.0;
+                acc.1.extend(item.1);
+                acc.2.extend(item.2);
+                acc.3.extend(item.3);
+                acc.4.extend(item.4);
+                acc
+            },
+        )
+        .reduce(
+            || (0, FxHashSet::default(), FxHashSet::default(), FxHashSet::default(), Vec::new()),
+            |mut acc, item| {
+                acc.0 += item.0;
+                acc.1.extend(item.1);
+                acc.2.extend(item.2);
+                acc.3.extend(item.3);
+                acc.4.extend(item.4);
+                acc
+            },
+        );
+
+    // Add metadata entries to build_metadata
+    for (route_raw, file_path, params) in all_metadata {
+        build_metadata.add_page(route_raw, file_path, params);
     }
+
+    // Collect all assets
+    build_pages_images.extend(all_images);
+    build_pages_scripts.extend(all_scripts);
+    build_pages_styles.extend(all_styles);
 
     info!(target: "pages", "{}", format!("generated {} pages in {}", page_count,  format_elapsed_time(pages_start.elapsed(), &section_format_options)).bold());
 
