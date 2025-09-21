@@ -57,7 +57,7 @@ pub struct HelloWorld;
 Every page must `impl` the `Page` trait, with the required method `render`.
 
 ```rs
-impl Page for HelloWorld {
+impl Route for HelloWorld {
   fn render(&self, ctx: &mut PageContext) -> RenderResult {
     "Hello, world!".into()
   }

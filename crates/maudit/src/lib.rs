@@ -37,7 +37,7 @@ pub mod maud {
     //! #[route("/")]
     //! pub struct Index;
     //!
-    //! impl Page<RouteParams, (), Markup> for Index {
+    //! impl Route<PageParams, (), Markup> for Index {
     //!   fn render(&self, ctx: &mut PageContext) -> Markup {
     //!     html! {
     //!       h1 { "Hello, world!" }
@@ -84,7 +84,7 @@ pub fn is_dev() -> bool {
 /// #
 /// #   #[route("/")]
 /// #   pub struct Index;
-/// #   impl Page<RouteParams, (), String> for Index {
+/// #   impl Route<PageParams, (), String> for Index {
 /// #      fn render(&self, _ctx: &mut PageContext) -> String {
 /// #          "Hello, world!".to_string()
 /// #      }
@@ -92,7 +92,7 @@ pub fn is_dev() -> bool {
 /// #   #[route("/article")]
 /// #   pub struct Article;
 /// #
-/// #   impl Page<RouteParams, (), String> for Article {
+/// #   impl Route<PageParams, (), String> for Article {
 /// #      fn render(&self, _ctx: &mut PageContext) -> String {
 /// #          "Hello, world!".to_string()
 /// #      }

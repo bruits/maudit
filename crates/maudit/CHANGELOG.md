@@ -76,7 +76,7 @@ use maudit::page::prelude::*;
 #[route("/image")]
 pub struct ImagePage;
 
-impl Page for ImagePage {
+impl Route for ImagePage {
   fn render(&self, ctx: &mut PageContext) -> RenderResult {
     let image = ctx.assets.add_image_with_options(
       "path/to/image.jpg",
@@ -114,7 +114,7 @@ pub struct Props {
   pub content: String,
 }
 
-impl Page<Params, Props> for Post {
+impl Route<Params, Props> for Post {
   fn render(&self, ctx: &mut PageContext) -> RenderResult {
     let params = ctx.params::<Params>();
     let props = ctx.props::<Props>();
@@ -125,8 +125,8 @@ impl Page<Params, Props> for Post {
     ).into()
   }
 
-  fn routes(&self, ctx: &mut DynamicRouteContext) -> Routes<Params, Props> {
-    vec![Route::from_params_and_props(
+  fn pages(&self, ctx: &mut DynamicRouteContext) -> Routes<Params, Props> {
+    vec![Page::from_params_and_props(
       Params {
         slug: "hello-world".to_string(),
       },

@@ -13,7 +13,7 @@ pub struct Params {
 impl Route<Params> for DynamicExample {
     fn pages(&self, _: &mut DynamicRouteContext) -> Pages<Params> {
         (0..1)
-            .map(|i| Route::from_params(Params { page: i }))
+            .map(|i| Page::from_params(Params { page: i }))
             .collect()
     }
 

@@ -14,7 +14,7 @@ use maudit::page::prelude::*;
 #[route("/hello-world")]
 pub struct HelloWorld;
 
-impl Page for HelloWorld {
+impl Route for HelloWorld {
   fn render(&self, ctx: &mut PageContext) -> RenderResult {
     RenderResult::Text("Hello, world!".to_string())
   }
@@ -30,7 +30,7 @@ Finally, make sure to [register the page](#registering-routes) in the `coronate`
 The `Page` trait accepts a generic parameter in third position for the return type of the `render` method. This type must implement `Into<RenderResult>`, enabling more ergonomic returns in certain cases.
 
 ```rs
-impl Page<(), (), String> for HelloWorld {
+impl Route<(), (), String> for HelloWorld {
   fn render(&self, ctx: &mut PageContext) -> String {
     "Hello, world!".to_string()
   }
@@ -61,14 +61,14 @@ pub struct Params {
   pub slug: String,
 }
 
-impl Page<Params> for Post {
+impl Route<Params> for Post {
   fn render(&self, ctx: &mut PageContext) -> RenderResult {
     let params = ctx.params::<Params>();
     RenderResult::Text(format!("Hello, {}!", params.slug))
   }
 
-  fn routes(&self, ctx: &mut DynamicRouteContext) -> Routes<Params> {
-    vec![Route::from_params(Params {
+  fn pages(&self, ctx: &mut DynamicRouteContext) -> Routes<Params> {
+    vec![Page::from_params(Params {
       slug: "hello-world".to_string(),
     })]
   }
@@ -88,21 +88,21 @@ pub struct Params {
   pub slug: String,
 }
 
-impl Page for Post {
+impl Route for Post {
   fn render(&self, ctx: &mut PageContext) -> String {
     let slug = ctx.params::<Params>().slug;
     format!("Hello, {}!", slug)
   }
 
-  fn routes(&self, ctx: &mut DynamicRouteContext) -> Routes<Params> {
-    vec![Route::from_params(Params {
+  fn pages(&self, ctx: &mut DynamicRouteContext) -> Routes<Params> {
+    vec![Page::from_params(Params {
       slug: "hello-world".to_string(),
     })]
   }
 }
 ```
 
-The struct used for the parameters must implement `Into<RouteParams>`, which can be done automatically by deriving the `Params` trait. The fields of the struct must implement the `Display` trait, as they will be converted to strings to be used in the final URLs and file paths.
+The struct used for the parameters must implement `Into<PageParams>`, which can be done automatically by deriving the `Params` trait. The fields of the struct must implement the `Display` trait, as they will be converted to strings to be used in the final URLs and file paths.
 
 Like static routes, dynamic routes must be [registered](#registering-routes) in the `coronate` function in order for them to be built.
 
@@ -116,7 +116,7 @@ use maudit::page::prelude::*;
 #[route("/api.json")]
 pub struct HelloWorldJson;
 
-impl Page for HelloWorldJson {
+impl Route for HelloWorldJson {
   fn render(&self, ctx: &mut PageContext) -> RenderResult {
     RenderResult::Text(r#"{"message": "Hello, world!"}"#.to_string())
   }
@@ -136,9 +136,9 @@ pub struct Params {
   pub slug: String,
 }
 
-impl Page<Params> for PostJson {
-  fn routes(&self, ctx: &mut DynamicRouteContext) -> Routes<Params> {
-    vec![Route::from_params(Params {
+impl Route<Params> for PostJson {
+  fn pages(&self, ctx: &mut DynamicRouteContext) -> Routes<Params> {
+    vec![Page::from_params(Params {
       slug: "hello-world".to_string()
     })]
   }

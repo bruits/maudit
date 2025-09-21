@@ -43,7 +43,7 @@ mod shortcodes_tests;
 /// #[route("/articles/my-article")]
 /// pub struct Article;
 ///
-/// impl Page<RouteParams, Markup> for Article {
+/// impl Route<PageParams, Markup> for Article {
 ///   fn render(&self, ctx: &mut PageContext) -> Markup {
 ///     let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///     let article = articles.get_entry("my-article");

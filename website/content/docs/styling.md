@@ -17,7 +17,7 @@ use maud::{html, Markup};
 #[route("/blog")]
 pub struct Blog;
 
-impl Page<RouteParams, Markup> for Blog {
+impl Route<PageParams, Markup> for Blog {
   fn render(&self, ctx: &mut PageContext) -> Markup {
     let style = ctx.assets.add_style("style.css");
 

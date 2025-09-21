@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 /// #[route("/")]
 /// pub struct Index;
 ///
-/// impl Page for Index {
+/// impl Route for Index {
 ///   fn render(&self, ctx: &mut PageContext) -> RenderResult {
 ///    "<h1>Hello, world!</h1>".into()
 ///   }
@@ -58,13 +58,13 @@ impl From<&[u8]> for RenderResult {
     }
 }
 
-pub type Pages<Params = RouteParams, Props = ()> = Vec<Page<Params, Props>>;
+pub type Pages<Params = PageParams, Props = ()> = Vec<Page<Params, Props>>;
 
 /// Represents a route with its parameters and associated props
 #[derive(Debug, Clone)]
-pub struct Page<Params = RouteParams, Props = ()>
+pub struct Page<Params = PageParams, Props = ()>
 where
-    Params: Into<RouteParams>,
+    Params: Into<PageParams>,
 {
     pub params: Params,
     pub props: Props,
@@ -72,7 +72,7 @@ where
 
 impl<Params, Props> Page<Params, Props>
 where
-    Params: Into<RouteParams>,
+    Params: Into<PageParams>,
 {
     pub fn new(params: Params, props: Props) -> Self {
         Self { params, props }
@@ -81,7 +81,7 @@ where
 
 impl<Params> Page<Params, ()>
 where
-    Params: Into<RouteParams>,
+    Params: Into<PageParams>,
 {
     pub fn from_params(params: Params) -> Self {
         Self { params, props: () }
@@ -159,7 +159,7 @@ pub fn paginate<T, Params>(
     mut params_fn: impl FnMut(usize) -> Params,
 ) -> Pages<Params, PaginationPage<'_, T>>
 where
-    Params: Into<RouteParams>,
+    Params: Into<PageParams>,
 {
     if items.is_empty() {
         return vec![];
@@ -196,7 +196,7 @@ where
 /// #[route("/")]
 /// pub struct Index;
 ///
-/// impl Page for Index {
+/// impl Route for Index {
 ///   fn render(&self, ctx: &mut PageContext) -> RenderResult {
 ///     let logo = ctx.assets.add_image("logo.png");
 ///     let last_entries = &ctx.content.get_source::<ArticleContent>("articles").entries;
@@ -236,14 +236,14 @@ impl<'a> PageContext<'a> {
     }
 
     pub fn from_dynamic_route(
-        dynamic_route: &'a RouteResult,
+        dynamic_page: &'a PagesResult,
         content: &'a RouteContent,
         assets: &'a mut RouteAssets,
         current_url: &'a String,
     ) -> Self {
         Self {
-            params: dynamic_route.1.as_ref(),
-            props: dynamic_route.2.as_ref(),
+            params: dynamic_page.1.as_ref(),
+            props: dynamic_page.2.as_ref(),
             content,
             assets,
             current_url,
@@ -277,7 +277,7 @@ impl<'a> PageContext<'a> {
     }
 }
 
-/// Allows to access the content source in the [`Page::routes`] method.
+/// Allows to access the content source in the [`Page::pages`] method.
 ///
 /// ## Example
 /// ```rs
@@ -298,7 +298,7 @@ impl<'a> PageContext<'a> {
 ///     pub article: String,
 /// }
 ///
-/// impl Page<ArticleParams> for Article {
+/// impl Route<ArticleParams> for Article {
 ///    fn render(&self, ctx: &mut PageContext) -> RenderResult {
 ///      let params = ctx.params::<ArticleParams>();
 ///      let articles = ctx.content.get_source::<ArticleContent>("articles");
@@ -306,7 +306,7 @@ impl<'a> PageContext<'a> {
 ///      article.render().into()
 ///   }
 ///
-///    fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<ArticleParams> {
+///    fn pages(&self, ctx: &mut DynamicRouteContext) -> Vec<ArticleParams> {
 ///       let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///
 ///       articles.into_params(|entry| ArticleParams {
@@ -331,15 +331,15 @@ pub struct DynamicRouteContext<'a> {
 /// #[route("/")]
 /// pub struct Index;
 ///
-/// impl Page for Index {
+/// impl Route for Index {
 ///    fn render(&self, ctx: &mut PageContext) -> RenderResult {
 ///       "<h1>Hello, world!</h1>".into()
 ///   }
 /// }
 /// ```
-pub trait Route<Params = RouteParams, Props = (), T = RenderResult>
+pub trait Route<Params = PageParams, Props = (), T = RenderResult>
 where
-    Params: Into<RouteParams>,
+    Params: Into<PageParams>,
     Props: 'static,
     T: Into<RenderResult>,
 {
@@ -349,30 +349,30 @@ where
     fn render(&self, ctx: &mut PageContext) -> T;
 }
 
-/// Raw representation of a route's parameters.
+/// Raw representation of the parameters passed to a page.
 ///
 /// Can be accessed through [`PageContext`]'s `raw_params`.
 #[derive(Clone, Default, Debug)]
-pub struct RouteParams(pub FxHashMap<String, String>);
+pub struct PageParams(pub FxHashMap<String, String>);
 
-impl RouteParams {
-    pub fn from_vec<T>(params: Vec<T>) -> Vec<RouteParams>
+impl PageParams {
+    pub fn from_vec<T>(params: Vec<T>) -> Vec<PageParams>
     where
-        T: Into<RouteParams>,
+        T: Into<PageParams>,
     {
         params.into_iter().map(|p| p.into()).collect()
     }
 }
 
-impl From<&RouteParams> for RouteParams {
-    fn from(params: &RouteParams) -> Self {
+impl From<&PageParams> for PageParams {
+    fn from(params: &PageParams) -> Self {
         params.clone()
     }
 }
 
-impl<T> FromIterator<T> for RouteParams
+impl<T> FromIterator<T> for PageParams
 where
-    T: Into<RouteParams>,
+    T: Into<PageParams>,
 {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut map = FxHashMap::default();
@@ -380,7 +380,7 @@ where
             let item = item.into();
             map.extend(item.0);
         }
-        RouteParams(map)
+        PageParams(map)
     }
 }
 
@@ -406,7 +406,7 @@ pub trait InternalRoute {
         get_route_type_from_route_params(&params_def)
     }
 
-    fn url(&self, params: &RouteParams) -> String {
+    fn url(&self, params: &PageParams) -> String {
         let mut params_def = extract_params_from_raw_route(&self.route_raw());
 
         // Replace every param_def with the value from the params hashmap for said key
@@ -436,7 +436,7 @@ pub trait InternalRoute {
         route
     }
 
-    fn file_path(&self, params: &RouteParams, output_dir: &Path) -> PathBuf {
+    fn file_path(&self, params: &PageParams, output_dir: &Path) -> PathBuf {
         let mut params_def = extract_params_from_raw_route(&self.route_raw());
         let mut route = self.route_raw();
 
@@ -472,11 +472,11 @@ pub trait InternalRoute {
     }
 }
 
-/// Extension trait providing generic convenience methods on an instance of a page
-pub trait PageExt<Params = RouteParams, Props = (), T = RenderResult>:
+/// Extension trait providing generic convenience methods on an instance of a route
+pub trait RouteExt<Params = PageParams, Props = (), T = RenderResult>:
     Route<Params, Props, T> + InternalRoute
 where
-    Params: Into<RouteParams>,
+    Params: Into<PageParams>,
     Props: 'static,
     T: Into<RenderResult>,
 {
@@ -489,10 +489,10 @@ where
 }
 
 // Blanket implementation for all Page implementors that also implement InternalPage
-impl<U, Params, Props, T> PageExt<Params, Props, T> for U
+impl<U, Params, Props, T> RouteExt<Params, Props, T> for U
 where
     U: Route<Params, Props, T> + InternalRoute,
-    Params: Into<RouteParams>,
+    Params: Into<PageParams>,
     Props: 'static,
     T: Into<RenderResult>,
 {
@@ -504,9 +504,9 @@ pub trait FullRoute: InternalRoute + Sync + Send {
     #[doc(hidden)]
     fn render_internal(&self, ctx: &mut PageContext) -> RenderResult;
     #[doc(hidden)]
-    fn pages_internal(&self, context: &mut DynamicRouteContext) -> RoutesResult;
+    fn pages_internal(&self, context: &mut DynamicRouteContext) -> PagesResults;
 
-    fn get_routes(&self, context: &mut DynamicRouteContext) -> RoutesResult {
+    fn get_pages(&self, context: &mut DynamicRouteContext) -> PagesResults {
         self.pages_internal(context)
     }
 
@@ -518,24 +518,24 @@ pub trait FullRoute: InternalRoute + Sync + Send {
     }
 }
 
-pub type RouteResult = (RouteParams, RouteProps, RouteTypedParams);
-pub type RoutesResult = Vec<RouteResult>;
+pub type PagesResult = (PageParams, PageProps, PageTypedParams);
+pub type PagesResults = Vec<PagesResult>;
 
-pub type RouteProps = Box<dyn Any + Send + Sync>;
-pub type RouteTypedParams = Box<dyn Any + Send + Sync>;
+pub type PageProps = Box<dyn Any + Send + Sync>;
+pub type PageTypedParams = Box<dyn Any + Send + Sync>;
 
 pub mod prelude {
-    //! Re-exports of the most commonly used types and traits for defining pages.
+    //! Re-exports of the most commonly used types and traits for defining routes.
     //!
-    //! This module is meant to be glob imported in your page files.
+    //! This module is meant to be glob imported in your routes files.
     //!
     //! ## Example
     //! ```rs
     //! use maudit::page::prelude::*;
     //! ```
     pub use super::{
-        DynamicRouteContext, FullRoute, Page, PageContext, PageExt, Pages, PaginationPage,
-        RenderResult, Route, RouteParams, paginate,
+        DynamicRouteContext, FullRoute, Page, PageContext, PageParams, Pages, PaginationPage,
+        RenderResult, Route, RouteExt, paginate,
     };
     pub use crate::assets::{Asset, Image, Style, StyleOptions};
     pub use crate::content::MarkdownContent;
@@ -567,7 +567,7 @@ mod tests {
 
         let mut params = FxHashMap::default();
         params.insert("slug".to_string(), "hello-world".to_string());
-        let route_params = RouteParams(params);
+        let route_params = PageParams(params);
 
         assert_eq!(page.url(&route_params), "/articles/hello-world");
     }
@@ -581,7 +581,7 @@ mod tests {
         let mut params = FxHashMap::default();
         params.insert("tag".to_string(), "rust".to_string());
         params.insert("page".to_string(), "2".to_string());
-        let route_params = RouteParams(params);
+        let route_params = PageParams(params);
 
         assert_eq!(page.url(&route_params), "/articles/tags/rust/2");
     }
@@ -597,7 +597,7 @@ mod tests {
         let mut params = FxHashMap::default();
         params.insert("tag".to_string(), "development-experience".to_string()); // Long replacement
         params.insert("page".to_string(), "1".to_string()); // Short replacement
-        let route_params = RouteParams(params);
+        let route_params = PageParams(params);
 
         assert_eq!(
             page.url(&route_params),
@@ -611,7 +611,7 @@ mod tests {
             route: "/about".to_string(),
         };
 
-        let route_params = RouteParams(FxHashMap::default());
+        let route_params = PageParams(FxHashMap::default());
 
         assert_eq!(page.url(&route_params), "/about");
     }
@@ -624,7 +624,7 @@ mod tests {
 
         let mut params = FxHashMap::default();
         params.insert("lang".to_string(), "en".to_string());
-        let route_params = RouteParams(params);
+        let route_params = PageParams(params);
 
         assert_eq!(page.url(&route_params), "/en/about");
     }
@@ -637,7 +637,7 @@ mod tests {
 
         let mut params = FxHashMap::default();
         params.insert("id".to_string(), "123".to_string());
-        let route_params = RouteParams(params);
+        let route_params = PageParams(params);
 
         assert_eq!(page.url(&route_params), "/api/users/123");
     }
@@ -650,7 +650,7 @@ mod tests {
 
         let mut params = FxHashMap::default();
         params.insert("slug".to_string(), "hello-world".to_string());
-        let route_params = RouteParams(params);
+        let route_params = PageParams(params);
 
         let output_dir = Path::new("/dist");
         let expected = Path::new("/dist/articles/hello-world/index.html");
@@ -667,7 +667,7 @@ mod tests {
         let mut params = FxHashMap::default();
         params.insert("tag".to_string(), "rust".to_string());
         params.insert("page".to_string(), "2".to_string());
-        let route_params = RouteParams(params);
+        let route_params = PageParams(params);
 
         let output_dir = Path::new("/dist");
         let expected = Path::new("/dist/articles/tags/rust/2/index.html");
@@ -681,7 +681,7 @@ mod tests {
             route: "/".to_string(),
         };
 
-        let route_params = RouteParams(FxHashMap::default());
+        let route_params = PageParams(FxHashMap::default());
         let output_dir = Path::new("/dist");
         let expected = Path::new("/dist/index.html");
 
@@ -694,7 +694,7 @@ mod tests {
             route: "/api/data.json".to_string(),
         };
 
-        let route_params = RouteParams(FxHashMap::default());
+        let route_params = PageParams(FxHashMap::default());
         let output_dir = Path::new("/dist");
         let expected = Path::new("/dist/api/data.json");
 
@@ -708,7 +708,7 @@ mod tests {
             route: "/articles/[slug]".to_string(),
         };
 
-        let route_params = RouteParams(FxHashMap::default());
+        let route_params = PageParams(FxHashMap::default());
 
         // This should panic because we're missing the "slug" parameter
         page.url(&route_params);
@@ -723,7 +723,7 @@ mod tests {
 
         let mut params = FxHashMap::default();
         params.insert("page".to_string(), "1".to_string());
-        let route_params = RouteParams(params);
+        let route_params = PageParams(params);
 
         let output_dir = Path::new("/dist");
 
@@ -822,7 +822,7 @@ mod tests {
         let routes = paginate(&entries, 2, |page| {
             let mut params = FxHashMap::default();
             params.insert("page".to_string(), page.to_string());
-            RouteParams(params)
+            PageParams(params)
         });
 
         assert_eq!(routes.len(), 2);
@@ -847,7 +847,7 @@ mod tests {
         let routes = paginate(&tags, 2, |page| {
             let mut params = FxHashMap::default();
             params.insert("page".to_string(), page.to_string());
-            RouteParams(params)
+            PageParams(params)
         });
 
         assert_eq!(routes.len(), 3);

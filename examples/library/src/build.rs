@@ -3,7 +3,7 @@ use std::fs;
 use maudit::{
     assets::RouteAssets,
     content::{ContentSources, RouteContent},
-    page::{DynamicRouteContext, FullRoute, PageContext, RouteParams, RouteType},
+    page::{DynamicRouteContext, FullRoute, PageContext, PageParams, RouteType},
     BuildOptions,
 };
 
@@ -30,23 +30,23 @@ pub fn build_website(
                 let mut page_assets = RouteAssets::new(&page_assets_options);
 
                 // Static and dynamic routes share the same interface for building, but static routes do not require any parameters.
-                // As such, we can just pass an empty set of parameters (the default for RouteParams).
-                let params = RouteParams::default();
+                // As such, we can just pass an empty set of parameters (the default for PageParams).
+                let params = PageParams::default();
 
-                // Every page has a PageContext, which contains information about the current route, as well as access to content and assets.
+                // Every page has a PageContext, which contains information about the current page, as well as access to content and assets.
                 let url = route.url(&params);
                 let mut ctx = PageContext::from_static_route(&content, &mut page_assets, &url);
 
                 let content = route.build(&mut ctx)?;
 
-                let route_filepath = route.file_path(&params, &options.output_dir);
+                let page_filepath = route.file_path(&params, &options.output_dir);
 
                 // On some platforms, creating a file in a nested directory requires that the directory already exists or the file creation will fail.
-                if let Some(parent_dir) = route_filepath.parent() {
+                if let Some(parent_dir) = page_filepath.parent() {
                     fs::create_dir_all(parent_dir)?
                 }
 
-                fs::write(route_filepath, content)?;
+                fs::write(page_filepath, content)?;
 
                 // Copy all assets used by this page.
                 for asset in page_assets.assets() {
@@ -54,9 +54,9 @@ pub fn build_website(
                 }
             }
             RouteType::Dynamic => {
-                // The `get_routes` method returns all the possible routes for this page, along with their parameters and properties.
+                // The `get_pages` method returns all the possible pages for this route, along with their parameters and properties.
                 // It is very common for dynamic pages to be based on content, for instance a blog post page that has one route per blog post.
-                // As such, we create a mini PageContext that includes the content sources, so that the page can use them to generate its routes.
+                // As such, we create a mini PageContext that includes the content sources, so that the route can use them to generate its pages.
 
                 // Every page of a route may share a reference to the same RouteContent and RouteAssets instance, as it can help with caching.
                 // However, it is not stricly necessary, and you may want to instead create a new instance of RouteAssets especially if you were to parallelize the building of pages.
@@ -68,7 +68,7 @@ pub fn build_website(
                     assets: &mut page_assets,
                 };
 
-                let routes = route.get_routes(&mut dynamic_ctx);
+                let routes = route.get_pages(&mut dynamic_ctx);
 
                 let content = RouteContent::new(&content_sources);
 

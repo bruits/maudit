@@ -18,7 +18,7 @@ The built-in `coronate` function takes a list of routes (which all implements th
 use maudit::{
   content::ContentSources,
   page::{FullRoute, RouteAssets, RouteContent},
-  route::{DynamicRouteContext, PageContext, RouteParams, RouteType},
+  routing::{DynamicRouteContext, PageContext, PageParams, RouteType},
   BuildOptions,
 };
 
@@ -57,8 +57,8 @@ pub fn build_website(
         let mut page_assets = RouteAssets::new(&page_assets_options);
 
         // Static and dynamic routes share the same interface for building, but static routes do not require any parameters.
-        // As such, we can just pass an empty set of parameters (the default for RouteParams).
-        let params = RouteParams::default();
+        // As such, we can just pass an empty set of parameters (the default for PageParams).
+        let params = PageParams::default();
 
         // Every page has a PageContext, which contains information about the current route, as well as access to content and assets.
         let url = route.url(&params);
@@ -127,7 +127,7 @@ Each individual page is essentially a static route, but it has a slightly differ
 // No changes before this block.
 
 RouteType::Dynamic => {
-  // The `get_routes` method returns all the possible routes for this page, along with their parameters and properties.
+  // The `get_pages` method returns all the possible pages for this route, along with their parameters and properties.
   // It is very common for dynamic pages to be based on content, for instance a blog post page that has one route per blog post.
   // As such, we create essentially a mini `PageContext` through `DynamicRouteContext` that includes the content sources, so that the page can use them to generate its routes.
 
@@ -141,7 +141,7 @@ RouteType::Dynamic => {
       assets: &mut page_assets,
   };
 
-  let routes = route.get_routes(&dynamic_ctx);
+  let routes = route.get_pages(&dynamic_ctx);
 
   for dynamic_route in routes {
       // The dynamic route includes the parameters for this specific route.

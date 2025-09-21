@@ -50,7 +50,7 @@ use maud::{html, PreEscaped};
 #[route("/some-article")]
 pub struct SomeArticlePage;
 
-impl Page for SomeArticlePage {
+impl Route for SomeArticlePage {
   fn render(&self, ctx: &mut PageContext) -> RenderResult {
     let entry = ctx
       .content
@@ -132,7 +132,7 @@ use maudit::page::prelude::*;
 #[route("/data")]
 pub struct DataPage;
 
-impl Page for DataPage {
+impl Route for DataPage {
     fn render(&self, ctx: &mut PageContext) -> RenderResult {
         let entry = ctx
             .content

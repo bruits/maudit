@@ -11,7 +11,7 @@ mod slugger;
 
 use crate::{
     assets::RouteAssets,
-    page::{DynamicRouteContext, PageContext, RouteParams},
+    page::{DynamicRouteContext, PageContext, PageParams},
 };
 pub use markdown::{
     components::{
@@ -128,7 +128,7 @@ pub use maudit_macros::markdown_entry;
 ///     pub article: String,
 /// }
 ///
-/// impl Page<ArticleParams> for Article {
+/// impl Route<ArticleParams> for Article {
 ///    fn render(&self, ctx: &mut PageContext) -> RenderResult {
 ///      let params = ctx.params::<ArticleParams>();
 ///      let articles = ctx.content.get_source::<ArticleContent>("articles");
@@ -136,7 +136,7 @@ pub use maudit_macros::markdown_entry;
 ///      article.render(ctx).into()
 ///   }
 ///
-///   fn routes(&self, ctx: &mut DynamicRouteContext) -> Vec<ArticleParams> {
+///   fn pages(&self, ctx: &mut DynamicRouteContext) -> Vec<ArticleParams> {
 ///     let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///
 ///     articles.into_params(|entry| ArticleParams {
@@ -220,7 +220,7 @@ impl RouteContent<'_> {
 ///     pub article: String,
 /// }
 ///
-/// impl Page for Article {
+/// impl Route for Article {
 ///    fn render(&self, ctx: &mut PageContext) -> RenderResult {
 ///      let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///      let article = articles.get_entry("my-article"); // returns a ContentEntry
@@ -403,7 +403,7 @@ impl<T> ContentSource<T> {
 
     pub fn into_params<P>(&self, cb: impl Fn(&ContentEntry<T>) -> P) -> Vec<P>
     where
-        P: Into<RouteParams>,
+        P: Into<PageParams>,
     {
         self.entries.iter().map(cb).collect()
     }
@@ -413,7 +413,7 @@ impl<T> ContentSource<T> {
         cb: impl Fn(&ContentEntry<T>) -> crate::page::Page<Params, Props>,
     ) -> crate::page::Pages<Params, Props>
     where
-        Params: Into<RouteParams>,
+        Params: Into<PageParams>,
     {
         self.entries.iter().map(cb).collect()
     }

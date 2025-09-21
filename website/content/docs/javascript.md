@@ -13,7 +13,7 @@ use maud::{html, Markup};
 #[route("/blog")]
 pub struct Blog;
 
-impl Page<RouteParams, Markup> for Blog {
+impl Route<PageParams, Markup> for Blog {
   fn render(&self, ctx: &mut PageContext) -> Markup {
     let script = ctx.assets.add_script("script.js");
 

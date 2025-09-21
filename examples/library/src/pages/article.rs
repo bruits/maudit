@@ -15,7 +15,7 @@ impl Route<ArticleParams> for Article {
         let articles = ctx.content.get_source::<ArticleContent>("articles");
 
         articles.into_pages(|entry| {
-            Route::from_params(ArticleParams {
+            Page::from_params(ArticleParams {
                 article: entry.id.clone(),
             })
         })

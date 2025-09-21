@@ -91,7 +91,7 @@ impl Route<NewsPageParams> for NewsPage {
         let content = ctx.content.get_source::<NewsContent>("news");
 
         content.into_pages(|entry| {
-            Route::from_params(NewsPageParams {
+            Page::from_params(NewsPageParams {
                 slug: entry.id.clone(),
             })
         })

@@ -20,7 +20,7 @@ use maudit::page::prelude::*;
 #[route("/blog")]
 pub struct Blog;
 
-impl Page for Blog {
+impl Route for Blog {
   fn render(&self, ctx: &mut PageContext) -> RenderResult {
     let image = ctx.assets.add_image("logo.png");
 
@@ -51,7 +51,7 @@ use maudit::page::prelude::*;
 #[route("/image")]
 pub struct ImagePage;
 
-impl Page for ImagePage {
+impl Route for ImagePage {
   fn render(&self, ctx: &mut PageContext) -> RenderResult {
     let image = ctx.assets.add_image_with_options(
       "path/to/image.jpg",

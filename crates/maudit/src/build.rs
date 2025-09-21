@@ -20,7 +20,7 @@ use crate::{
     errors::BuildError,
     is_dev,
     logging::print_title,
-    page::{DynamicRouteContext, FullRoute, PageContext, RenderResult, RouteParams, RouteType},
+    page::{DynamicRouteContext, FullRoute, PageContext, PageParams, RenderResult, RouteType},
 };
 use colored::{ColoredString, Colorize};
 use log::{debug, info, trace, warn};
@@ -231,7 +231,7 @@ pub async fn build(
                 let content = RouteContent::new(content_sources);
                 let mut page_assets = RouteAssets::new(&page_assets_options);
 
-                let params = RouteParams::default();
+                let params = PageParams::default();
                 let url = route.url(&params);
 
                 let result = route.build(&mut PageContext::from_static_route(
@@ -262,31 +262,31 @@ pub async fn build(
                 let content = RouteContent::new(content_sources);
                 let mut page_assets = RouteAssets::new(&page_assets_options);
 
-                let routes = route.get_routes(&mut DynamicRouteContext {
+                let pages = route.get_pages(&mut DynamicRouteContext {
                     content: &content,
                     assets: &mut page_assets,
                 });
 
-                if routes.is_empty() {
-                    warn!(target: "build", "{} is a dynamic route, but its implementation of Page::routes returned an empty Vec. No pages will be generated for this route.", route.route_raw().to_string().bold());
+                if pages.is_empty() {
+                    warn!(target: "build", "{} is a dynamic route, but its implementation of Route::pages returned an empty Vec. No pages will be generated for this route.", route.route_raw().to_string().bold());
                     continue;
                 } else {
                     info!(target: "build", "{}", route.route_raw().to_string().bold());
                 }
 
-                for dynamic_route in routes {
+                for page in pages {
                     let route_start = Instant::now();
 
-                    let url = route.url(&dynamic_route.0);
+                    let url = route.url(&page.0);
 
                     let content = route.build(&mut PageContext::from_dynamic_route(
-                        &dynamic_route,
+                        &page,
                         &content,
                         &mut page_assets,
                         &url,
                     ))?;
 
-                    let file_path = route.file_path(&dynamic_route.0, &options.output_dir);
+                    let file_path = route.file_path(&page.0, &options.output_dir);
 
                     write_route_file(&content, &file_path)?;
 
@@ -295,7 +295,7 @@ pub async fn build(
                     build_metadata.add_page(
                         route.route_raw().to_string(),
                         file_path.to_string_lossy().to_string(),
-                        Some(dynamic_route.0.0),
+                        Some(page.0.0),
                     );
 
                     page_count += 1;

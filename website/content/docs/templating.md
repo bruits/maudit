@@ -19,7 +19,7 @@ use maudit::page::prelude::*;
 #[route("/")]
 pub struct Index;
 
-impl Page<RouteParams, Markup> for Index {
+impl Route<PageParams, Markup> for Index {
     fn render(&self, _: &mut PageContext) -> Markup {
         html! {
             h1 { "Hello, world!" }
@@ -37,7 +37,7 @@ use maudit::page::prelude::*;
 #[route("/")]
 pub struct Index;
 
-impl Page<RouteParams, Markup> for Index {
+impl Route<PageParams, Markup> for Index {
     fn render(&self, ctx: &mut PageContext) -> Markup {
         let logo = ctx.add_image("./logo.png");
 

@@ -49,7 +49,7 @@ impl Route<DocsPageParams> for DocsPage {
         let content = ctx.content.get_source::<DocsContent>("docs");
 
         content.into_pages(|entry| {
-            Route::from_params(DocsPageParams {
+            Page::from_params(DocsPageParams {
                 slug: entry.id.clone(),
             })
         })
