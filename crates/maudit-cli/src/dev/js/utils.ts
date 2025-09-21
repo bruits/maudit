@@ -6,3 +6,25 @@ const ansiPattern = new RegExp(
 export function stripAnsi(str: string): string {
 	return str.replace(ansiPattern, "");
 }
+
+export function log(...args: unknown[]) {
+	mauditMessage("log", args);
+}
+
+export function warn(...args: unknown[]) {
+	mauditMessage("warn", args);
+}
+
+export function error(...args: unknown[]) {
+	mauditMessage("error", args);
+}
+
+function mauditMessage(level: "log" | "warn" | "error", message: unknown[]) {
+	console[level](
+		"%cMaudit",
+		"background: #ba1f33; color: white; padding-inline: 4px; border-radius: 2px; font-family: serif;",
+		...message.map((m) =>
+			typeof m === "string" ? stripAnsi(m) : JSON.stringify(m, null, 2)
+		)
+	);
+}

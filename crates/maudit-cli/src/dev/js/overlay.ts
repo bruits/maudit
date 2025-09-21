@@ -1,5 +1,7 @@
 import type { Message } from "./client";
 
+export const overlayTagName = "maudit-error-overlay";
+
 const template = /*html*/ `
 <style>
 	#maudit-error-overlay {
@@ -57,10 +59,9 @@ class MauditErrorOverlay extends HTMLElement {
 	}
 }
 
-export const overlayId = "maudit-error-overlay";
-const { customElements } = globalThis; // Ensure `customElements` is defined before the next line.
-if (customElements && !customElements.get(overlayId)) {
-	customElements.define(overlayId, MauditErrorOverlay);
+const { customElements } = globalThis;
+if (customElements && !customElements.get(overlayTagName)) {
+	customElements.define(overlayTagName, MauditErrorOverlay);
 }
 
 export function createErrorOverlay(err: Message["message"]) {
@@ -70,6 +71,6 @@ export function createErrorOverlay(err: Message["message"]) {
 
 export function clearErrorOverlay() {
 	document
-		.querySelectorAll<MauditErrorOverlay>(overlayId)
+		.querySelectorAll<MauditErrorOverlay>(overlayTagName)
 		.forEach((n) => n.close());
 }

@@ -5,7 +5,9 @@
 
 import { AnsiUp } from "ansi_up";
 import { createErrorOverlay } from "./overlay";
-import { stripAnsi } from "./utils";
+import { error, log } from "./utils";
+
+const WS_SERVER_ADDRESS = "{SERVER_ADDRESS}";
 
 const ansiUp = new AnsiUp();
 
@@ -28,7 +30,7 @@ const debounceReload = (time: number | undefined) => {
 };
 const pageReload = debounceReload(50);
 
-const socket = new WebSocket("ws://{SERVER_ADDRESS}/ws");
+const socket = new WebSocket(`ws://${WS_SERVER_ADDRESS}/ws`);
 
 socket.addEventListener("open", (event) => {
 	console.log("Connected to server");
@@ -51,25 +53,3 @@ socket.addEventListener("message", (event) => {
 		error("Failed to parse WebSocket message", event.data, e);
 	}
 });
-
-function log(...args: unknown[]) {
-	mauditMessage("log", args);
-}
-
-function warn(...args: unknown[]) {
-	mauditMessage("warn", args);
-}
-
-function error(...args: unknown[]) {
-	mauditMessage("error", args);
-}
-
-function mauditMessage(level: "log" | "warn" | "error", message: unknown[]) {
-	console[level](
-		"%cMaudit",
-		"background: #ba1f33; color: white; padding-inline: 4px; border-radius: 2px; font-family: serif;",
-		...message.map((m) =>
-			typeof m === "string" ? stripAnsi(m) : JSON.stringify(m, null, 2)
-		)
-	);
-}
