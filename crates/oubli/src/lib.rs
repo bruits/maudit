@@ -1,10 +1,10 @@
 use maudit::content::ContentEntry;
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 use maudit::{
     content::{ContentSourceInternal, ContentSources},
     coronate,
-    page::{prelude::Params, FullRoute},
+    route::{prelude::Params, FullRoute},
 };
 
 // Re-expose Maudit's public API.
@@ -65,7 +65,7 @@ macro_rules! archetypes {
                     );
                     // Generate the pages
                     mod $ident {
-                        use maudit::page::prelude::*;
+                        use maudit::route::prelude::*;
                         use oubli::archetypes::blog::*;
 
                         #[route(stringify!($ident))]
@@ -88,7 +88,7 @@ macro_rules! archetypes {
                             }
                         }
                     }
-                    ($name, stringify!($ident), vec![&$ident::Index as &dyn maudit::page::FullRoute, &$ident::Entry as &dyn maudit::page::FullRoute], Box::new(content_source) as Box<dyn maudit::content::ContentSourceInternal>)
+                    ($name, stringify!($ident), vec![&$ident::Index as &dyn maudit::route::FullRoute, &$ident::Entry as &dyn maudit::route::FullRoute], Box::new(content_source) as Box<dyn maudit::content::ContentSourceInternal>)
                 },
                 oubli::Archetype::MarkdownDoc => {
                     todo!();

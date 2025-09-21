@@ -1,6 +1,6 @@
 //! Core traits and structs to define the pages of your website.
 //!
-//! Every page must implement the [`Page`] trait. Then, pages can be passed to [`coronate()`](crate::coronate), through the [`routes!`](crate::routes) macro, to be built.
+//! Every route must implement the [`Route`] trait. Then, pages can be passed to [`coronate()`](crate::coronate), through the [`routes!`](crate::routes) macro, to be built.
 use crate::assets::RouteAssets;
 use crate::build::finish_route;
 use crate::content::RouteContent;
@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 ///
 /// ## Example
 /// ```rs
-/// use maudit::page::prelude::*;
+/// use maudit::route::prelude::*;
 ///
 /// #[route("/")]
 /// pub struct Index;
@@ -179,11 +179,11 @@ where
     routes
 }
 
-/// Allows to access various data and assets in a [`Page`] implementation.
+/// Allows to access various data and assets in a [`Route`] implementation.
 ///
 /// ## Example
 /// ```rs
-/// use maudit::page::prelude::*;
+/// use maudit::route::prelude::*;
 /// use maud::html;
 /// # use maudit::content::markdown_entry;
 /// #
@@ -281,7 +281,7 @@ impl<'a> PageContext<'a> {
 ///
 /// ## Example
 /// ```rs
-/// use maudit::page::prelude::*;
+/// use maudit::route::prelude::*;
 /// # use maudit::content::markdown_entry;
 /// #
 /// # #[markdown_entry]
@@ -326,7 +326,7 @@ pub struct DynamicRouteContext<'a> {
 ///
 /// ## Example
 /// ```rs
-/// use maudit::page::prelude::*;
+/// use maudit::route::prelude::*;
 ///
 /// #[route("/")]
 /// pub struct Index;
@@ -531,7 +531,7 @@ pub mod prelude {
     //!
     //! ## Example
     //! ```rs
-    //! use maudit::page::prelude::*;
+    //! use maudit::route::prelude::*;
     //! ```
     pub use super::{
         DynamicRouteContext, FullRoute, Page, PageContext, PageParams, Pages, PaginationPage,

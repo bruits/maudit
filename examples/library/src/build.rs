@@ -3,7 +3,7 @@ use std::fs;
 use maudit::{
     assets::RouteAssets,
     content::{ContentSources, RouteContent},
-    page::{DynamicRouteContext, FullRoute, PageContext, PageParams, RouteType},
+    route::{DynamicRouteContext, FullRoute, PageContext, PageParams, RouteType},
     BuildOptions,
 };
 

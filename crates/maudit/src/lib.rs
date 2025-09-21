@@ -9,7 +9,7 @@
 pub mod assets;
 pub mod content;
 pub mod errors;
-pub mod page;
+pub mod route;
 
 mod routing;
 
@@ -31,7 +31,7 @@ pub mod maud {
     //!
     //! ## Example
     //! ```rs
-    //! use maudit::page::prelude::*;
+    //! use maudit::route::prelude::*;
     //! use maud::{html, Markup};
     //!
     //! #[route("/")]
@@ -56,7 +56,7 @@ use std::env;
 use build::execute_build;
 use content::ContentSources;
 use logging::init_logging;
-use page::FullRoute;
+use route::FullRoute;
 
 /// Returns whether Maudit is running in development mode (through `maudit dev`).
 ///
@@ -79,8 +79,8 @@ pub fn is_dev() -> bool {
 ///   content_sources, coronate, routes, BuildOptions, BuildOutput,
 /// };
 ///
-/// # mod pages {
-/// #   use maudit::page::prelude::*;
+/// # mod routes {
+/// #   use maudit::route::prelude::*;
 /// #
 /// #   #[route("/")]
 /// #   pub struct Index;
@@ -101,7 +101,7 @@ pub fn is_dev() -> bool {
 ///
 /// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
 ///     coronate(
-///         routes![pages::Index, pages::Article],
+///         routes![routes::Index, routes::Article],
 ///         content_sources![],
 ///         BuildOptions::default(),
 ///     )

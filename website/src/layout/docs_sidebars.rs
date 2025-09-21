@@ -1,5 +1,5 @@
 use maud::{html, Markup};
-use maudit::{content::MarkdownHeading, page::PageContext};
+use maudit::{content::MarkdownHeading, route::PageContext};
 
 use crate::content::{DocsContent, DocsSection};
 

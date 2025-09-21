@@ -3,7 +3,7 @@ mod tests {
     use crate::{
         assets::RouteAssetsOptions,
         content::shortcodes::{MarkdownShortcodes, preprocess_shortcodes},
-        page::PageContext,
+        route::PageContext,
     };
 
     fn create_test_shortcodes() -> MarkdownShortcodes {

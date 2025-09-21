@@ -71,7 +71,7 @@
 To process an image, add it using `ctx.assets.add_image_with_options` in your page's `render` method, specifying the desired transformations.
 
 ```rs
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[route("/image")]
 pub struct ImagePage;
@@ -98,7 +98,7 @@ See the [Assets documentation](https://maudit.org/docs/assets/) for more details
 - [52eda9e](https://github.com/bruits/maudit/commit/52eda9ea4eac8efd3efd945d00f39a1b99f284ab) Adds support for dynamic routes with properties. In addition to its parameters, a dynamic route can now provide additional properties that can be used during rendering.
 
 ```rs
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[route("/posts/[slug]")]
 pub struct Post;

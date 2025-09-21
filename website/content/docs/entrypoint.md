@@ -10,7 +10,7 @@ In a `main.rs` file, import the `coronate` function and call it to build your pr
 
 ```rs
 use maudit::{coronate, routes, BuildOptions, BuildOutput};
-use pages::Index;
+use routes::Index;
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
   coronate(routes![Index], vec![].into(), BuildOptions::default())
@@ -24,7 +24,7 @@ All kinds of routes must be passed to the `coronate` function in order for them 
 The first argument to the `coronate` function is a `Vec` of all the routes that should be built. For the sake of ergonomics, the `routes!` macro can be used to create this list.
 
 ```rs
-use pages::Index;
+use routes::Index;
 
 coronate(
   routes![Index],

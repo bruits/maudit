@@ -11,7 +11,7 @@ To import a stylesheet, add it anywhere in your project's directory, and use the
 In [supported templating languages](/docs/templating/), the return value of `ctx.assets.add_style()` can be used directly in the template.
 
 ```rs
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 use maud::{html, Markup};
 
 #[route("/blog")]

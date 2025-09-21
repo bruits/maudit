@@ -44,7 +44,7 @@ Where `loader` and `glob_markdown` are functions returning a Vec of `ContentEntr
 Once a content source is defined, it can be accessed in pages through the `PageContext#content` property.
 
 ```rs
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 use maud::{html, PreEscaped};
 
 #[route("/some-article")]
@@ -127,7 +127,7 @@ content_sources![
 and then in pages, you could access the data like this:
 
 ```rs
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[route("/data")]
 pub struct DataPage;

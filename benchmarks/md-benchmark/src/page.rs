@@ -1,4 +1,4 @@
-use maudit::{content::UntypedMarkdownContent, page::prelude::*};
+use maudit::{content::UntypedMarkdownContent, route::prelude::*};
 
 #[route("/[file]")]
 pub struct Article;

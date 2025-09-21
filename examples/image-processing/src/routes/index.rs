@@ -1,6 +1,6 @@
 use crate::layout::layout;
 use maud::html;
-use maudit::{assets::ImageOptions, page::prelude::*};
+use maudit::{assets::ImageOptions, route::prelude::*};
 
 #[route("/")]
 pub struct Index;

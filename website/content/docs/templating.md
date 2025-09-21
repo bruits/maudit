@@ -14,7 +14,7 @@ Maudit implements `Into<RenderResult>` for the Maud `Markup` type, allowing one 
 
 ```rs
 use maud::{html, Markup};
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[route("/")]
 pub struct Index;
@@ -32,7 +32,7 @@ Maudit implements the `Render` trait for assets, such as scripts, styles, and im
 
 ```rs
 use maud::{html, Markup};
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[route("/")]
 pub struct Index;

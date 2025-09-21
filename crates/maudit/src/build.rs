@@ -20,7 +20,7 @@ use crate::{
     errors::BuildError,
     is_dev,
     logging::print_title,
-    page::{DynamicRouteContext, FullRoute, PageContext, PageParams, RenderResult, RouteType},
+    route::{DynamicRouteContext, FullRoute, PageContext, PageParams, RenderResult, RouteType},
 };
 use colored::{ColoredString, Colorize};
 use log::{debug, info, trace, warn};

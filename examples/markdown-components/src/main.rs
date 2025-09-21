@@ -2,10 +2,10 @@ use maudit::content::{glob_markdown, MarkdownComponents, MarkdownOptions};
 use maudit::{content_sources, coronate, routes, BuildOptions, BuildOutput};
 
 mod components;
-mod pages;
+mod routes;
 
 use components::*;
-use pages::{ComponentExample, IndexPage};
+use routes::{ComponentExample, IndexPage};
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(

@@ -1,6 +1,6 @@
 use maud::{html, PreEscaped, DOCTYPE};
 use maudit::content::markdown_entry;
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[markdown_entry]
 pub struct ComponentExample {}

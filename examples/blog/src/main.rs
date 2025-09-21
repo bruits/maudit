@@ -5,7 +5,7 @@ use maudit::{
     content::glob_markdown, content_sources, coronate, routes, BuildOptions, BuildOutput,
 };
 
-mod pages {
+mod routes {
     mod article;
     mod index;
     pub use article::Article;
@@ -14,7 +14,7 @@ mod pages {
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(
-        routes![pages::Index, pages::Article],
+        routes![routes::Index, routes::Article],
         content_sources![
             "articles" => glob_markdown::<ArticleContent>("content/articles/*.md", None)
         ],

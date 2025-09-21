@@ -8,7 +8,7 @@ pub use header::header;
 use maudit::assets::StyleOptions;
 use maudit::content::MarkdownHeading;
 use maudit::maud::generator;
-use maudit::page::{RenderResult, PageContext};
+use maudit::route::{RenderResult, PageContext};
 
 pub fn docs_layout(
     main: Markup,

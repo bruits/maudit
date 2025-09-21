@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::page::RouteType;
+use crate::route::RouteType;
 
 #[derive(Debug, PartialEq)]
 pub struct ParameterDef {
@@ -64,7 +64,7 @@ pub fn guess_if_route_is_endpoint(raw_route: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use crate::{
-        page::RouteType,
+        route::RouteType,
         routing::{ParameterDef, extract_params_from_raw_route, get_route_type_from_route_params},
     };
 

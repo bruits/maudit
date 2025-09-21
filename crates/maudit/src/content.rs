@@ -11,7 +11,7 @@ mod slugger;
 
 use crate::{
     assets::RouteAssets,
-    page::{DynamicRouteContext, PageContext, PageParams},
+    route::{DynamicRouteContext, PageContext, PageParams},
 };
 pub use markdown::{
     components::{
@@ -111,7 +111,7 @@ pub use maudit_macros::markdown_entry;
 ///
 /// In a page:
 /// ```rs
-/// use maudit::page::prelude::*;
+/// use maudit::route::prelude::*;
 /// # use maudit::content::markdown_entry;
 /// #
 /// # #[markdown_entry]
@@ -203,7 +203,7 @@ impl RouteContent<'_> {
 ///
 /// ## Example
 /// ```rs
-/// use maudit::page::prelude::*;
+/// use maudit::route::prelude::*;
 /// # use maudit::content::markdown_entry;
 /// #
 /// # #[markdown_entry]
@@ -266,7 +266,7 @@ impl ContentContext for DynamicRouteContext<'_> {
 type DataLoadingFn<T> = Box<dyn Fn(&mut dyn ContentContext) -> T + Send + Sync>;
 
 type OptionalContentRenderFn =
-    Option<Box<dyn Fn(&str, &mut crate::page::PageContext) -> String + Send + Sync>>;
+    Option<Box<dyn Fn(&str, &mut crate::route::PageContext) -> String + Send + Sync>>;
 
 impl<T> ContentEntry<T> {
     pub fn new(
@@ -327,7 +327,7 @@ pub type Untyped = FxHashMap<String, String>;
 ///
 /// ## Example
 /// ```rs
-/// use maudit::page::prelude::*;
+/// use maudit::route::prelude::*;
 /// use maudit::content::{glob_markdown, ContentSources};
 /// use maudit::content_sources;
 /// # use maudit::content::markdown_entry;
@@ -410,8 +410,8 @@ impl<T> ContentSource<T> {
 
     pub fn into_pages<Params, Props>(
         &self,
-        cb: impl Fn(&ContentEntry<T>) -> crate::page::Page<Params, Props>,
-    ) -> crate::page::Pages<Params, Props>
+        cb: impl Fn(&ContentEntry<T>) -> crate::route::Page<Params, Props>,
+    ) -> crate::route::Pages<Params, Props>
     where
         Params: Into<PageParams>,
     {

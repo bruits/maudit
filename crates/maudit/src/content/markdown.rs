@@ -16,7 +16,7 @@ use crate::{
         ContentContext,
         shortcodes::{MarkdownShortcodes, preprocess_shortcodes},
     },
-    page::PageContext,
+    route::PageContext,
 };
 
 use super::{ContentEntry, highlight::CodeBlock, slugger};
@@ -30,7 +30,7 @@ mod shortcodes_tests;
 ///
 /// ## Example
 /// ```rs
-/// use maudit::page::prelude::*;
+/// use maudit::route::prelude::*;
 /// use maud::{html, Markup};
 /// # use maudit::content::markdown_entry;
 /// #

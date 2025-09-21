@@ -1,5 +1,5 @@
 use maud::{html, Markup, PreEscaped};
-use maudit::{content::ContentEntry, page::prelude::*};
+use maudit::{content::ContentEntry, route::prelude::*};
 
 use crate::{content::DocsContent, layout::docs_layout};
 

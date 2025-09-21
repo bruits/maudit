@@ -1,6 +1,6 @@
 use maud::html;
 use maud::PreEscaped;
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 use std::collections::BTreeMap;
 
 use crate::content::NewsContent;

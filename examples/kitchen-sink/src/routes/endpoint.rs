@@ -1,4 +1,4 @@
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[route("/catalogue/data.json")]
 pub struct Endpoint;

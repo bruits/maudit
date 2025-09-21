@@ -45,16 +45,16 @@ Pages in Maudit are created directly in Rust, using `.rs` files.
 
 To create a page, create a `.rs` file with a public struct using the `route` attribute, which take the path of the route as sole parameter.
 
-All of Maudit's useful imports for pages can be imported using the prelude from `maudit::page`.
+All of Maudit's useful imports for pages can be imported using the prelude from `maudit::route`.
 
 ```rs
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[route("/hello-world")]
 pub struct HelloWorld;
 ```
 
-Every page must `impl` the `Page` trait, with the required method `render`.
+Every page must `impl` the `Route` trait, with the required method `render`.
 
 ```rs
 impl Route for HelloWorld {
@@ -67,7 +67,7 @@ impl Route for HelloWorld {
 Finally, pages' struct must be passed to the `coronate` function in the project's `main.rs`
 
 ```rs
-use pages::HelloWorld;
+use routes::HelloWorld;
 use maudit::{coronate, routes, content_sources, BuildOptions, BuildOutput};
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {

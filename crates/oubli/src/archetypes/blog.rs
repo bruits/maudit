@@ -3,8 +3,8 @@
 use crate::layouts::layout;
 use maud::{html, Markup};
 use maudit::content::markdown_entry;
-use maudit::page::prelude::*;
-use maudit::page::FullRoute;
+use maudit::route::prelude::*;
+use maudit::route::FullRoute;
 
 pub fn blog_index_content<T: FullRoute>(
     route: impl FullRoute,

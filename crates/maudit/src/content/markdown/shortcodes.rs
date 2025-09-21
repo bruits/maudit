@@ -1,7 +1,7 @@
 use rustc_hash::FxHashMap;
 use std::str::FromStr;
 
-use crate::page::PageContext;
+use crate::route::PageContext;
 
 pub type ShortcodeFn =
     Box<dyn Fn(&ShortcodeArgs, Option<&mut PageContext>) -> String + Send + Sync>;

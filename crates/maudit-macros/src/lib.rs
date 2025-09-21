@@ -25,22 +25,22 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let path = &attrs.path;
 
     let expanded = quote! {
-        impl maudit::page::InternalRoute for #struct_name {
+        impl maudit::route::InternalRoute for #struct_name {
             fn route_raw(&self) -> String {
                 #path.to_string()
             }
         }
 
-        impl maudit::page::FullRoute for #struct_name {
-            fn render_internal(&self, ctx: &mut maudit::page::PageContext) -> maudit::page::RenderResult {
+        impl maudit::route::FullRoute for #struct_name {
+            fn render_internal(&self, ctx: &mut maudit::route::PageContext) -> maudit::route::RenderResult {
                 self.render(ctx).into()
             }
 
-            fn pages_internal(&self, ctx: &mut maudit::page::DynamicRouteContext) -> Vec<(maudit::page::PageParams, Box<dyn std::any::Any + Send + Sync>, Box<dyn std::any::Any + Send + Sync>)> {
+            fn pages_internal(&self, ctx: &mut maudit::route::DynamicRouteContext) -> Vec<(maudit::route::PageParams, Box<dyn std::any::Any + Send + Sync>, Box<dyn std::any::Any + Send + Sync>)> {
                 self.pages(ctx)
                     .into_iter()
                     .map(|route| {
-                        let raw_params: maudit::page::PageParams = (&route.params).into();
+                        let raw_params: maudit::route::PageParams = (&route.params).into();
                         let typed_params: Box<dyn std::any::Any + Send + Sync> = Box::new(route.params);
                         let props: Box<dyn std::any::Any + Send + Sync> = Box::new(route.props);
                         (raw_params, typed_params, props)

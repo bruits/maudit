@@ -7,7 +7,7 @@ section: "core-concepts"
 JavaScript and TypeScript files can be added to pages using the `ctx.assets.add_script()` method.
 
 ```rs
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 use maud::{html, Markup};
 
 #[route("/blog")]

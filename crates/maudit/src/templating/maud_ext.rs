@@ -3,7 +3,7 @@ use maud::{Markup, Render, html};
 use crate::{
     GENERATOR,
     assets::{Asset, Image, Script, Style},
-    page::RenderResult,
+    route::RenderResult,
 };
 
 impl Render for Style {

@@ -1,10 +1,10 @@
 use maud::html;
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 use crate::{
     content::ArticleContent,
     layout::layout,
-    pages::{article::ArticleParams, Article},
+    routes::{article::ArticleParams, Article},
 };
 
 #[route("/")]

@@ -1,6 +1,6 @@
 use maudit::{coronate, routes, AssetsOptions, BuildOptions, BuildOutput};
 
-mod pages {
+mod routes {
     mod dynamic;
     mod endpoint;
     mod index;
@@ -11,7 +11,7 @@ mod pages {
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(
-        routes![pages::Index, pages::DynamicExample, pages::Endpoint],
+        routes![routes::Index, routes::DynamicExample, routes::Endpoint],
         vec![].into(),
         BuildOptions {
             assets: AssetsOptions {

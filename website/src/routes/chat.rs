@@ -1,5 +1,5 @@
 use maud::html;
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[route("/chat")]
 pub struct ChatRedirect;
