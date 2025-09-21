@@ -5,6 +5,7 @@
 
 import { AnsiUp } from "ansi_up";
 import { createErrorOverlay } from "./overlay";
+import { stripAnsi } from "./utils";
 
 const ansiUp = new AnsiUp();
 
@@ -51,22 +52,24 @@ socket.addEventListener("message", (event) => {
 	}
 });
 
-function log(...args: any[]) {
+function log(...args: unknown[]) {
 	mauditMessage("log", args);
 }
 
-function warn(...args: any[]) {
+function warn(...args: unknown[]) {
 	mauditMessage("warn", args);
 }
 
-function error(...args: any[]) {
+function error(...args: unknown[]) {
 	mauditMessage("error", args);
 }
 
-function mauditMessage(level: "log" | "warn" | "error", message: any[]) {
+function mauditMessage(level: "log" | "warn" | "error", message: unknown[]) {
 	console[level](
-		`%cMaudit`,
+		"%cMaudit",
 		"background: #ba1f33; color: white; padding-inline: 4px; border-radius: 2px; font-family: serif;",
-		message
+		...message.map((m) =>
+			typeof m === "string" ? stripAnsi(m) : JSON.stringify(m, null, 2)
+		)
 	);
 }
