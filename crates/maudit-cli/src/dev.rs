@@ -49,6 +49,7 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
             ("MAUDIT_DEV", "true"),
             ("MAUDIT_QUIET", "true"),
             ("CARGO_TERM_COLOR", "always"),
+            ("RUSTFLAGS", "-Awarnings"),
         ])
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -170,6 +171,7 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
                                 ("MAUDIT_DEV", "true"),
                                 ("MAUDIT_QUIET", "true"),
                                 ("CARGO_TERM_COLOR", "always"),
+                                ("RUSTFLAGS", "-Awarnings"),
                             ])
                             .stdout(std::process::Stdio::inherit())
                             .stderr(std::process::Stdio::piped())
@@ -227,6 +229,13 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
                                                     .await;
                                                 });
                                             } else {
+                                                // TODO: It'd be great to somehow be able to get structured errors here (and in the initial build)
+                                                // You can get some sort of structured errors from cargo with `--message-format=json`, but:
+                                                // - You get an absurd amount of output, including non-error messages, at least when running `cargo run`
+                                                // - You don't get the normal human-friendly output anymore, which would be great to have still
+                                                //  - You can print the rendered output to the console from the JSON, but then you don't have colors
+                                                // - It'd only work for rustc errors, not sure how we'd make it work with runtime errors.
+                                                // ... So until then, we just send the raw stderr output and hopefully the user can make sense of it.
                                                 let stderr =
                                                     String::from_utf8_lossy(&output.stderr)
                                                         .to_string();

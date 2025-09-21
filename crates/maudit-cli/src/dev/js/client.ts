@@ -1,11 +1,18 @@
-import { AnsiUp } from "ansi_up";
-
-const ansiUp = new AnsiUp();
-
 /**
  * TODO: This is a quite naive implementation, without necessarily thinking about complex HMR and stuff
  * It might be better to use a more sophisticated approach, using some sort of diffing, handling reconnecting, etc.
  */
+
+import { AnsiUp } from "ansi_up";
+import { createErrorOverlay } from "./overlay";
+
+const ansiUp = new AnsiUp();
+
+export interface Message {
+	type: "success" | "error";
+	message: string;
+}
+
 const debounceReload = (time: number | undefined) => {
 	let timer: number | null | undefined;
 	return () => {
@@ -29,14 +36,15 @@ socket.addEventListener("open", (event) => {
 
 socket.addEventListener("message", (event) => {
 	try {
-		const message = JSON.parse(event.data);
+		const message = JSON.parse(event.data) as Message;
 
 		if (message.type === "success") {
 			log("Build successful:", message.message);
 			pageReload();
 		} else if (message.type === "error") {
 			error("Build error:", message.message);
-			// Don't reload on errors, let the user see the error
+
+			createErrorOverlay(ansiUp.ansi_to_html(message.message));
 		}
 	} catch (e) {
 		error("Failed to parse WebSocket message", event.data, e);
