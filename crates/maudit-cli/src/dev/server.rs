@@ -12,6 +12,7 @@ use axum::{
     Router,
 };
 use quanta::Instant;
+use serde_json::json;
 use tokio::{net::TcpSocket, signal, sync::broadcast};
 use tracing::{debug, Level};
 
@@ -44,7 +45,7 @@ struct AppState {
 fn inject_live_reload_script(html_content: &str, socket_addr: SocketAddr, host: bool) -> String {
     let mut content = html_content.to_string();
 
-    let script_content = include_str!("./client.js").replace(
+    let script_content = include_str!("./js/dist/client.js").replace(
         "{SERVER_ADDRESS}",
         &format!(
             "{}:{}",
@@ -74,10 +75,11 @@ pub async fn start_dev_web_server(
     // Send initial error if present
     if let Some(error) = initial_error {
         let _ = tx.send(WebSocketMessage {
-            data: format!(
-                r#"{{"type": "error", "message": "{}"}}"#,
-                error.replace("\"", "\\\"")
-            ),
+            data: json!({
+                "type": "error",
+                "message": error
+            })
+            .to_string(),
         });
     }
 
@@ -172,11 +174,11 @@ pub async fn update_status(
 
     // Send the message
     let _ = tx.send(WebSocketMessage {
-        data: format!(
-            r#"{{"type": "{}", "message": "{}"}}"#,
-            status_type,
-            message.replace("\"", "\\\"")
-        ),
+        data: json!({
+            "type": status_type,
+            "message": message
+        })
+        .to_string(),
     });
 }
 
@@ -239,10 +241,11 @@ async fn handle_socket(
         if let Some(error_message) = status.as_ref() {
             let _ = sender
                 .send(Message::Text(
-                    format!(
-                        r#"{{"type": "error", "message": "{}"}}"#,
-                        error_message.replace("\"", "\\\"")
-                    )
+                    json!({
+                        "type": "error",
+                        "message": error_message
+                    })
+                    .to_string()
                     .into(),
                 ))
                 .await;
