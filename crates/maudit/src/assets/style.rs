@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::assets::{
-    HashAssetType, HashConfig, PageAssetsOptions, calculate_hash, make_filename, make_final_path,
+    HashAssetType, HashConfig, RouteAssetsOptions, calculate_hash, make_filename, make_final_path,
     make_final_url,
 };
 
@@ -28,7 +28,7 @@ impl Style {
         path: PathBuf,
         included: bool,
         style_options: &StyleOptions,
-        page_assets_options: &PageAssetsOptions,
+        page_assets_options: &RouteAssetsOptions,
     ) -> Self {
         let hash = calculate_hash(
             &path,

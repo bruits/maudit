@@ -7,14 +7,14 @@ section: "core-concepts"
 JavaScript and TypeScript files can be added to pages using the `ctx.assets.add_script()` method.
 
 ```rs
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 use maud::{html, Markup};
 
 #[route("/blog")]
 pub struct Blog;
 
-impl Page<RouteParams, Markup> for Blog {
-  fn render(&self, ctx: &mut RouteContext) -> Markup {
+impl Route<PageParams, Markup> for Blog {
+  fn render(&self, ctx: &mut PageContext) -> Markup {
     let script = ctx.assets.add_script("script.js");
 
     html! {
@@ -27,7 +27,7 @@ impl Page<RouteParams, Markup> for Blog {
 The `include_script()` method can be used to automatically include the script in the page, which can be useful when using layouts or other shared templates.
 
 ```rs
-fn render(&self, ctx: &mut RouteContext) -> Markup {
+fn render(&self, ctx: &mut PageContext) -> Markup {
   ctx.assets.include_script("script.js");
 
   layout(

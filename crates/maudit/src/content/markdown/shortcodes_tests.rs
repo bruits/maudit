@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod tests {
     use crate::{
-        assets::PageAssetsOptions,
+        assets::RouteAssetsOptions,
         content::shortcodes::{MarkdownShortcodes, preprocess_shortcodes},
-        page::RouteContext,
+        route::PageContext,
     };
 
     fn create_test_shortcodes() -> MarkdownShortcodes {
@@ -52,24 +52,24 @@ mod tests {
         shortcodes
     }
 
-    // Helper function to create a minimal RouteContext for testing
+    // Helper function to create a minimal PageContext for testing
     fn with_test_route_context<F, R>(f: F) -> R
     where
-        F: for<'a> FnOnce(&mut RouteContext<'a>) -> R,
+        F: for<'a> FnOnce(&mut PageContext<'a>) -> R,
     {
         use crate::{
-            assets::PageAssets,
-            content::{ContentSources, PageContent},
+            assets::RouteAssets,
+            content::{ContentSources, RouteContent},
         };
 
         let content_sources = ContentSources::new(vec![]);
-        let content = PageContent::new(&content_sources);
-        let mut page_assets = PageAssets::new(&PageAssetsOptions {
+        let content = RouteContent::new(&content_sources);
+        let mut page_assets = RouteAssets::new(&RouteAssetsOptions {
             assets_dir: "assets".into(),
             ..Default::default()
         });
 
-        let mut ctx = RouteContext {
+        let mut ctx = PageContext {
             content: &content,
             assets: &mut page_assets,
             current_url: &"/test".to_string(),
@@ -80,7 +80,7 @@ mod tests {
         f(&mut ctx)
     }
 
-    // Helper function for tests that don't need RouteContext
+    // Helper function for tests that don't need PageContext
     fn preprocess_shortcodes_simple(
         content: &str,
         shortcodes: &MarkdownShortcodes,
@@ -88,11 +88,11 @@ mod tests {
         preprocess_shortcodes(content, shortcodes, None, None)
     }
 
-    // Helper function that automatically wraps RouteContext in Some() for existing tests
+    // Helper function that automatically wraps PageContext in Some() for existing tests
     fn preprocess_shortcodes_with_ctx(
         content: &str,
         shortcodes: &MarkdownShortcodes,
-        route_ctx: &mut RouteContext,
+        route_ctx: &mut PageContext,
     ) -> Result<String, String> {
         preprocess_shortcodes(content, shortcodes, Some(route_ctx), None)
     }

@@ -9,9 +9,9 @@
 pub mod assets;
 pub mod content;
 pub mod errors;
-pub mod page;
+pub mod route;
 
-mod route;
+mod routing;
 
 // Exports for end-users
 pub use build::metadata::{BuildOutput, PageOutput, StaticAssetOutput};
@@ -31,14 +31,14 @@ pub mod maud {
     //!
     //! ## Example
     //! ```rs
-    //! use maudit::page::prelude::*;
+    //! use maudit::route::prelude::*;
     //! use maud::{html, Markup};
     //!
     //! #[route("/")]
     //! pub struct Index;
     //!
-    //! impl Page<RouteParams, (), Markup> for Index {
-    //!   fn render(&self, ctx: &mut RouteContext) -> Markup {
+    //! impl Route<PageParams, (), Markup> for Index {
+    //!   fn render(&self, ctx: &mut PageContext) -> Markup {
     //!     html! {
     //!       h1 { "Hello, world!" }
     //!     }
@@ -56,7 +56,7 @@ use std::env;
 use build::execute_build;
 use content::ContentSources;
 use logging::init_logging;
-use page::FullPage;
+use route::FullRoute;
 
 /// Returns whether Maudit is running in development mode (through `maudit dev`).
 ///
@@ -79,21 +79,21 @@ pub fn is_dev() -> bool {
 ///   content_sources, coronate, routes, BuildOptions, BuildOutput,
 /// };
 ///
-/// # mod pages {
-/// #   use maudit::page::prelude::*;
+/// # mod routes {
+/// #   use maudit::route::prelude::*;
 /// #
 /// #   #[route("/")]
 /// #   pub struct Index;
-/// #   impl Page<RouteParams, (), String> for Index {
-/// #      fn render(&self, _ctx: &mut RouteContext) -> String {
+/// #   impl Route<PageParams, (), String> for Index {
+/// #      fn render(&self, _ctx: &mut PageContext) -> String {
 /// #          "Hello, world!".to_string()
 /// #      }
 /// #   }
 /// #   #[route("/article")]
 /// #   pub struct Article;
 /// #
-/// #   impl Page<RouteParams, (), String> for Article {
-/// #      fn render(&self, _ctx: &mut RouteContext) -> String {
+/// #   impl Route<PageParams, (), String> for Article {
+/// #      fn render(&self, _ctx: &mut PageContext) -> String {
 /// #          "Hello, world!".to_string()
 /// #      }
 /// #   }
@@ -101,7 +101,7 @@ pub fn is_dev() -> bool {
 ///
 /// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
 ///     coronate(
-///         routes![pages::Index, pages::Article],
+///         routes![routes::Index, routes::Article],
 ///         content_sources![],
 ///         BuildOptions::default(),
 ///     )
@@ -202,7 +202,7 @@ pub const GENERATOR: &str = concat!("Maudit v", env!("CARGO_PKG_VERSION"));
 /// }
 /// ```
 pub fn coronate(
-    routes: &[&dyn FullPage],
+    routes: &[&dyn FullRoute],
     mut content_sources: ContentSources,
     options: BuildOptions,
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {

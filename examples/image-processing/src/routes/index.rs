@@ -1,12 +1,12 @@
 use crate::layout::layout;
 use maud::html;
-use maudit::{assets::ImageOptions, page::prelude::*};
+use maudit::{assets::ImageOptions, route::prelude::*};
 
 #[route("/")]
 pub struct Index;
 
-impl Page for Index {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Route for Index {
+    fn render(&self, ctx: &mut PageContext) -> RenderResult {
         let logo = ctx.assets.add_image("images/logo.svg");
         let walrus = ctx.assets.add_image_with_options(
             "images/walrus.jpg",

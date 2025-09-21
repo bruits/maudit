@@ -1,4 +1,4 @@
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 use crate::{content::ArticleContent, layout::layout};
 
@@ -10,18 +10,18 @@ pub struct ArticleParams {
     pub article: String,
 }
 
-impl Page<ArticleParams> for Article {
-    fn routes(&self, ctx: &DynamicRouteContext) -> Routes<ArticleParams> {
+impl Route<ArticleParams> for Article {
+    fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<ArticleParams> {
         let articles = ctx.content.get_source::<ArticleContent>("articles");
 
-        articles.into_routes(|entry| {
-            Route::from_params(ArticleParams {
+        articles.into_pages(|entry| {
+            Page::from_params(ArticleParams {
                 article: entry.id.clone(),
             })
         })
     }
 
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> RenderResult {
         let params = ctx.params::<ArticleParams>();
         let articles = ctx.content.get_source::<ArticleContent>("articles");
         let article = articles.get_entry(&params.article);

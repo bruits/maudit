@@ -1,9 +1,9 @@
 use maud::html;
 use maud::Markup;
 use maud::PreEscaped;
-use maudit::page::RouteContext;
+use maudit::route::PageContext;
 
-pub fn header(_: &mut RouteContext, bottom_border: bool) -> Markup {
+pub fn header(_: &mut PageContext, bottom_border: bool) -> Markup {
     let border = if bottom_border { "border-b" } else { "" };
 
     html! {

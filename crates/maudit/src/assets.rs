@@ -18,22 +18,22 @@ pub use style::{Style, StyleOptions};
 use crate::{AssetHashingStrategy, BuildOptions};
 
 #[derive(Default)]
-pub struct PageAssets {
+pub struct RouteAssets {
     pub images: FxHashSet<Image>,
     pub scripts: FxHashSet<Script>,
     pub styles: FxHashSet<Style>,
 
-    pub(crate) options: PageAssetsOptions,
+    pub(crate) options: RouteAssetsOptions,
 }
 
 #[derive(Clone)]
-pub struct PageAssetsOptions {
+pub struct RouteAssetsOptions {
     pub assets_dir: PathBuf,
     pub output_assets_dir: PathBuf,
     pub hashing_strategy: AssetHashingStrategy,
 }
 
-impl Default for PageAssetsOptions {
+impl Default for RouteAssetsOptions {
     fn default() -> Self {
         let default_build_options = BuildOptions::default();
         let page_assets_optiosn = default_build_options.page_assets_options();
@@ -46,8 +46,8 @@ impl Default for PageAssetsOptions {
     }
 }
 
-impl PageAssets {
-    pub fn new(assets_options: &PageAssetsOptions) -> Self {
+impl RouteAssets {
+    pub fn new(assets_options: &RouteAssetsOptions) -> Self {
         Self {
             options: assets_options.clone(),
             ..Default::default()
@@ -118,7 +118,7 @@ impl PageAssets {
     /// Add a script to the page assets, causing the file to be created in the output directory. The script is resolved relative to the current working directory.
     ///
     /// The script will not automatically be included in the page, but can be included through the `.url()` method on the returned `Script` object.
-    /// Alternatively, a script can be included automatically using the [PageAssets::include_script] method instead.
+    /// Alternatively, a script can be included automatically using the [RouteAssets::include_script] method instead.
     ///
     /// Subsequent calls to this function using the same path will return the same script, as such, the value returned by this function can be cloned and used multiple times without issue.
     pub fn add_script<P>(&mut self, script_path: P) -> Script
@@ -149,7 +149,7 @@ impl PageAssets {
     /// Add a style to the page assets, causing the file to be created in the output directory. The style is resolved relative to the current working directory.
     ///
     /// The style will not automatically be included in the page, but can be included through the `.url()` method on the returned `Style` object.
-    /// Alternatively, a style can be included automatically using the [PageAssets::include_style] method instead.
+    /// Alternatively, a style can be included automatically using the [RouteAssets::include_style] method instead.
     ///
     /// Subsequent calls to this method using the same path will return the same style, as such, the value returned by this method can be cloned and used multiple times without issue. this method is equivalent to calling `add_style_with_options` with the default `StyleOptions` and is purely provided for convenience.
     pub fn add_style<P>(&mut self, style_path: P) -> Style
@@ -357,7 +357,7 @@ mod tests {
     #[test]
     fn test_add_style() {
         let temp_dir = setup_temp_dir();
-        let mut page_assets = PageAssets::default();
+        let mut page_assets = RouteAssets::default();
         page_assets.add_style(temp_dir.join("style.css"));
 
         assert!(page_assets.styles.len() == 1);
@@ -366,7 +366,7 @@ mod tests {
     #[test]
     fn test_include_style() {
         let temp_dir = setup_temp_dir();
-        let mut page_assets = PageAssets::default();
+        let mut page_assets = RouteAssets::default();
 
         page_assets.include_style(temp_dir.join("style.css"));
 
@@ -377,7 +377,7 @@ mod tests {
     #[test]
     fn test_add_script() {
         let temp_dir = setup_temp_dir();
-        let mut page_assets = PageAssets::default();
+        let mut page_assets = RouteAssets::default();
 
         page_assets.add_script(temp_dir.join("script.js"));
         assert!(page_assets.scripts.len() == 1);
@@ -386,7 +386,7 @@ mod tests {
     #[test]
     fn test_include_script() {
         let temp_dir = setup_temp_dir();
-        let mut page_assets = PageAssets::default();
+        let mut page_assets = RouteAssets::default();
 
         page_assets.include_script(temp_dir.join("script.js"));
 
@@ -397,7 +397,7 @@ mod tests {
     #[test]
     fn test_add_image() {
         let temp_dir = setup_temp_dir();
-        let mut page_assets = PageAssets::default();
+        let mut page_assets = RouteAssets::default();
 
         page_assets.add_image(temp_dir.join("image.png"));
         assert!(page_assets.images.len() == 1);
@@ -406,7 +406,7 @@ mod tests {
     #[test]
     fn test_asset_has_leading_slash() {
         let temp_dir = setup_temp_dir();
-        let mut page_assets = PageAssets::default();
+        let mut page_assets = RouteAssets::default();
 
         let image = page_assets.add_image(temp_dir.join("image.png"));
         assert_eq!(image.url().unwrap().chars().next(), Some('/'));
@@ -421,7 +421,7 @@ mod tests {
     #[test]
     fn test_asset_url_include_hash() {
         let temp_dir = setup_temp_dir();
-        let mut page_assets = PageAssets::default();
+        let mut page_assets = RouteAssets::default();
 
         let image = page_assets.add_image(temp_dir.join("image.png"));
         assert!(image.url().unwrap().contains(&image.hash));
@@ -436,7 +436,7 @@ mod tests {
     #[test]
     fn test_asset_path_include_hash() {
         let temp_dir = setup_temp_dir();
-        let mut page_assets = PageAssets::default();
+        let mut page_assets = RouteAssets::default();
 
         let image = page_assets.add_image(temp_dir.join("image.png"));
         assert!(image.build_path().to_string_lossy().contains(&image.hash));
@@ -463,7 +463,7 @@ mod tests {
         ];
         std::fs::write(&image_path, png_data).unwrap();
 
-        let mut page_assets = PageAssets::default();
+        let mut page_assets = RouteAssets::default();
 
         // Test that different options produce different hashes
         let image_default = page_assets.add_image(&image_path);
@@ -526,7 +526,7 @@ mod tests {
         ];
         std::fs::write(&image_path, png_data).unwrap();
 
-        let mut page_assets = PageAssets::default();
+        let mut page_assets = RouteAssets::default();
 
         // Same options should produce same hash
         let image1 = page_assets.add_image_with_options(
@@ -558,7 +558,7 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let style_path = temp_dir.join("style.css");
 
-        let mut page_assets = PageAssets::new(&PageAssetsOptions::default());
+        let mut page_assets = RouteAssets::new(&RouteAssetsOptions::default());
 
         // Test that different tailwind options produce different hashes
         let style_default = page_assets.add_style(&style_path);
@@ -583,7 +583,7 @@ mod tests {
         std::fs::write(&style1_path, content).unwrap();
         std::fs::write(&style2_path, content).unwrap();
 
-        let mut page_assets = PageAssets::new(&PageAssetsOptions::default());
+        let mut page_assets = RouteAssets::new(&RouteAssetsOptions::default());
 
         let style1 = page_assets.add_style(&style1_path);
         let style2 = page_assets.add_style(&style2_path);
@@ -599,8 +599,8 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let style_path = temp_dir.join("dynamic_style.css");
 
-        let assets_options = PageAssetsOptions::default();
-        let mut page_assets = PageAssets::new(&assets_options);
+        let assets_options = RouteAssetsOptions::default();
+        let mut page_assets = RouteAssets::new(&assets_options);
 
         // Write first content and get hash
         std::fs::write(&style_path, "body { background: red; }").unwrap();

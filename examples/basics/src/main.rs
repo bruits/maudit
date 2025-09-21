@@ -2,12 +2,12 @@ mod layout;
 
 use maudit::{coronate, routes, BuildOptions, BuildOutput};
 
-mod pages {
+mod routes {
     mod index;
     pub use index::Index;
 }
 
-pub use pages::Index;
+pub use routes::Index;
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(routes![Index], vec![].into(), BuildOptions::default())

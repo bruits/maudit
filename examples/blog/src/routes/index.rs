@@ -1,17 +1,17 @@
 use maud::html;
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 use crate::{
     content::ArticleContent,
     layout::layout,
-    pages::{article::ArticleParams, Article},
+    routes::{article::ArticleParams, Article},
 };
 
 #[route("/")]
 pub struct Index;
 
-impl Page for Index {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Route for Index {
+    fn render(&self, ctx: &mut PageContext) -> RenderResult {
         let articles = ctx.content.get_source::<ArticleContent>("articles");
 
         let markup = html! {

@@ -3,9 +3,9 @@ use maudit::{coronate, routes, AssetsOptions, BuildOptions, BuildOutput};
 
 mod content;
 mod layout;
-mod pages;
+mod routes;
 
-use pages::*;
+use routes::*;
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(

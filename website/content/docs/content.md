@@ -41,17 +41,17 @@ Where `loader` and `glob_markdown` are functions returning a Vec of `ContentEntr
 
 ## Using a content source in pages
 
-Once a content source is defined, it can be accessed in pages through the `RouteContext#content` property.
+Once a content source is defined, it can be accessed in pages through the `PageContext#content` property.
 
 ```rs
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 use maud::{html, PreEscaped};
 
 #[route("/some-article")]
 pub struct SomeArticlePage;
 
-impl Page for SomeArticlePage {
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Route for SomeArticlePage {
+  fn render(&self, ctx: &mut PageContext) -> RenderResult {
     let entry = ctx
       .content
       .get_source::<BlogPost>("source_name")
@@ -127,13 +127,13 @@ content_sources![
 and then in pages, you could access the data like this:
 
 ```rs
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[route("/data")]
 pub struct DataPage;
 
-impl Page for DataPage {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Route for DataPage {
+    fn render(&self, ctx: &mut PageContext) -> RenderResult {
         let entry = ctx
             .content
             .get_source::<MyType>("my_data")

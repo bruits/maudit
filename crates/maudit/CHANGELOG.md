@@ -71,13 +71,13 @@
 To process an image, add it using `ctx.assets.add_image_with_options` in your page's `render` method, specifying the desired transformations.
 
 ```rs
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[route("/image")]
 pub struct ImagePage;
 
-impl Page for ImagePage {
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Route for ImagePage {
+  fn render(&self, ctx: &mut PageContext) -> RenderResult {
     let image = ctx.assets.add_image_with_options(
       "path/to/image.jpg",
       ImageOptions {
@@ -98,7 +98,7 @@ See the [Assets documentation](https://maudit.org/docs/assets/) for more details
 - [52eda9e](https://github.com/bruits/maudit/commit/52eda9ea4eac8efd3efd945d00f39a1b99f284ab) Adds support for dynamic routes with properties. In addition to its parameters, a dynamic route can now provide additional properties that can be used during rendering.
 
 ```rs
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[route("/posts/[slug]")]
 pub struct Post;
@@ -114,8 +114,8 @@ pub struct Props {
   pub content: String,
 }
 
-impl Page<Params, Props> for Post {
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Route<Params, Props> for Post {
+  fn render(&self, ctx: &mut PageContext) -> RenderResult {
     let params = ctx.params::<Params>();
     let props = ctx.props::<Props>();
 
@@ -125,8 +125,8 @@ impl Page<Params, Props> for Post {
     ).into()
   }
 
-  fn routes(&self, ctx: &DynamicRouteContext) -> Routes<Params, Props> {
-    vec![Route::from_params_and_props(
+  fn pages(&self, ctx: &mut DynamicRouteContext) -> Routes<Params, Props> {
+    vec![Page::from_params_and_props(
       Params {
         slug: "hello-world".to_string(),
       },

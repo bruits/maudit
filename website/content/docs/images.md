@@ -15,13 +15,13 @@ Additionally, Maudit supports processing (i.e. resizing and converting) images a
 To use an image in a page, add it anywhere in your project's directory, and use the `ctx.assets.add_image()` method to add it to a page's assets.
 
 ```rs
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[route("/blog")]
 pub struct Blog;
 
-impl Page for Blog {
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Route for Blog {
+  fn render(&self, ctx: &mut PageContext) -> RenderResult {
     let image = ctx.assets.add_image("logo.png");
 
     format!("", image.url).into()
@@ -46,13 +46,13 @@ Images can be collocated next to your content, or anywhere else in your project 
 Images added to pages can be transformed by using `ctx.assets.add_image_with_options()`.
 
 ```rs
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[route("/image")]
 pub struct ImagePage;
 
-impl Page for ImagePage {
-  fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Route for ImagePage {
+  fn render(&self, ctx: &mut PageContext) -> RenderResult {
     let image = ctx.assets.add_image_with_options(
       "path/to/image.jpg",
       ImageOptions {

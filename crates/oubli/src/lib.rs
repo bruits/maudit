@@ -1,10 +1,10 @@
 use maudit::content::ContentEntry;
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 use maudit::{
     content::{ContentSourceInternal, ContentSources},
     coronate,
-    page::{prelude::Params, FullPage},
+    route::{prelude::Params, FullRoute},
 };
 
 // Re-expose Maudit's public API.
@@ -65,30 +65,30 @@ macro_rules! archetypes {
                     );
                     // Generate the pages
                     mod $ident {
-                        use maudit::page::prelude::*;
+                        use maudit::route::prelude::*;
                         use oubli::archetypes::blog::*;
 
                         #[route(stringify!($ident))]
                         pub struct Index;
-                        impl Page for Index {
-                            fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+                        impl Route for Index {
+                            fn render(&self, ctx: &mut PageContext) -> RenderResult {
                                 blog_index_content::<Entry>(Entry, ctx, $name, stringify!($ident)).into()
                             }
                         }
 
                         #[route(concat!(stringify!($ident), "/[entry]"))]
                         pub struct Entry;
-                        impl Page<BlogEntryParams> for Entry {
-                            fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+                        impl Route<BlogEntryParams> for Entry {
+                            fn render(&self, ctx: &mut PageContext) -> RenderResult {
                                 blog_entry_render(ctx, $name, stringify!($ident)).into()
                             }
 
-                            fn routes(&self, ctx: &DynamicRouteContext) -> Routes<BlogEntryParams> {
+                            fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<BlogEntryParams> {
                                 blog_entry_routes(ctx, stringify!($ident))
                             }
                         }
                     }
-                    ($name, stringify!($ident), vec![&$ident::Index as &dyn maudit::page::FullPage, &$ident::Entry as &dyn maudit::page::FullPage], Box::new(content_source) as Box<dyn maudit::content::ContentSourceInternal>)
+                    ($name, stringify!($ident), vec![&$ident::Index as &dyn maudit::route::FullRoute, &$ident::Entry as &dyn maudit::route::FullRoute], Box::new(content_source) as Box<dyn maudit::content::ContentSourceInternal>)
                 },
                 oubli::Archetype::MarkdownDoc => {
                     todo!();
@@ -127,10 +127,10 @@ pub fn forget(
     archetypes: Vec<(
         &str,
         &str,
-        Vec<&dyn FullPage>,
+        Vec<&dyn FullRoute>,
         Box<dyn ContentSourceInternal>,
     )>,
-    routes: &[&dyn FullPage],
+    routes: &[&dyn FullRoute],
     mut content_sources: ContentSources,
     options: BuildOptions,
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
@@ -194,6 +194,6 @@ pub struct ArchetypeStoreEntry {
 type ArchetypeTuple<'a> = (
     &'a str,
     &'a str,
-    Vec<&'a dyn FullPage>,
+    Vec<&'a dyn FullRoute>,
     Box<dyn ContentSourceInternal>,
 );

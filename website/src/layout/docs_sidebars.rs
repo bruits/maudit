@@ -1,9 +1,9 @@
 use maud::{html, Markup};
-use maudit::{content::MarkdownHeading, page::RouteContext};
+use maudit::{content::MarkdownHeading, route::PageContext};
 
 use crate::content::{DocsContent, DocsSection};
 
-pub fn left_sidebar(ctx: &mut RouteContext) -> Markup {
+pub fn left_sidebar(ctx: &mut PageContext) -> Markup {
     let content = ctx.content.get_source::<DocsContent>("docs");
 
     let mut sections = std::collections::HashMap::new();

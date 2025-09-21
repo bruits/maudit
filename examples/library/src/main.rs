@@ -5,7 +5,7 @@ use maudit::{content::glob_markdown, content_sources, routes, BuildOptions};
 
 use crate::build::build_website;
 
-mod pages {
+mod routes {
     mod article;
     mod index;
     pub use article::Article;
@@ -16,7 +16,7 @@ mod build;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     build_website(
-        routes![pages::Index],
+        routes![routes::Index],
         content_sources![
             "articles" => glob_markdown::<ArticleContent>("content/articles/*.md", None)
         ],

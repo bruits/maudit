@@ -14,13 +14,13 @@ Maudit implements `Into<RenderResult>` for the Maud `Markup` type, allowing one 
 
 ```rs
 use maud::{html, Markup};
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[route("/")]
 pub struct Index;
 
-impl Page<RouteParams, Markup> for Index {
-    fn render(&self, _: &mut RouteContext) -> Markup {
+impl Route<PageParams, Markup> for Index {
+    fn render(&self, _: &mut PageContext) -> Markup {
         html! {
             h1 { "Hello, world!" }
         }
@@ -32,13 +32,13 @@ Maudit implements the `Render` trait for assets, such as scripts, styles, and im
 
 ```rs
 use maud::{html, Markup};
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[route("/")]
 pub struct Index;
 
-impl Page<RouteParams, Markup> for Index {
-    fn render(&self, ctx: &mut RouteContext) -> Markup {
+impl Route<PageParams, Markup> for Index {
+    fn render(&self, ctx: &mut PageContext) -> Markup {
         let logo = ctx.add_image("./logo.png");
 
         html! {

@@ -8,7 +8,7 @@ use thumbhash::{rgba_to_thumb_hash, thumb_hash_to_average_rgba, thumb_hash_to_rg
 
 use super::image_cache::ImageCache;
 use crate::assets::{
-    HashAssetType, HashConfig, PageAssetsOptions, calculate_hash, make_filename, make_final_path,
+    HashAssetType, HashConfig, RouteAssetsOptions, calculate_hash, make_filename, make_final_path,
     make_final_url,
 };
 use crate::is_dev;
@@ -78,7 +78,7 @@ impl Image {
     pub fn new(
         path: PathBuf,
         image_options: Option<ImageOptions>,
-        page_assets_options: &PageAssetsOptions,
+        page_assets_options: &RouteAssetsOptions,
     ) -> Self {
         let hash = calculate_hash(
             &path,

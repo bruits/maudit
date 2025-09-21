@@ -1,4 +1,4 @@
-use maudit::{content::UntypedMarkdownContent, page::prelude::*};
+use maudit::{content::UntypedMarkdownContent, route::prelude::*};
 
 #[route("/[file]")]
 pub struct Article;
@@ -8,19 +8,19 @@ struct Params {
     file: String,
 }
 
-impl Page<Params> for Article {
-    fn routes(&self, context: &DynamicRouteContext) -> Routes<Params> {
+impl Route<Params> for Article {
+    fn pages(&self, context: &mut DynamicRouteContext) -> Pages<Params> {
         context
             .content
             .get_source::<UntypedMarkdownContent>("articles")
-            .into_routes(|entry| {
-                Route::from_params(Params {
+            .into_pages(|entry| {
+                Page::from_params(Params {
                     file: entry.id.clone(),
                 })
             })
     }
 
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> RenderResult {
         let params = ctx.params::<Params>();
         let entry = ctx
             .content

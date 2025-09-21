@@ -1,14 +1,14 @@
 use maud::html;
 use maud::PreEscaped;
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 use crate::layout::layout;
 
 #[route("/")]
 pub struct Index;
 
-impl Page for Index {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Route for Index {
+    fn render(&self, ctx: &mut PageContext) -> RenderResult {
         let features = [
             ("Performant", "Generate a site with thousands of pages in seconds using minimal resources."),
             ("Content", "Bring your content to life with built-in support for Markdown, custom components, syntax highlighting, and more."),

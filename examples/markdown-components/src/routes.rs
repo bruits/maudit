@@ -1,6 +1,6 @@
 use maud::{html, PreEscaped, DOCTYPE};
 use maudit::content::markdown_entry;
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 
 #[markdown_entry]
 pub struct ComponentExample {}
@@ -8,8 +8,8 @@ pub struct ComponentExample {}
 #[route("/")]
 pub struct IndexPage;
 
-impl Page for IndexPage {
-    fn render(&self, ctx: &mut RouteContext) -> RenderResult {
+impl Route for IndexPage {
+    fn render(&self, ctx: &mut PageContext) -> RenderResult {
         let examples = ctx.content.get_source::<ComponentExample>("examples");
         let example = examples.get_entry("showcase");
 

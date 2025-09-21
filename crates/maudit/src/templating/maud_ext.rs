@@ -3,6 +3,7 @@ use maud::{Markup, Render, html};
 use crate::{
     GENERATOR,
     assets::{Asset, Image, Script, Style},
+    route::RenderResult,
 };
 
 impl Render for Style {
@@ -34,5 +35,11 @@ impl Render for Image {
 pub fn generator() -> Markup {
     html! {
         meta name="generator" content=(GENERATOR);
+    }
+}
+
+impl From<maud::Markup> for RenderResult {
+    fn from(val: maud::Markup) -> Self {
+        RenderResult::Text(val.into_string())
     }
 }

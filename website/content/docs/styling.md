@@ -11,14 +11,14 @@ To import a stylesheet, add it anywhere in your project's directory, and use the
 In [supported templating languages](/docs/templating/), the return value of `ctx.assets.add_style()` can be used directly in the template.
 
 ```rs
-use maudit::page::prelude::*;
+use maudit::route::prelude::*;
 use maud::{html, Markup};
 
 #[route("/blog")]
 pub struct Blog;
 
-impl Page<RouteParams, Markup> for Blog {
-  fn render(&self, ctx: &mut RouteContext) -> Markup {
+impl Route<PageParams, Markup> for Blog {
+  fn render(&self, ctx: &mut PageContext) -> Markup {
     let style = ctx.assets.add_style("style.css");
 
     html! {
@@ -31,7 +31,7 @@ impl Page<RouteParams, Markup> for Blog {
 Alternatively, the `include_style()` method can be used to automatically include the stylesheet in the page, without needing to manually add it to the template. Note that, at this time, pages without a `head` tag won't have the stylesheet included.
 
 ```rs
-fn render(&self, ctx: &mut RouteContext) -> Markup {
+fn render(&self, ctx: &mut PageContext) -> Markup {
   ctx.assets.include_style("style.css");
 
   layout(
@@ -49,7 +49,7 @@ fn render(&self, ctx: &mut RouteContext) -> Markup {
 Maudit includes built-in support for [Tailwind CSS](https://tailwindcss.com/). To use it, use `add_style_with_options()` or `include_style_with_options()` with the `StyleOptions { tailwind: true }` option.
 
 ```rs
-fn render(&self, ctx: &mut RouteContext) -> Markup {
+fn render(&self, ctx: &mut PageContext) -> Markup {
   ctx.assets.add_style_with_options("style.css", StyleOptions { tailwind: true });
 
   html! {

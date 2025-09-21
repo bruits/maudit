@@ -25,22 +25,22 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let path = &attrs.path;
 
     let expanded = quote! {
-        impl maudit::page::InternalPage for #struct_name {
+        impl maudit::route::InternalRoute for #struct_name {
             fn route_raw(&self) -> String {
                 #path.to_string()
             }
         }
 
-        impl maudit::page::FullPage for #struct_name {
-            fn render_internal(&self, ctx: &mut maudit::page::RouteContext) -> maudit::page::RenderResult {
+        impl maudit::route::FullRoute for #struct_name {
+            fn render_internal(&self, ctx: &mut maudit::route::PageContext) -> maudit::route::RenderResult {
                 self.render(ctx).into()
             }
 
-            fn routes_internal(&self, ctx: &maudit::page::DynamicRouteContext) -> Vec<(maudit::page::RouteParams, Box<dyn std::any::Any + Send + Sync>, Box<dyn std::any::Any + Send + Sync>)> {
-                self.routes(ctx)
+            fn pages_internal(&self, ctx: &mut maudit::route::DynamicRouteContext) -> Vec<(maudit::route::PageParams, Box<dyn std::any::Any + Send + Sync>, Box<dyn std::any::Any + Send + Sync>)> {
+                self.pages(ctx)
                     .into_iter()
                     .map(|route| {
-                        let raw_params: maudit::page::RouteParams = (&route.params).into();
+                        let raw_params: maudit::route::PageParams = (&route.params).into();
                         let typed_params: Box<dyn std::any::Any + Send + Sync> = Box::new(route.params);
                         let props: Box<dyn std::any::Any + Send + Sync> = Box::new(route.props);
                         (raw_params, typed_params, props)
@@ -60,40 +60,58 @@ pub fn derive_params(item: TokenStream) -> TokenStream {
     let item_struct = syn::parse_macro_input!(item as ItemStruct);
     let struct_name = &item_struct.ident;
 
-    let fields = match &item_struct.fields {
+    let field_conversions = match &item_struct.fields {
         syn::Fields::Named(fields) => fields
             .named
             .iter()
-            .map(|f| f.ident.as_ref().unwrap())
+            .map(|field| {
+                let field_name = field.ident.as_ref().unwrap();
+                let field_name_str = field_name.to_string();
+
+                // Check if the field type is Option<T>
+                if is_option_type(&field.ty) {
+                    quote! {
+                        map.insert(
+                            #field_name_str.to_string(),
+                            self.#field_name.as_ref().map_or("__MAUDIT_NONE__".to_string(), |v| v.to_string())
+                        );
+                    }
+                } else {
+                    quote! {
+                        map.insert(#field_name_str.to_string(), self.#field_name.to_string());
+                    }
+                }
+            })
             .collect::<Vec<_>>(),
         _ => panic!("Only named fields are supported"),
     };
 
-    // Add a from Hashmap conversion
     let expanded = quote! {
-        impl Into<RouteParams> for #struct_name {
-            fn into(self) -> RouteParams {
-                let mut map = maudit::FxHashMap::default();
-                #(
-                    map.insert(stringify!(#fields).to_string(), self.#fields.to_string());
-                )*
-                RouteParams(map)
+        impl Into<PageParams> for #struct_name {
+            fn into(self) -> PageParams {
+                (&self).into()
             }
         }
 
-        impl Into<RouteParams> for &#struct_name {
-            fn into(self) -> RouteParams {
+        impl Into<PageParams> for &#struct_name {
+            fn into(self) -> PageParams {
                 let mut map = maudit::FxHashMap::default();
-                #(
-                    map.insert(stringify!(#fields).to_string(), self.#fields.to_string());
-                )*
-                RouteParams(map)
+                #(#field_conversions)*
+                PageParams(map)
             }
         }
-
     };
 
     TokenStream::from(expanded)
+}
+
+fn is_option_type(ty: &syn::Type) -> bool {
+    if let syn::Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            return segment.ident == "Option";
+        }
+    }
+    false
 }
 
 #[proc_macro_attribute]

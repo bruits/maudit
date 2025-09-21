@@ -3,12 +3,12 @@
 use crate::layouts::layout;
 use maud::{html, Markup};
 use maudit::content::markdown_entry;
-use maudit::page::prelude::*;
-use maudit::page::FullPage;
+use maudit::route::prelude::*;
+use maudit::route::FullRoute;
 
-pub fn blog_index_content<T: FullPage>(
-    route: impl FullPage,
-    ctx: &mut RouteContext,
+pub fn blog_index_content<T: FullRoute>(
+    route: impl FullRoute,
+    ctx: &mut PageContext,
     name: &str,
     stringified_ident: &str,
 ) -> Markup {
@@ -43,17 +43,17 @@ pub struct BlogEntryParams {
     pub entry: String,
 }
 
-pub fn blog_entry_routes(ctx: &DynamicRouteContext, name: &str) -> Routes<BlogEntryParams> {
+pub fn blog_entry_routes(ctx: &mut DynamicRouteContext, name: &str) -> Pages<BlogEntryParams> {
     let blog_entries = ctx.content.get_source::<BlogEntryContent>(name);
 
-    blog_entries.into_routes(|entry| {
-        Route::from_params(BlogEntryParams {
+    blog_entries.into_pages(|entry| {
+        Page::from_params(BlogEntryParams {
             entry: entry.id.clone(),
         })
     })
 }
 
-pub fn blog_entry_render(ctx: &mut RouteContext, name: &str, stringified_ident: &str) -> Markup {
+pub fn blog_entry_render(ctx: &mut PageContext, name: &str, stringified_ident: &str) -> Markup {
     let params = ctx.params::<BlogEntryParams>();
     let blog_entries = ctx
         .content
