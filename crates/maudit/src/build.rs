@@ -220,9 +220,9 @@ pub async fn build(
 
     let mut page_count = 0;
 
-    // TODO: This is fully serial. Parallelizing it is trivial with Rayon and stuff, but it doesn't necessarily make it
-    // faster in all cases, making it sometimes even slower due to the overhead. It'd be great to investigate and benchmark
-    // this.
+    // This is fully serial. It is trivial to make it parallel, but it currently isn't because every time I've tried to
+    // (uncommited, #25 and #41) it either made no difference or was slower. The overhead of Rayon is just too high for
+    // how fast most sites build. Ideally, it'd be configurable and default to serial, but I haven't found an ergonomic way to do that yet.
     for route in routes {
         match route.route_type() {
             RouteType::Static => {
