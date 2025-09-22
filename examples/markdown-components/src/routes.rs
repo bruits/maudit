@@ -9,7 +9,7 @@ pub struct ComponentExample {}
 pub struct IndexPage;
 
 impl Route for IndexPage {
-    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let examples = ctx.content.get_source::<ComponentExample>("examples");
         let example = examples.get_entry("showcase");
 
@@ -32,6 +32,5 @@ impl Route for IndexPage {
                 }
             }
         }
-        .into()
     }
 }

@@ -8,7 +8,7 @@ use crate::layout::layout;
 pub struct Index;
 
 impl Route for Index {
-    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let features = [
             ("Performant", "Generate a site with thousands of pages in seconds using minimal resources."),
             ("Content", "Bring your content to life with built-in support for Markdown, custom components, syntax highlighting, and more."),

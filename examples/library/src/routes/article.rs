@@ -21,7 +21,7 @@ impl Route<ArticleParams> for Article {
         })
     }
 
-    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let params = ctx.params::<ArticleParams>();
         let articles = ctx.content.get_source::<ArticleContent>("articles");
         let article = articles.get_entry(&params.article);
@@ -29,6 +29,6 @@ impl Route<ArticleParams> for Article {
         let headings = article.data(ctx).get_headings();
         println!("{:?}", headings);
 
-        layout(article.render(ctx)).into()
+        layout(article.render(ctx))
     }
 }

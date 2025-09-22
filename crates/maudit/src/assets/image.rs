@@ -78,7 +78,7 @@ impl Image {
     pub fn new(
         path: PathBuf,
         image_options: Option<ImageOptions>,
-        page_assets_options: &RouteAssetsOptions,
+        route_assets_options: &RouteAssetsOptions,
     ) -> Self {
         let hash = calculate_hash(
             &path,
@@ -86,7 +86,7 @@ impl Image {
                 asset_type: HashAssetType::Image(
                     image_options.as_ref().unwrap_or(&ImageOptions::default()),
                 ),
-                hashing_strategy: &page_assets_options.hashing_strategy,
+                hashing_strategy: &route_assets_options.hashing_strategy,
             }),
         );
 
@@ -103,8 +103,8 @@ impl Image {
                 })
                 .as_deref(),
         );
-        let build_path = make_final_path(&page_assets_options.output_assets_dir, &filename);
-        let url = make_final_url(&page_assets_options.assets_dir, &filename);
+        let build_path = make_final_path(&route_assets_options.output_assets_dir, &filename);
+        let url = make_final_url(&route_assets_options.assets_dir, &filename);
 
         Self {
             path,

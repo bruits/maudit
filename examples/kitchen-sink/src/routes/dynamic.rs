@@ -17,7 +17,7 @@ impl Route<Params> for DynamicExample {
             .collect()
     }
 
-    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let params = ctx.params::<Params>();
         let image = ctx.assets.add_image("data/social-card.png");
         ctx.assets
@@ -31,6 +31,5 @@ impl Route<Params> for DynamicExample {
             (image)
             p { (params.page) }
         }
-        .into()
     }
 }

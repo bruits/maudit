@@ -51,7 +51,7 @@ use maud::{html, PreEscaped};
 pub struct SomeArticlePage;
 
 impl Route for SomeArticlePage {
-  fn render(&self, ctx: &mut PageContext) -> RenderResult {
+  fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
     let entry = ctx
       .content
       .get_source::<BlogPost>("source_name")
@@ -66,7 +66,7 @@ impl Route for SomeArticlePage {
       }
 
       (PreEscaped(entry.render(ctx)))
-    }.into()
+    }
   }
 }
 ```
@@ -133,7 +133,7 @@ use maudit::route::prelude::*;
 pub struct DataPage;
 
 impl Route for DataPage {
-    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let entry = ctx
             .content
             .get_source::<MyType>("my_data")

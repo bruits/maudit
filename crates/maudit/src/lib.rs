@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 //!
 //! <div class="warning">
-//! You are currently reading Maudit API reference. For a more gentle introduction, please refer to our <a href="https://maudit.dev/docs">documentation</a>.
+//! You are currently reading Maudit API reference. For a more gentle introduction, please refer to our <a href="https://maudit.org/docs">documentation</a>.
 //! </div>
 
 // Modules the end-user will interact directly or indirectly with

@@ -173,7 +173,7 @@ pub async fn build(
         }
     });
 
-    let page_assets_options = options.page_assets_options();
+    let route_assets_options = options.route_assets_options();
 
     info!(target: "build", "Output directory: {}", options.output_dir.display());
 
@@ -229,7 +229,7 @@ pub async fn build(
                 let route_start = Instant::now();
 
                 let content = RouteContent::new(content_sources);
-                let mut page_assets = RouteAssets::new(&page_assets_options);
+                let mut page_assets = RouteAssets::new(&route_assets_options);
 
                 let params = PageParams::default();
                 let url = route.url(&params);
@@ -260,7 +260,7 @@ pub async fn build(
             }
             RouteType::Dynamic => {
                 let content = RouteContent::new(content_sources);
-                let mut page_assets = RouteAssets::new(&page_assets_options);
+                let mut page_assets = RouteAssets::new(&route_assets_options);
 
                 let pages = route.get_pages(&mut DynamicRouteContext {
                     content: &content,
@@ -314,7 +314,7 @@ pub async fn build(
         || !build_pages_styles.is_empty()
         || !build_pages_scripts.is_empty()
     {
-        fs::create_dir_all(&page_assets_options.output_assets_dir)?;
+        fs::create_dir_all(&route_assets_options.output_assets_dir)?;
     }
 
     if !build_pages_styles.is_empty() || !build_pages_scripts.is_empty() {
@@ -360,7 +360,7 @@ pub async fn build(
                     input: Some(bundler_inputs),
                     minify: Some(rolldown::RawMinifyOptions::Bool(!is_dev())),
                     dir: Some(
-                        page_assets_options
+                        route_assets_options
                             .output_assets_dir
                             .to_string_lossy()
                             .to_string(),
@@ -514,6 +514,8 @@ pub fn finish_route(
     route: String,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     match render_result {
+        // We've handled errors already at this point, but just in case, handle them again here
+        RenderResult::Err(e) => Err(e),
         RenderResult::Text(html) => {
             let included_styles: Vec<_> = page_assets.included_styles().collect();
             let included_scripts: Vec<_> = page_assets.included_scripts().collect();

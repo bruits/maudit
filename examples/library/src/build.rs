@@ -17,17 +17,17 @@ pub fn build_website(
 
     // Options we'll be passing to RouteAssets instances.
     // This value automatically has the paths joined based on the output directory in BuildOptions for us, so we don't have to do it ourselves.
-    let page_assets_options = options.page_assets_options();
+    let route_assets_options = options.route_assets_options();
 
     // Create the assets directory if it doesn't exist.
-    fs::create_dir_all(&page_assets_options.assets_dir)?;
+    fs::create_dir_all(&route_assets_options.assets_dir)?;
 
     for route in routes {
         match route.route_type() {
             RouteType::Static => {
                 // Our page does not include content or assets, but we'll set those up for future use.
                 let content = RouteContent::new(&content_sources);
-                let mut page_assets = RouteAssets::new(&page_assets_options);
+                let mut page_assets = RouteAssets::new(&route_assets_options);
 
                 // Static and dynamic routes share the same interface for building, but static routes do not require any parameters.
                 // As such, we can just pass an empty set of parameters (the default for PageParams).
@@ -61,7 +61,7 @@ pub fn build_website(
                 // Every page of a route may share a reference to the same RouteContent and RouteAssets instance, as it can help with caching.
                 // However, it is not stricly necessary, and you may want to instead create a new instance of RouteAssets especially if you were to parallelize the building of pages.
                 let content = RouteContent::new(&content_sources);
-                let mut page_assets = RouteAssets::new(&page_assets_options);
+                let mut page_assets = RouteAssets::new(&route_assets_options);
 
                 let mut dynamic_ctx = DynamicRouteContext {
                     content: &content,

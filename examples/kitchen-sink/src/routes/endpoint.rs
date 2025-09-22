@@ -4,7 +4,7 @@ use maudit::route::prelude::*;
 pub struct Endpoint;
 
 impl Route for Endpoint {
-    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let image = ctx.assets.add_image("data/logo.svg");
         let some_script = ctx.assets.add_script("data/script.js");
         ctx.assets
@@ -19,6 +19,5 @@ impl Route for Endpoint {
             image.path.to_string_lossy(),
             some_script.path.to_string_lossy()
         )
-        .into()
     }
 }

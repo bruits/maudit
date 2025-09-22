@@ -8,13 +8,13 @@ pub use header::header;
 use maudit::assets::StyleOptions;
 use maudit::content::MarkdownHeading;
 use maudit::maud::generator;
-use maudit::route::{RenderResult, PageContext};
+use maudit::route::{PageContext, RenderResult};
 
 pub fn docs_layout(
     main: Markup,
     ctx: &mut PageContext,
     headings: &[MarkdownHeading],
-) -> RenderResult {
+) -> impl Into<RenderResult> {
     layout(
         html! {
             div.container.mx-auto."grid-cols-(--docs-columns)".grid."min-h-[calc(100%-64px)]" {
@@ -40,7 +40,7 @@ pub fn layout(
     bottom_border: bool,
     licenses: bool,
     ctx: &mut PageContext,
-) -> RenderResult {
+) -> impl Into<RenderResult> {
     ctx.assets
         .include_style_with_options("assets/prin.css", StyleOptions { tailwind: true });
 
@@ -91,5 +91,4 @@ pub fn layout(
             }
         }
     }
-    .into()
 }

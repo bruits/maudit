@@ -20,13 +20,13 @@ impl Route<Params> for Article {
             })
     }
 
-    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let params = ctx.params::<Params>();
         let entry = ctx
             .content
             .get_source::<UntypedMarkdownContent>("articles")
             .get_entry(params.file.as_str());
 
-        entry.render(ctx).into()
+        entry.render(ctx)
     }
 }

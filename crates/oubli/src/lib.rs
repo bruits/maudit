@@ -71,16 +71,16 @@ macro_rules! archetypes {
                         #[route(stringify!($ident))]
                         pub struct Index;
                         impl Route for Index {
-                            fn render(&self, ctx: &mut PageContext) -> RenderResult {
-                                blog_index_content::<Entry>(Entry, ctx, $name, stringify!($ident)).into()
+                            fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+                                blog_index_content::<Entry>(Entry, ctx, $name, stringify!($ident))
                             }
                         }
 
                         #[route(concat!(stringify!($ident), "/[entry]"))]
                         pub struct Entry;
                         impl Route<BlogEntryParams> for Entry {
-                            fn render(&self, ctx: &mut PageContext) -> RenderResult {
-                                blog_entry_render(ctx, $name, stringify!($ident)).into()
+                            fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+                                blog_entry_render(ctx, $name, stringify!($ident))
                             }
 
                             fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<BlogEntryParams> {

@@ -54,12 +54,12 @@ use maudit::route::prelude::*;
 pub struct HelloWorld;
 ```
 
-Every page must `impl` the `Route` trait, with the required method `render`.
+Every route must `impl` the `Route` trait, with the required method `render`.
 
 ```rs
 impl Route for HelloWorld {
-  fn render(&self, ctx: &mut PageContext) -> RenderResult {
-    "Hello, world!".into()
+  fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+    "Hello, world!"
   }
 }
 ```

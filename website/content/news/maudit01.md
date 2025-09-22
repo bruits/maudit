@@ -34,8 +34,8 @@ use maudit::route::prelude::*;
 pub struct Index;
 
 impl Route for Index {
-    fn render(&self, ctx: &mut PageContext) -> RenderResult {
-        "Hello World".into()
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        "Hello World"
     }
 }
 ```

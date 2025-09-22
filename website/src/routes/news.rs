@@ -10,7 +10,7 @@ use crate::layout::layout;
 pub struct NewsIndex;
 
 impl Route for NewsIndex {
-    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let content = ctx.content.get_source::<NewsContent>("news");
 
         // Group articles by year
@@ -97,7 +97,7 @@ impl Route<NewsPageParams> for NewsPage {
         })
     }
 
-    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let slug = ctx.params::<NewsPageParams>().slug.clone();
         let entry = ctx
             .content

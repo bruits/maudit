@@ -28,19 +28,19 @@ impl Style {
         path: PathBuf,
         included: bool,
         style_options: &StyleOptions,
-        page_assets_options: &RouteAssetsOptions,
+        route_assets_options: &RouteAssetsOptions,
     ) -> Self {
         let hash = calculate_hash(
             &path,
             Some(&HashConfig {
                 asset_type: HashAssetType::Style(style_options),
-                hashing_strategy: &page_assets_options.hashing_strategy,
+                hashing_strategy: &route_assets_options.hashing_strategy,
             }),
         );
 
         let filename = make_filename(&path, &hash, Some("css"));
-        let build_path = make_final_path(&page_assets_options.output_assets_dir, &filename);
-        let url = make_final_url(&page_assets_options.assets_dir, &filename);
+        let build_path = make_final_path(&route_assets_options.output_assets_dir, &filename);
+        let url = make_final_url(&route_assets_options.assets_dir, &filename);
 
         Self {
             path,

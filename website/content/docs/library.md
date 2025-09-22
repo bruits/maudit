@@ -32,8 +32,6 @@ pub fn build_website(
 }
 ```
 
-`Box<dyn std::error::Error>` is typically seen as an anti-pattern in Rust, as it makes it hard to handle specific error types. But, for the sake of simplicity, we'll use it here.
-
 ## Building pages
 
 The first step in building our own entrypoint is to iterate over the routes and build each page. Routes can either be static (i.e. `/index`) or dynamic (i.e. `/articles/[id]`). For now, we'll only handle static routes.
@@ -47,14 +45,14 @@ pub fn build_website(
 
   // Options we'll be passing to RouteAssets instances.
   // This value automatically has the paths joined based on the output directory in BuildOptions for us, so we don't have to do it ourselves.
-  let page_assets_options = options.page_assets_options();
+  let route_assets_options = options.route_assets_options();
 
   for route in routes {
     match route.route_type() {
       RouteType::Static => {
         // Our page does not include content or assets, but we'll set those up for future use.
         let content = RouteContent::new(&content_sources);
-        let mut page_assets = RouteAssets::new(&page_assets_options);
+        let mut route_assets = RouteAssets::new(&route_assets_options);
 
         // Static and dynamic routes share the same interface for building, but static routes do not require any parameters.
         // As such, we can just pass an empty set of parameters (the default for PageParams).
@@ -62,7 +60,7 @@ pub fn build_website(
 
         // Every page has a PageContext, which contains information about the current route, as well as access to content and assets.
         let url = route.url(&params);
-        let mut ctx = PageContext::from_static_route(&content, &mut page_assets, &url);
+        let mut ctx = PageContext::from_static_route(&content, &mut route_assets, &url);
 
         let content = route.build(&mut ctx)?;
 
@@ -93,10 +91,10 @@ But, if you try to use assets, you'll notice that your pages are pointing to non
 
 Implementing asset processing is a bit outside of the scope of this guide, but we'll at least make sure that assets are working by copying them to the output directory.
 
-This can be done by iterating over the assets registered in `page_assets` and copying them to their build path after having called `route.build()` (which registers the assets used by the page):
+This can be done by iterating over the assets registered in `route_assets` and copying them to their build path after having called `route.build()` (which registers the assets used by the page):
 
 ```rs
-for asset in page_assets.assets() {
+for asset in route_assets.assets() {
     fs::copy(asset.path(), asset.build_path())?;
 }
 ```
@@ -133,7 +131,7 @@ RouteType::Dynamic => {
 
   // Every page of a route may share a reference to the same RouteContent and RouteAssets instance, as it can help with caching.
   // However, it is not stricly necessary, and you may want to instead create a new instance of RouteAssets especially if you were to parallelize the building of pages.
-  let mut page_assets = RouteAssets::new(&page_assets_options);
+  let mut page_assets = RouteAssets::new(&route_assets_options);
   let content = RouteContent::new(&content_sources);
 
   let dynamic_ctx = DynamicRouteContext {

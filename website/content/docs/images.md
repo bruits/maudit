@@ -21,10 +21,10 @@ use maudit::route::prelude::*;
 pub struct Blog;
 
 impl Route for Blog {
-  fn render(&self, ctx: &mut PageContext) -> RenderResult {
+  fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
     let image = ctx.assets.add_image("logo.png");
 
-    format!("", image.url).into()
+    format!("", image.url)
   }
 }
 ```
@@ -52,7 +52,7 @@ use maudit::route::prelude::*;
 pub struct ImagePage;
 
 impl Route for ImagePage {
-  fn render(&self, ctx: &mut PageContext) -> RenderResult {
+  fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
     let image = ctx.assets.add_image_with_options(
       "path/to/image.jpg",
       ImageOptions {
@@ -62,7 +62,7 @@ impl Route for ImagePage {
       },
     )?;
 
-    format!("<img src=\"{}\" alt=\"Processed Image\" />", image.url).into()
+    format!("<img src=\"{}\" alt=\"Processed Image\" />", image.url)
   }
 }
 ```

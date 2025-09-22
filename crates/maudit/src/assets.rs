@@ -36,7 +36,7 @@ pub struct RouteAssetsOptions {
 impl Default for RouteAssetsOptions {
     fn default() -> Self {
         let default_build_options = BuildOptions::default();
-        let page_assets_optiosn = default_build_options.page_assets_options();
+        let page_assets_optiosn = default_build_options.route_assets_options();
 
         Self {
             assets_dir: default_build_options.assets.assets_dir,

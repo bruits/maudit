@@ -11,7 +11,7 @@ use crate::{
 pub struct Index;
 
 impl Route for Index {
-    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let articles = ctx.content.get_source::<ArticleContent>("articles");
         let logo = ctx.assets.add_image("images/logo.svg");
 
@@ -30,6 +30,6 @@ impl Route for Index {
         }
         .into_string();
 
-        layout(markup).into()
+        layout(markup)
     }
 }

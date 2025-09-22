@@ -6,7 +6,7 @@ use maudit::{assets::ImageOptions, route::prelude::*};
 pub struct Index;
 
 impl Route for Index {
-    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let logo = ctx.assets.add_image("images/logo.svg");
         let walrus = ctx.assets.add_image_with_options(
             "images/walrus.jpg",
@@ -23,6 +23,5 @@ impl Route for Index {
             h2 { "Here's a 200x200 walrus:" }
             (walrus)
         })
-        .into()
     }
 }

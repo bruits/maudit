@@ -6,7 +6,7 @@ use maudit::route::prelude::*;
 pub struct Index;
 
 impl Route for Index {
-    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let logo = ctx.assets.add_image("images/logo.svg");
 
         let archetype_store = ctx
@@ -20,6 +20,5 @@ impl Route for Index {
                 a href=(archetype.id) { (archetype.data(ctx).title) }
             }
         })
-        .into()
     }
 }

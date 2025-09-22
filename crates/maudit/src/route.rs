@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 /// pub struct Index;
 ///
 /// impl Route for Index {
-///   fn render(&self, ctx: &mut PageContext) -> RenderResult {
+///   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
 ///    "<h1>Hello, world!</h1>".into()
 ///   }
 /// }
@@ -32,6 +32,28 @@ use std::path::{Path, PathBuf};
 pub enum RenderResult {
     Text(String),
     Raw(Vec<u8>),
+    Err(Box<dyn std::error::Error>),
+}
+
+impl<T> From<Result<T, Box<dyn std::error::Error>>> for RenderResult
+where
+    T: Into<RenderResult>,
+{
+    fn from(val: Result<T, Box<dyn std::error::Error>>) -> Self {
+        match val {
+            Ok(s) => s.into(),
+            Err(e) => RenderResult::Err(e),
+        }
+    }
+}
+
+impl From<RenderResult> for Result<RenderResult, Box<dyn std::error::Error>> {
+    fn from(val: RenderResult) -> Self {
+        match val {
+            RenderResult::Err(e) => Err(e),
+            _ => Ok(val),
+        }
+    }
 }
 
 impl From<String> for RenderResult {
@@ -197,7 +219,7 @@ where
 /// pub struct Index;
 ///
 /// impl Route for Index {
-///   fn render(&self, ctx: &mut PageContext) -> RenderResult {
+///   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
 ///     let logo = ctx.assets.add_image("logo.png");
 ///     let last_entries = &ctx.content.get_source::<ArticleContent>("articles").entries;
 ///     html! {
@@ -299,7 +321,7 @@ impl<'a> PageContext<'a> {
 /// }
 ///
 /// impl Route<ArticleParams> for Article {
-///    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+///    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
 ///      let params = ctx.params::<ArticleParams>();
 ///      let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///      let article = articles.get_entry(&params.article);
@@ -332,21 +354,20 @@ pub struct DynamicRouteContext<'a> {
 /// pub struct Index;
 ///
 /// impl Route for Index {
-///    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+///    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
 ///       "<h1>Hello, world!</h1>".into()
 ///   }
 /// }
 /// ```
-pub trait Route<Params = PageParams, Props = (), T = RenderResult>
+pub trait Route<Params = PageParams, Props = ()>
 where
     Params: Into<PageParams>,
     Props: 'static,
-    T: Into<RenderResult>,
 {
     fn pages(&self, _ctx: &mut DynamicRouteContext) -> Pages<Params, Props> {
         Vec::new()
     }
-    fn render(&self, ctx: &mut PageContext) -> T;
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult>;
 }
 
 /// Raw representation of the parameters passed to a page.
@@ -473,12 +494,10 @@ pub trait InternalRoute {
 }
 
 /// Extension trait providing generic convenience methods on an instance of a route
-pub trait RouteExt<Params = PageParams, Props = (), T = RenderResult>:
-    Route<Params, Props, T> + InternalRoute
+pub trait RouteExt<Params = PageParams, Props = ()>: Route<Params, Props> + InternalRoute
 where
     Params: Into<PageParams>,
     Props: 'static,
-    T: Into<RenderResult>,
 {
     /// Get the URL for this page with the given parameters
     ///
@@ -489,12 +508,11 @@ where
 }
 
 // Blanket implementation for all Page implementors that also implement InternalPage
-impl<U, Params, Props, T> RouteExt<Params, Props, T> for U
+impl<U, Params, Props> RouteExt<Params, Props> for U
 where
-    U: Route<Params, Props, T> + InternalRoute,
+    U: Route<Params, Props> + InternalRoute,
     Params: Into<PageParams>,
     Props: 'static,
-    T: Into<RenderResult>,
 {
 }
 
@@ -502,7 +520,10 @@ where
 /// We expose it because [`maudit_macros::route`] implements it for the user behind the scenes.
 pub trait FullRoute: InternalRoute + Sync + Send {
     #[doc(hidden)]
-    fn render_internal(&self, ctx: &mut PageContext) -> RenderResult;
+    fn render_internal(
+        &self,
+        ctx: &mut PageContext,
+    ) -> Result<RenderResult, Box<dyn std::error::Error>>;
     #[doc(hidden)]
     fn pages_internal(&self, context: &mut DynamicRouteContext) -> PagesResults;
 
@@ -511,7 +532,7 @@ pub trait FullRoute: InternalRoute + Sync + Send {
     }
 
     fn build(&self, ctx: &mut PageContext) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-        let result = self.render_internal(ctx);
+        let result = self.render_internal(ctx)?;
         let bytes = finish_route(result, ctx.assets, self.route_raw())?;
 
         Ok(bytes)

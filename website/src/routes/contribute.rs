@@ -7,7 +7,7 @@ use crate::layout::layout;
 pub struct Contribute;
 
 impl Route for Contribute {
-    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         layout(
             html!(
                     div.container.w-full.max-w-larger-prose.mx-auto.my-14.flex.flex-col."gap-y-12"."px-8"."sm:px-0" {

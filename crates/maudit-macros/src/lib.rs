@@ -32,8 +32,9 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         impl maudit::route::FullRoute for #struct_name {
-            fn render_internal(&self, ctx: &mut maudit::route::PageContext) -> maudit::route::RenderResult {
-                self.render(ctx).into()
+            fn render_internal(&self, ctx: &mut maudit::route::PageContext) -> Result<maudit::route::RenderResult, Box<dyn std::error::Error>> {
+                let result: maudit::route::RenderResult = self.render(ctx).into();
+                result.into()
             }
 
             fn pages_internal(&self, ctx: &mut maudit::route::DynamicRouteContext) -> Vec<(maudit::route::PageParams, Box<dyn std::any::Any + Send + Sync>, Box<dyn std::any::Any + Send + Sync>)> {

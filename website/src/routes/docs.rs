@@ -7,7 +7,7 @@ use crate::{content::DocsContent, layout::docs_layout};
 pub struct DocsIndex;
 
 impl Route for DocsIndex {
-    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let index_page = ctx
             .content
             .get_source::<DocsContent>("docs")
@@ -55,7 +55,7 @@ impl Route<DocsPageParams> for DocsPage {
         })
     }
 
-    fn render(&self, ctx: &mut PageContext) -> RenderResult {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let slug = ctx.params::<DocsPageParams>().slug.clone();
         let entry = ctx
             .content
