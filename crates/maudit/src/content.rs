@@ -1,7 +1,7 @@
 //! Core functions and structs to define the content sources of your website.
 //!
 //! Content sources represent the content of your website, such as articles, blog posts, etc. Then, content sources can be passed to [`coronate()`](crate::coronate), through the [`content_sources!`](crate::content_sources) macro, to be loaded.
-use std::{any::Any, path::PathBuf};
+use std::{any::Any, path::PathBuf, sync::Arc};
 
 use rustc_hash::FxHashMap;
 
@@ -369,12 +369,12 @@ impl ContentSources {
     }
 }
 
-type ContentSourceInitMethod<T> = Box<dyn Fn() -> Vec<ContentEntry<T>> + Send + Sync>;
+type ContentSourceInitMethod<T> = Box<dyn Fn() -> Vec<Arc<ContentEntry<T>>> + Send + Sync>;
 
 /// A source of content such as articles, blog posts, etc.
 pub struct ContentSource<T = Untyped> {
     pub name: String,
-    pub entries: Vec<ContentEntry<T>>,
+    pub entries: Vec<Arc<ContentEntry<T>>>,
     pub(crate) init_method: ContentSourceInitMethod<T>,
 }
 
@@ -398,14 +398,17 @@ impl<T> ContentSource<T> {
     }
 
     pub fn get_entry_safe(&self, id: &str) -> Option<&ContentEntry<T>> {
-        self.entries.iter().find(|entry| entry.id == id)
+        self.entries
+            .iter()
+            .find(|entry| entry.id == id)
+            .map(|v| &**v)
     }
 
     pub fn into_params<P>(&self, cb: impl Fn(&ContentEntry<T>) -> P) -> Vec<P>
     where
         P: Into<PageParams>,
     {
-        self.entries.iter().map(cb).collect()
+        self.entries.iter().map(|entry| cb(&**entry)).collect()
     }
 
     pub fn into_pages<Params, Props>(
@@ -415,7 +418,7 @@ impl<T> ContentSource<T> {
     where
         Params: Into<PageParams>,
     {
-        self.entries.iter().map(cb).collect()
+        self.entries.iter().map(|entry| cb(&**entry)).collect()
     }
 }
 

@@ -190,7 +190,10 @@ impl MarkdownOptions {
 ///   )
 /// }
 /// ```
-pub fn glob_markdown<T>(pattern: &str, options: Option<MarkdownOptions>) -> Vec<ContentEntry<T>>
+pub fn glob_markdown<T>(
+    pattern: &str,
+    options: Option<MarkdownOptions>,
+) -> Vec<Arc<ContentEntry<T>>>
 where
     T: DeserializeOwned + MarkdownContent + InternalMarkdownContent + Send + Sync + 'static,
 {
@@ -221,7 +224,7 @@ where
         let opts = options.clone();
         let path = entry.clone();
 
-        entries.push(ContentEntry::new_lazy(
+        entries.push(Arc::new(ContentEntry::new_lazy(
             id,
             Some(Box::new(move |content: &str, route_ctx| {
                 render_markdown(content, opts.as_deref(), Some(&path), Some(route_ctx))
@@ -229,7 +232,7 @@ where
             Some(content),
             data_loader,
             Some(entry),
-        ));
+        )));
     }
 
     entries

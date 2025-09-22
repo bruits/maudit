@@ -111,7 +111,8 @@ where
 }
 
 /// Pagination page for any type of items
-pub struct PaginationPage<'a, T> {
+#[derive(Clone)]
+pub struct PaginationPage<T> {
     pub page: usize,
     pub per_page: usize,
     pub total_items: usize,
@@ -122,11 +123,11 @@ pub struct PaginationPage<'a, T> {
     pub prev_page: Option<usize>,
     pub start_index: usize,
     pub end_index: usize,
-    pub items: &'a [T],
+    pub items: Vec<T>,
 }
 
-impl<'a, T> PaginationPage<'a, T> {
-    pub fn new(page: usize, per_page: usize, total_items: usize, items: &'a [T]) -> Self {
+impl<T> PaginationPage<T> {
+    pub fn new(page: usize, per_page: usize, total_items: usize, page_items: Vec<T>) -> Self {
         let total_pages = if total_items == 0 {
             1
         } else {
@@ -150,12 +151,12 @@ impl<'a, T> PaginationPage<'a, T> {
             prev_page: if page > 0 { Some(page - 1) } else { None },
             start_index,
             end_index,
-            items: &items[start_index..end_index],
+            items: page_items,
         }
     }
 }
 
-impl<'a, T> std::fmt::Debug for PaginationPage<'a, T> {
+impl<T> std::fmt::Debug for PaginationPage<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PaginationPage")
             .field("page", &self.page)
@@ -174,15 +175,19 @@ impl<'a, T> std::fmt::Debug for PaginationPage<'a, T> {
     }
 }
 
-/// Helper function to create paginated routes from any slice
-pub fn paginate<T, Params>(
-    items: &[T],
+/// Helper function to create paginated routes from any iterator
+pub fn paginate<T, I, Params>(
+    items: I,
     per_page: usize,
     mut params_fn: impl FnMut(usize) -> Params,
-) -> Pages<Params, PaginationPage<'_, T>>
+) -> Pages<Params, PaginationPage<T>>
 where
+    I: IntoIterator<Item = T>,
     Params: Into<PageParams>,
+    T: Clone,
 {
+    let items: Vec<T> = items.into_iter().collect();
+
     if items.is_empty() {
         return vec![];
     }
@@ -193,7 +198,13 @@ where
 
     for page in 0..total_pages {
         let params = params_fn(page);
-        let props = PaginationPage::new(page, per_page, total_items, items);
+
+        // Calculate the slice for this specific page
+        let start_index = page * per_page;
+        let end_index = ((page + 1) * per_page).min(total_items);
+        let page_items = items[start_index..end_index].to_vec();
+
+        let props = PaginationPage::new(page, per_page, total_items, page_items);
 
         routes.push(Page::new(params, props));
     }
@@ -442,7 +453,15 @@ pub trait InternalRoute {
 
             match value {
                 Some(value) => {
-                    route.replace_range(param_def.index..param_def.index + param_def.length, value);
+                    if value == "__MAUDIT_NONE__" {
+                        route
+                            .replace_range(param_def.index..param_def.index + param_def.length, "");
+                    } else {
+                        route.replace_range(
+                            param_def.index..param_def.index + param_def.length,
+                            value,
+                        );
+                    }
                 }
                 None => {
                     panic!(
@@ -469,7 +488,15 @@ pub trait InternalRoute {
 
             match value {
                 Some(value) => {
-                    route.replace_range(param_def.index..param_def.index + param_def.length, value);
+                    if value == "__MAUDIT_NONE__" {
+                        route
+                            .replace_range(param_def.index..param_def.index + param_def.length, "");
+                    } else {
+                        route.replace_range(
+                            param_def.index..param_def.index + param_def.length,
+                            value,
+                        );
+                    }
                 }
                 None => {
                     panic!(
@@ -753,114 +780,6 @@ mod tests {
     }
 
     #[test]
-    fn test_pagination_page_with_entries() {
-        // Create some mock content entries
-        use crate::content::ContentEntry;
-        use std::path::PathBuf;
-
-        let entries = vec![
-            ContentEntry::new(
-                "entry1".to_string(),
-                None,
-                Some("content1".to_string()),
-                (),
-                Some(PathBuf::from("file1.md")),
-            ),
-            ContentEntry::new(
-                "entry2".to_string(),
-                None,
-                Some("content2".to_string()),
-                (),
-                Some(PathBuf::from("file2.md")),
-            ),
-            ContentEntry::new(
-                "entry3".to_string(),
-                None,
-                Some("content3".to_string()),
-                (),
-                Some(PathBuf::from("file3.md")),
-            ),
-            ContentEntry::new(
-                "entry4".to_string(),
-                None,
-                Some("content4".to_string()),
-                (),
-                Some(PathBuf::from("file4.md")),
-            ),
-            ContentEntry::new(
-                "entry5".to_string(),
-                None,
-                Some("content5".to_string()),
-                (),
-                Some(PathBuf::from("file5.md")),
-            ),
-        ];
-
-        let pagination = PaginationPage::new(1, 2, 5, &entries);
-
-        assert_eq!(pagination.page, 1);
-        assert_eq!(pagination.per_page, 2);
-        assert_eq!(pagination.total_items, 5);
-        assert_eq!(pagination.total_pages, 3);
-        assert!(pagination.has_next);
-        assert!(pagination.has_prev);
-        assert_eq!(pagination.start_index, 2);
-        assert_eq!(pagination.end_index, 4);
-        assert_eq!(pagination.items.len(), 2);
-        assert_eq!(pagination.items[0].id, "entry3");
-        assert_eq!(pagination.items[1].id, "entry4");
-    }
-
-    #[test]
-    fn test_paginate_content_function() {
-        use crate::content::ContentEntry;
-        use std::path::PathBuf;
-
-        let entries = vec![
-            ContentEntry::new(
-                "entry1".to_string(),
-                None,
-                Some("content1".to_string()),
-                (),
-                Some(PathBuf::from("file1.md")),
-            ),
-            ContentEntry::new(
-                "entry2".to_string(),
-                None,
-                Some("content2".to_string()),
-                (),
-                Some(PathBuf::from("file2.md")),
-            ),
-            ContentEntry::new(
-                "entry3".to_string(),
-                None,
-                Some("content3".to_string()),
-                (),
-                Some(PathBuf::from("file3.md")),
-            ),
-        ];
-
-        let routes = paginate(&entries, 2, |page| {
-            let mut params = FxHashMap::default();
-            params.insert("page".to_string(), page.to_string());
-            PageParams(params)
-        });
-
-        assert_eq!(routes.len(), 2);
-
-        // First page
-        assert_eq!(routes[0].props.page, 0);
-        assert_eq!(routes[0].props.items.len(), 2);
-        assert_eq!(routes[0].props.items[0].id, "entry1");
-        assert_eq!(routes[0].props.items[1].id, "entry2");
-
-        // Second page
-        assert_eq!(routes[1].props.page, 1);
-        assert_eq!(routes[1].props.items.len(), 1);
-        assert_eq!(routes[1].props.items[0].id, "entry3");
-    }
-
-    #[test]
     fn test_paginate_generic_function() {
         // Test with simple strings
         let tags = vec!["rust", "javascript", "python", "go", "typescript"];
@@ -876,18 +795,18 @@ mod tests {
         // First page
         assert_eq!(routes[0].props.page, 0);
         assert_eq!(routes[0].props.items.len(), 2);
-        assert_eq!(routes[0].props.items[0], "rust");
-        assert_eq!(routes[0].props.items[1], "javascript");
+        assert_eq!(routes[0].props.items[0], &"rust");
+        assert_eq!(routes[0].props.items[1], &"javascript");
 
         // Second page
         assert_eq!(routes[1].props.page, 1);
         assert_eq!(routes[1].props.items.len(), 2);
-        assert_eq!(routes[1].props.items[0], "python");
-        assert_eq!(routes[1].props.items[1], "go");
+        assert_eq!(routes[1].props.items[0], &"python");
+        assert_eq!(routes[1].props.items[1], &"go");
 
         // Third page
         assert_eq!(routes[2].props.page, 2);
         assert_eq!(routes[2].props.items.len(), 1);
-        assert_eq!(routes[2].props.items[0], "typescript");
+        assert_eq!(routes[2].props.items[0], &"typescript");
     }
 }
