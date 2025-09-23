@@ -13,13 +13,13 @@ use components::{LinkType, ListType, MarkdownComponents, TableAlignment};
 use crate::{
     assets::Asset,
     content::{
-        ContentContext,
+        ContentContext, ContentEntry, Entry,
         shortcodes::{MarkdownShortcodes, preprocess_shortcodes},
     },
     route::PageContext,
 };
 
-use super::{ContentEntry, highlight::CodeBlock, slugger};
+use super::{highlight::CodeBlock, slugger};
 
 #[cfg(test)]
 mod shortcodes_tests;
@@ -146,10 +146,20 @@ impl InternalMarkdownContent for UntypedMarkdownContent {
     }
 }
 
-#[derive(Default)]
 pub struct MarkdownOptions {
+    pub highlight_theme: String,
     pub components: MarkdownComponents,
     pub shortcodes: MarkdownShortcodes,
+}
+
+impl Default for MarkdownOptions {
+    fn default() -> Self {
+        Self {
+            highlight_theme: "base16-ocean.dark".to_string(),
+            components: MarkdownComponents::default(),
+            shortcodes: MarkdownShortcodes::default(),
+        }
+    }
 }
 
 impl MarkdownOptions {
@@ -161,11 +171,12 @@ impl MarkdownOptions {
         Self {
             components,
             shortcodes,
+            ..Self::default()
         }
     }
 }
 
-/// Glob for Markdown files and return a vector of [`ContentEntry`]s.
+/// Glob for Markdown files and return a vector of [`Entry`]s.
 ///
 /// Typically used by [`content_sources!`](crate::content_sources) to define a Markdown content source in [`coronate()`](crate::coronate).
 ///
@@ -190,10 +201,7 @@ impl MarkdownOptions {
 ///   )
 /// }
 /// ```
-pub fn glob_markdown<T>(
-    pattern: &str,
-    options: Option<MarkdownOptions>,
-) -> Vec<Arc<ContentEntry<T>>>
+pub fn glob_markdown<T>(pattern: &str, options: Option<MarkdownOptions>) -> Vec<Entry<T>>
 where
     T: DeserializeOwned + MarkdownContent + InternalMarkdownContent + Send + Sync + 'static,
 {
@@ -224,7 +232,7 @@ where
         let opts = options.clone();
         let path = entry.clone();
 
-        entries.push(Arc::new(ContentEntry::new_lazy(
+        entries.push(Entry::create_lazy(
             id,
             Some(Box::new(move |content: &str, route_ctx| {
                 render_markdown(content, opts.as_deref(), Some(&path), Some(route_ctx))
@@ -232,7 +240,7 @@ where
             Some(content),
             data_loader,
             Some(entry),
-        )));
+        ));
     }
 
     entries
@@ -402,7 +410,7 @@ pub fn render_markdown(
 
             Event::End(TagEnd::CodeBlock) => {
                 if let Some(ref mut code_block) = code_block {
-                    let html = code_block.highlight(&code_block_content);
+                    let html = code_block.highlight(&code_block_content, "base16-ocean.dark");
                     events[i] =
                         Event::Html(format!("{}{}", html.unwrap(), "</code></pre>\n").into());
                 }

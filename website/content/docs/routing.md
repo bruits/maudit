@@ -72,7 +72,8 @@ pub struct Params {
 impl Route<Params> for Post {
   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
     let params = ctx.params::<Params>();
-    RenderResult::Text(format!("Hello, {}!", params.slug))
+
+    format!("Hello, {}!", params.slug)
   }
 
   fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<Params> {
@@ -114,9 +115,17 @@ The struct used for the parameters must implement `Into<PageParams>`, which can 
 
 Like static routes, dynamic routes must be [registered](#registering-routes) in the `coronate` function in order for them to be built.
 
+### Optional parameters
+
+Dynamic routes can also have optional parameters by using the `Option<T>` type in the parameters struct. These parameters will be completely removed from the URL and file path when they are `None`. For instance, in a route with the path `/posts/[category]/[slug]`, if the `category` parameter is `None`, the resulting URL will be `/posts/my-blog-post/`.
+
+This feature is notably useful when creating paginated routes (ex: `/posts/[page]`), where the first page sometimes does not include a page number in the URL, but subsequent pages do (e.g., `/blog` for the first page and `/blog/1` for the second page).
+
+Maudit will automatically collapse repeated slashes in the URL and file path into a single slash, as such `/articles/[slug]/[page]/` where `page` is `None` will result in `/articles/my-article/`, and not `/articles/my-article//`.
+
 ## Endpoints
 
-Maudit supports returning other types of content besides HTML, such as JSON, plain text or binary data. To do this, simply add a file extension to the route path and return the content in the `render` method. Both static and dynamic routes can be used as endpoints.
+Maudit supports returning other types of content besides HTML, such as JSON, plain text or binary data. To do this, add a file extension to the route path and return the content in the `render` method. Both static and dynamic routes can be used as endpoints.
 
 ```rs
 use maudit::route::prelude::*;

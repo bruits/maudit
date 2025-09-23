@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use maudit::content::ContentEntry;
+use maudit::content::{ContentEntry, Entry};
 use maudit::route::prelude::*;
 
 use maudit::{
@@ -169,7 +167,7 @@ fn generate_archetype_store(archetypes: &Vec<ArchetypeTuple>) -> Box<dyn Content
         Box::new(move || {
             let mut entries = Vec::new();
             for (name, stringified_ident) in names.iter() {
-                entries.push(Arc::new(ContentEntry::new(
+                entries.push(Entry::create(
                     stringified_ident.to_string(),
                     None,
                     None,
@@ -177,7 +175,7 @@ fn generate_archetype_store(archetypes: &Vec<ArchetypeTuple>) -> Box<dyn Content
                         title: name.to_string(),
                     },
                     None,
-                )));
+                ));
             }
             entries
         }),

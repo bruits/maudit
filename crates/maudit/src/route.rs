@@ -3,7 +3,7 @@
 //! Every route must implement the [`Route`] trait. Then, pages can be passed to [`coronate()`](crate::coronate), through the [`routes!`](crate::routes) macro, to be built.
 use crate::assets::RouteAssets;
 use crate::build::finish_route;
-use crate::content::RouteContent;
+use crate::content::{Entry, RouteContent};
 use crate::routing::{
     extract_params_from_raw_route, get_route_type_from_route_params, guess_if_route_is_endpoint,
 };
@@ -174,6 +174,9 @@ impl<T> std::fmt::Debug for PaginationPage<T> {
             .finish()
     }
 }
+
+/// Type alias for pagination pages of content entries, for easier usage
+pub type PaginatedContentPage<T> = PaginationPage<Entry<T>>;
 
 /// Helper function to create paginated routes from any iterator
 pub fn paginate<T, I, Params>(
@@ -385,7 +388,7 @@ where
 ///
 /// Can be accessed through [`PageContext`]'s `raw_params`.
 #[derive(Clone, Default, Debug)]
-pub struct PageParams(pub FxHashMap<String, String>);
+pub struct PageParams(pub FxHashMap<String, Option<String>>);
 
 impl PageParams {
     pub fn from_vec<T>(params: Vec<T>) -> Vec<PageParams>
@@ -452,17 +455,18 @@ pub trait InternalRoute {
             let value = params.0.get(&param_def.key);
 
             match value {
-                Some(value) => {
-                    if value == "__MAUDIT_NONE__" {
-                        route
-                            .replace_range(param_def.index..param_def.index + param_def.length, "");
-                    } else {
+                Some(value) => match value {
+                    Some(value) => {
                         route.replace_range(
                             param_def.index..param_def.index + param_def.length,
                             value,
                         );
                     }
-                }
+                    None => {
+                        route
+                            .replace_range(param_def.index..param_def.index + param_def.length, "");
+                    }
+                },
                 None => {
                     panic!(
                         "Route {:?} is missing parameter {:?}",
@@ -473,7 +477,8 @@ pub trait InternalRoute {
             }
         }
 
-        route
+        // Collapse multiple slashes into single slashes
+        route.replace("//", "/")
     }
 
     fn file_path(&self, params: &PageParams, output_dir: &Path) -> PathBuf {
@@ -487,17 +492,18 @@ pub trait InternalRoute {
             let value = params.0.get(&param_def.key);
 
             match value {
-                Some(value) => {
-                    if value == "__MAUDIT_NONE__" {
-                        route
-                            .replace_range(param_def.index..param_def.index + param_def.length, "");
-                    } else {
+                Some(value) => match value {
+                    Some(value) => {
                         route.replace_range(
                             param_def.index..param_def.index + param_def.length,
                             value,
                         );
                     }
-                }
+                    None => {
+                        route
+                            .replace_range(param_def.index..param_def.index + param_def.length, "");
+                    }
+                },
                 None => {
                     panic!(
                         "Route {:?} is missing parameter {:?}",
@@ -510,13 +516,17 @@ pub trait InternalRoute {
 
         let cleaned_raw_route = route.trim_start_matches('/').to_string();
 
-        output_dir.join(match self.is_endpoint() {
-            true => cleaned_raw_route,
-            false => match cleaned_raw_route.is_empty() {
-                true => "index.html".into(),
-                false => format!("{}/index.html", cleaned_raw_route),
-            },
-        })
+        output_dir.join(
+            match self.is_endpoint() {
+                true => cleaned_raw_route,
+                false => match cleaned_raw_route.is_empty() {
+                    true => "index.html".to_string(),
+                    false => format!("{}/index.html", cleaned_raw_route),
+                },
+            }
+            // Collapse multiple slashes into single slashes for any potential optional params
+            .replace("//", "/"),
+        )
     }
 }
 
@@ -582,11 +592,13 @@ pub mod prelude {
     //! use maudit::route::prelude::*;
     //! ```
     pub use super::{
-        DynamicRouteContext, FullRoute, Page, PageContext, PageParams, Pages, PaginationPage,
-        RenderResult, Route, RouteExt, paginate,
+        DynamicRouteContext, FullRoute, Page, PageContext, PageParams, Pages, PaginatedContentPage,
+        PaginationPage, RenderResult, Route, RouteExt, paginate,
     };
-    pub use crate::assets::{Asset, Image, Style, StyleOptions};
-    pub use crate::content::MarkdownContent;
+    pub use crate::assets::{Asset, Image, ImageFormat, ImageOptions, Script, Style, StyleOptions};
+    pub use crate::content::{
+        ContentContext, ContentEntry, Entry, EntryInner, MarkdownContent, RouteContent,
+    };
     pub use maudit_macros::{Params, route};
 }
 
@@ -614,7 +626,7 @@ mod tests {
         };
 
         let mut params = FxHashMap::default();
-        params.insert("slug".to_string(), "hello-world".to_string());
+        params.insert("slug".to_string(), Some("hello-world".to_string()));
         let route_params = PageParams(params);
 
         assert_eq!(page.url(&route_params), "/articles/hello-world");
@@ -627,8 +639,8 @@ mod tests {
         };
 
         let mut params = FxHashMap::default();
-        params.insert("tag".to_string(), "rust".to_string());
-        params.insert("page".to_string(), "2".to_string());
+        params.insert("tag".to_string(), Some("rust".to_string()));
+        params.insert("page".to_string(), Some("2".to_string()));
         let route_params = PageParams(params);
 
         assert_eq!(page.url(&route_params), "/articles/tags/rust/2");
@@ -643,8 +655,11 @@ mod tests {
         };
 
         let mut params = FxHashMap::default();
-        params.insert("tag".to_string(), "development-experience".to_string()); // Long replacement
-        params.insert("page".to_string(), "1".to_string()); // Short replacement
+        params.insert(
+            "tag".to_string(),
+            Some("development-experience".to_string()),
+        ); // Long replacement
+        params.insert("page".to_string(), Some("1".to_string())); // Short replacement
         let route_params = PageParams(params);
 
         assert_eq!(
@@ -671,7 +686,7 @@ mod tests {
         };
 
         let mut params = FxHashMap::default();
-        params.insert("lang".to_string(), "en".to_string());
+        params.insert("lang".to_string(), Some("en".to_string()));
         let route_params = PageParams(params);
 
         assert_eq!(page.url(&route_params), "/en/about");
@@ -684,7 +699,7 @@ mod tests {
         };
 
         let mut params = FxHashMap::default();
-        params.insert("id".to_string(), "123".to_string());
+        params.insert("id".to_string(), Some("123".to_string()));
         let route_params = PageParams(params);
 
         assert_eq!(page.url(&route_params), "/api/users/123");
@@ -697,7 +712,7 @@ mod tests {
         };
 
         let mut params = FxHashMap::default();
-        params.insert("slug".to_string(), "hello-world".to_string());
+        params.insert("slug".to_string(), Some("hello-world".to_string()));
         let route_params = PageParams(params);
 
         let output_dir = Path::new("/dist");
@@ -713,8 +728,8 @@ mod tests {
         };
 
         let mut params = FxHashMap::default();
-        params.insert("tag".to_string(), "rust".to_string());
-        params.insert("page".to_string(), "2".to_string());
+        params.insert("tag".to_string(), Some("rust".to_string()));
+        params.insert("page".to_string(), Some("2".to_string()));
         let route_params = PageParams(params);
 
         let output_dir = Path::new("/dist");
@@ -770,7 +785,7 @@ mod tests {
         };
 
         let mut params = FxHashMap::default();
-        params.insert("page".to_string(), "1".to_string());
+        params.insert("page".to_string(), Some("1".to_string()));
         let route_params = PageParams(params);
 
         let output_dir = Path::new("/dist");
@@ -786,7 +801,7 @@ mod tests {
 
         let routes = paginate(&tags, 2, |page| {
             let mut params = FxHashMap::default();
-            params.insert("page".to_string(), page.to_string());
+            params.insert("page".to_string(), Some(page.to_string()));
             PageParams(params)
         });
 
@@ -808,5 +823,98 @@ mod tests {
         assert_eq!(routes[2].props.page, 2);
         assert_eq!(routes[2].props.items.len(), 1);
         assert_eq!(routes[2].props.items[0], &"typescript");
+    }
+
+    #[test]
+    fn test_url_optional_parameter_with_value() {
+        let page = TestPage {
+            route: "/articles/[slug]/[page]".to_string(),
+        };
+
+        let mut params = FxHashMap::default();
+        params.insert("slug".to_string(), Some("hello-world".to_string()));
+        params.insert("page".to_string(), Some("2".to_string()));
+        let route_params = PageParams(params);
+
+        assert_eq!(page.url(&route_params), "/articles/hello-world/2");
+    }
+
+    #[test]
+    fn test_url_optional_parameter_none() {
+        let page = TestPage {
+            route: "/articles/[slug]/[page]".to_string(),
+        };
+
+        let mut params = FxHashMap::default();
+        params.insert("slug".to_string(), Some("hello-world".to_string()));
+        params.insert("page".to_string(), None);
+        let route_params = PageParams(params);
+
+        assert_eq!(page.url(&route_params), "/articles/hello-world/");
+    }
+
+    #[test]
+    fn test_url_multiple_optional_parameters() {
+        let page = TestPage {
+            route: "/[lang]/articles/[category]/[page]".to_string(),
+        };
+
+        let mut params = FxHashMap::default();
+        params.insert("lang".to_string(), None);
+        params.insert("category".to_string(), Some("rust".to_string()));
+        params.insert("page".to_string(), None);
+        let route_params = PageParams(params);
+
+        assert_eq!(page.url(&route_params), "/articles/rust/");
+    }
+
+    #[test]
+    fn test_file_path_optional_parameter_with_value() {
+        let page = TestPage {
+            route: "/articles/[slug]/[page]".to_string(),
+        };
+
+        let mut params = FxHashMap::default();
+        params.insert("slug".to_string(), Some("hello-world".to_string()));
+        params.insert("page".to_string(), Some("2".to_string()));
+        let route_params = PageParams(params);
+
+        let output_dir = Path::new("/dist");
+        let expected = Path::new("/dist/articles/hello-world/2/index.html");
+
+        assert_eq!(page.file_path(&route_params, output_dir), expected);
+    }
+
+    #[test]
+    fn test_file_path_optional_parameter_none() {
+        let page = TestPage {
+            route: "/articles/[slug]/[page]".to_string(),
+        };
+
+        let mut params = FxHashMap::default();
+        params.insert("slug".to_string(), Some("hello-world".to_string()));
+        params.insert("page".to_string(), None);
+        let route_params = PageParams(params);
+
+        let output_dir = Path::new("/dist");
+        let expected = Path::new("/dist/articles/hello-world/index.html");
+
+        assert_eq!(page.file_path(&route_params, output_dir), expected);
+    }
+
+    #[test]
+    fn test_file_path_optional_parameter_endpoint() {
+        let page = TestPage {
+            route: "/api/[version]/data.json".to_string(),
+        };
+
+        let mut params = FxHashMap::default();
+        params.insert("version".to_string(), None);
+        let route_params = PageParams(params);
+
+        let output_dir = Path::new("/dist");
+        let expected = Path::new("/dist/api/data.json");
+
+        assert_eq!(page.file_path(&route_params, output_dir), expected);
     }
 }

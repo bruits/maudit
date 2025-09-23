@@ -37,7 +37,7 @@ fn main() {
 }
 ```
 
-Where `loader` and `glob_markdown` are functions returning a Vec of `ContentEntry`. Typically, a loader also accepts a type argument specifying the shape of the data for each entries it returns, which will be used inside your pages to provide typed content.
+Where `loader` and `glob_markdown` are functions returning a Vec of `Entry`. Typically, a loader also accepts a type argument specifying the shape of the data for each entries it returns, which will be used inside your pages to provide typed content.
 
 ## Using a content source in pages
 
@@ -96,12 +96,12 @@ This loader take a glob pattern (compatible with [the `glob` crate](https://gith
 
 ### Custom loaders
 
-As said previously, a loader is simply a function returning a Vec of `ContentEntry`. This means you can create your own loaders to load content from any source you want, as long as you return the right type.
+As said previously, a loader is a function returning a Vec of `Entry`. This means you can create your own loaders to load content from any source you want, as long as you return the right type.
 
 For instance, you could create a loader that fetches a remote JSON file and deserializes it into a struct, producing a content source with a single entry:
 
 ```rs
-use maudit::content::{ContentEntry};
+use maudit::content::{Entry, ContentEntry};
 
 #[derive(serde::Deserialize)]
 pub struct MyType {
@@ -109,11 +109,11 @@ pub struct MyType {
     pub name: String,
 }
 
-pub fn my_loader(path: &str) -> Vec<ContentEntry<MyType>> {
+pub fn my_loader(path: &str) -> Vec<Entry<MyType>> {
     let response = reqwest::blocking::get(path).unwrap();
     let data = response.json::<MyType>().unwrap();
 
-    vec![ContentEntry::new(data.id.into(), None, None, data, None)]
+    vec![Entry::create(data.id.into(), None, None, data, None)]
 }
 
 // Use it as a content source:
@@ -149,10 +149,10 @@ impl Route for DataPage {
 }
 ```
 
-Content entries can also be rendered by passing a render function to the `render` method of `ContentEntry`.
+Content entries can also be rendered by passing a render function to the `render` method of `Entry`.
 
 ```rs
-ContentEntry::new(
+Entry::create(
   data.id.into(),
   Some(Box::new(|content, ctx| {
     // render the content string into HTML

@@ -1,3 +1,4 @@
+use core::panic;
 use std::sync::OnceLock;
 use syntect::{
     Error,
@@ -73,18 +74,29 @@ impl CodeBlock {
         (Self { meta }, opening_html)
     }
 
-    pub fn highlight(&self, content: &str) -> Result<String, Error> {
+    pub fn highlight(&self, content: &str, theme_path: &str) -> Result<String, Error> {
         let ss = get_syntax_set();
         let ts = get_theme_set();
 
         let syntax = ss
-            .find_syntax_by_name(&self.meta.language)
+            .find_syntax_by_token(&self.meta.language)
+            // Maybe token is enough, looking around at other users of Syntect, it seems like they often just use by_token, not sure.
+            .or_else(|| ss.find_syntax_by_name(&self.meta.language))
             .or_else(|| ss.find_syntax_by_extension(&self.meta.language))
             .or_else(|| ss.find_syntax_by_first_line(content))
             .unwrap_or_else(|| ss.find_syntax_plain_text());
 
-        // TODO: Allow configuring the theme
-        let mut h = HighlightLines::new(syntax, &ts.themes["base16-ocean.dark"]);
+        let theme = match ts.themes.get(theme_path) {
+            Some(theme) => theme,
+            None => &match ThemeSet::get_theme(theme_path) {
+                Ok(theme) => theme,
+                Err(_) => panic!(
+                    "Theme '{theme_path}' not found in default themes and could not be loaded from file."
+                ),
+            },
+        };
+
+        let mut h = HighlightLines::new(syntax, theme);
 
         let mut highlighted = String::new();
         for line in LinesWithEndings::from(content) {
