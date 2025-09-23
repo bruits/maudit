@@ -1,5 +1,36 @@
 # maudit
 
+## 0.6.0
+
+### Minor changes
+
+- [90cef9f](https://github.com/bruits/maudit/commit/90cef9f4049b8f2a236c622c564bfd29a4b6a8d2) Update the return type of `Route::render` to allow returning anything that can be converted into a `RenderResult`, such as `String` or `Result<String, E>`.
+  
+  This not only makes it more ergonomic to return strings directly from the `render` method, but also allows using the `?` operator to propagate errors without needing to change the function signature. This does require typing a few more characters, but it should be worth it for the improved ergonomics. Eventually, when https://github.com/rust-lang/rust/issues/63063 lands, it'll be hidden behind a simpler to write type alias. — Thanks @Princesseuh!
+- [2bfa8a8](https://github.com/bruits/maudit/commit/2bfa8a87212243b27c2231b836e7da9ec2cd3288) Rename (almost) all instances of Routes to Pages and vice versa.
+  
+  Previously, in Maudit, a _page_ referred to the struct you'd pass to `coronate` and a page could have multiple routes if it was dynamic. In my opinion, the reverse is more intuitive: a _route_ is the struct you define, and a route can have multiple _pages_ if it's dynamic. This also applies to every other types that had "Route" or "Page" in their name.
+  
+  As such, the following renames were made:
+  
+  - `Route` -> `Page`
+  - `FullRoute` -> `FullPage`
+  - `RouteContext` -> `PageContext`
+  - `RouteParams` -> `PageParams`
+  - `Routes` -> `Pages`
+  - `fn routes` -> `fn pages`
+  - `maudit::page` -> `maudit::route` (including the prelude, which is now `maudit::route::prelude`)
+  
+  And probably some others I forgot. — Thanks @Princesseuh!
+
+### Patch changes
+
+- [4496b9b](https://github.com/bruits/maudit/commit/4496b9bcd8bbcdde7bd2d3b9b347aada6d182c0f) Improve hashing performance for assets — Thanks @Princesseuh!
+- [4496b9b](https://github.com/bruits/maudit/commit/4496b9bcd8bbcdde7bd2d3b9b347aada6d182c0f) Changed syntax for self-closing shortcodes to require an explicit closing slash, ex: `{{ image /}}` — Thanks @Princesseuh!
+- [4496b9b](https://github.com/bruits/maudit/commit/4496b9bcd8bbcdde7bd2d3b9b347aada6d182c0f) Adds width and height properties to images and generated html — Thanks @Princesseuh!
+- Updated dependencies: maudit-macros@0.5.0
+
+
 ## 0.5.1
 
 ### Patch changes
