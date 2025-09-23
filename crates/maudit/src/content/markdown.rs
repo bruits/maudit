@@ -208,6 +208,7 @@ where
     let mut entries = vec![];
     let options = options.map(Arc::new);
 
+    // TODO: `glob` is kinda slow, but alternatives are either unmaintained, have annoying bugs or not faster.
     for entry in glob_fs(pattern).unwrap() {
         let entry = entry.unwrap();
 

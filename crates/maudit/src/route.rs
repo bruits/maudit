@@ -482,51 +482,48 @@ pub trait InternalRoute {
     }
 
     fn file_path(&self, params: &PageParams, output_dir: &Path) -> PathBuf {
-        let mut params_def = extract_params_from_raw_route(&self.route_raw());
-        let mut route = self.route_raw();
+        let params_def = extract_params_from_raw_route(&self.route_raw());
+        let route_template = self.route_raw();
 
-        // Sort params by index in reverse order to avoid index shifting issues
-        params_def.sort_by(|a, b| b.index.cmp(&a.index));
+        let mut sorted_params = params_def;
+        sorted_params.sort_by_key(|p| p.index);
 
-        for param_def in params_def {
-            let value = params.0.get(&param_def.key);
+        let mut path = PathBuf::from(output_dir);
+        let mut last_index = 0;
+        let mut current_component = String::new();
 
-            match value {
-                Some(value) => match value {
-                    Some(value) => {
-                        route.replace_range(
-                            param_def.index..param_def.index + param_def.length,
-                            value,
-                        );
-                    }
-                    None => {
-                        route
-                            .replace_range(param_def.index..param_def.index + param_def.length, "");
-                    }
-                },
-                None => {
-                    panic!(
-                        "Route {:?} is missing parameter {:?}",
-                        self.route_raw(),
-                        param_def.key
-                    );
-                }
+        for param_def in sorted_params.iter() {
+            // Push everything before this param into current_component
+            current_component.push_str(&route_template[last_index..param_def.index]);
+
+            // Append param value if present
+            let value = params.0.get(&param_def.key).unwrap_or_else(|| {
+                panic!(
+                    "Route {:?} is missing parameter {:?}",
+                    route_template, param_def.key
+                )
+            });
+            if let Some(v) = value {
+                current_component.push_str(v);
             }
+
+            last_index = param_def.index + param_def.length;
         }
 
-        let cleaned_raw_route = route.trim_start_matches('/').to_string();
+        // Append remainder of the route
+        current_component.push_str(&route_template[last_index..]);
 
-        output_dir.join(
-            match self.is_endpoint() {
-                true => cleaned_raw_route,
-                false => match cleaned_raw_route.is_empty() {
-                    true => "index.html".to_string(),
-                    false => format!("{}/index.html", cleaned_raw_route),
-                },
-            }
-            // Collapse multiple slashes into single slashes for any potential optional params
-            .replace("//", "/"),
-        )
+        // Split by '/' and push non-empty components into the PathBuf
+        for part in current_component.split('/').filter(|s| !s.is_empty()) {
+            path.push(part);
+        }
+
+        // Handle endpoint vs. page
+        if !self.is_endpoint() {
+            path.push("index.html");
+        }
+
+        path
     }
 }
 
