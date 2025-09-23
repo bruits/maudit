@@ -37,7 +37,13 @@ Running `cargo run` will show which pages of your site are slow to build, allowi
 
 ### Preventing build directory block
 
-As Maudit recompile your project on every change, it is possible to run into issues where the build directory is first blocked by another process, [most commonly `rust-analyzer` in your editor.](https://github.com/rust-lang/rust-analyzer/issues/4616), slowing down builds significantly.
+As Maudit recompile your project on every change, it is possible to run into issues where the build directory is first blocked by another process, [most commonly `rust-analyzer` in your editor](https://github.com/rust-lang/rust-analyzer/issues/4616), slowing down builds significantly.
+
+To avoid this, [you can change the build directory used by `rust-analyzer`](https://rust-analyzer.github.io/book/configuration#cargo.targetDir) to a different directory than the default `target` directory used by Cargo. For example, in VSCode you can add the following to your settings:
+
+```json
+"rust-analyzer.cargo.targetDir": true // or a specific path like "target-ra"
+```
 
 While this does improve the time it takes to get feedback on changes, note that changing `rust-analyzer` settings to use a different build directory will use a lot of disk space.
 

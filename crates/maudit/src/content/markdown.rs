@@ -411,7 +411,12 @@ pub fn render_markdown(
 
             Event::End(TagEnd::CodeBlock) => {
                 if let Some(ref mut code_block) = code_block {
-                    let html = code_block.highlight(&code_block_content, "base16-ocean.dark");
+                    let html = code_block.highlight(
+                        &code_block_content,
+                        &options
+                            .unwrap_or(&MarkdownOptions::default())
+                            .highlight_theme,
+                    );
                     events[i] =
                         Event::Html(format!("{}{}", html.unwrap(), "</code></pre>\n").into());
                 }
