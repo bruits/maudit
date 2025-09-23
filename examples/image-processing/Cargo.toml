@@ -9,4 +9,4 @@ intended_version = "0.5.0"
 
 [dependencies]
 maudit = { workspace = true }
-maud = "0.26.0"
+maud = "0.27.0"
