@@ -31,7 +31,7 @@ Maudit is a fairly standard Rust project with a typical directory structure. It 
 ### Prerequisites
 
 - Latest stable version of [Rust](https://www.rust-lang.org/)
-- (Optional, for website and examples using Tailwind) [Node.js](https://nodejs.org/) and [pnpm](https://pnpm.io/).
+- (Optional, for website, examples using Tailwind and the CLI) [Node.js](https://nodejs.org/) and [pnpm](https://pnpm.io/).
   - We recommend installing pnpm using [Corepack](https://pnpm.io/installation#using-corepack).
 
 ### Project structure

@@ -12,7 +12,8 @@ fn main() {
     }
 
     let js_src_dir = PathBuf::from("src/dev/js");
-    let js_dist_dir = js_src_dir.join("dist");
+    let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR environment variable not set");
+    let js_dist_dir = PathBuf::from(out_dir).join("js");
 
     // Ensure the dist directory exists
     std::fs::create_dir_all(&js_dist_dir).expect("Failed to create dist directory");
