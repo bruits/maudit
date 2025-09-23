@@ -1,5 +1,14 @@
 # maudit-cli
 
+## 0.5.0
+
+### Minor changes
+
+- [2bfa8a8](https://github.com/bruits/maudit/commit/2bfa8a87212243b27c2231b836e7da9ec2cd3288) Improve general hot-reloading experience.
+  
+  The Maudit CLI will now output errors encountered during hot-reloading to the terminal and in the browser. — Thanks @Princesseuh!
+
+
 ## 0.4.5
 
 ### Patch changes
