@@ -6,7 +6,6 @@ use crate::assets::{
 };
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-#[non_exhaustive]
 pub struct Script {
     pub path: PathBuf,
     pub(crate) hash: String,

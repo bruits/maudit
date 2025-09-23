@@ -1,5 +1,5 @@
 use maud::{html, Markup, PreEscaped};
-use maudit::{content::ContentEntry, route::prelude::*};
+use maudit::{content::EntryInner, route::prelude::*};
 
 use crate::{content::DocsContent, layout::docs_layout};
 
@@ -19,7 +19,7 @@ impl Route for DocsIndex {
     }
 }
 
-fn render_entry(entry: &ContentEntry<DocsContent>, ctx: &mut PageContext) -> Markup {
+fn render_entry(entry: &EntryInner<DocsContent>, ctx: &mut PageContext) -> Markup {
     html! {
         section.mb-4.border-b."border-[#e9e9e7]".pb-2 {
             @if let Some(section) = &entry.data(ctx).section {

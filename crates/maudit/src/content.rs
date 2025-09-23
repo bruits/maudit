@@ -1,7 +1,7 @@
 //! Core functions and structs to define the content sources of your website.
 //!
 //! Content sources represent the content of your website, such as articles, blog posts, etc. Then, content sources can be passed to [`coronate()`](crate::coronate), through the [`content_sources!`](crate::content_sources) macro, to be loaded.
-use std::{any::Any, path::PathBuf};
+use std::{any::Any, path::PathBuf, sync::Arc};
 
 use rustc_hash::FxHashMap;
 
@@ -223,12 +223,12 @@ impl RouteContent<'_> {
 /// impl Route for Article {
 ///    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
 ///      let articles = ctx.content.get_source::<ArticleContent>("articles");
-///      let article = articles.get_entry("my-article"); // returns a ContentEntry
+///      let article = articles.get_entry("my-article"); // returns a Entry<ArticleContent>
 ///      article.render(ctx).into()
 ///   }
 /// }
 /// ```
-pub struct ContentEntry<T> {
+pub struct EntryInner<T> {
     pub id: String,
     render: OptionalContentRenderFn,
     pub raw_content: Option<String>,
@@ -236,6 +236,47 @@ pub struct ContentEntry<T> {
     cached_data: std::sync::OnceLock<T>,
     pub file_path: Option<PathBuf>,
 }
+
+/// Helper type for easier usage of `EntryInner`. Content sources always return Arc-wrapped entries, but the user ergonomics of writing `Arc<EntryInner<T>>` is not great.
+pub type Entry<T> = Arc<EntryInner<T>>;
+
+pub trait ContentEntry<T> {
+    fn create(
+        id: String,
+        render: OptionalContentRenderFn,
+        raw_content: Option<String>,
+        data: T,
+        file_path: Option<PathBuf>,
+    ) -> Entry<T> {
+        Arc::new(EntryInner {
+            id,
+            render,
+            raw_content,
+            data_loader: None,
+            cached_data: std::sync::OnceLock::from(data),
+            file_path,
+        })
+    }
+
+    fn create_lazy(
+        id: String,
+        render: OptionalContentRenderFn,
+        raw_content: Option<String>,
+        data_loader: DataLoadingFn<T>,
+        file_path: Option<PathBuf>,
+    ) -> Entry<T> {
+        Arc::new(EntryInner {
+            id,
+            render,
+            raw_content,
+            data_loader: Some(data_loader),
+            cached_data: std::sync::OnceLock::new(),
+            file_path,
+        })
+    }
+}
+
+impl<T> ContentEntry<T> for Entry<T> {}
 
 /// Trait for contexts that can provide access to content
 pub trait ContentContext {
@@ -268,41 +309,7 @@ type DataLoadingFn<T> = Box<dyn Fn(&mut dyn ContentContext) -> T + Send + Sync>;
 type OptionalContentRenderFn =
     Option<Box<dyn Fn(&str, &mut crate::route::PageContext) -> String + Send + Sync>>;
 
-impl<T> ContentEntry<T> {
-    pub fn new(
-        id: String,
-        render: OptionalContentRenderFn,
-        raw_content: Option<String>,
-        data: T,
-        file_path: Option<PathBuf>,
-    ) -> Self {
-        Self {
-            id,
-            render,
-            raw_content,
-            data_loader: None,
-            cached_data: std::sync::OnceLock::from(data),
-            file_path,
-        }
-    }
-
-    pub fn new_lazy(
-        id: String,
-        render: OptionalContentRenderFn,
-        raw_content: Option<String>,
-        data_loader: DataLoadingFn<T>,
-        file_path: Option<PathBuf>,
-    ) -> Self {
-        Self {
-            id,
-            render,
-            raw_content,
-            data_loader: Some(data_loader),
-            cached_data: std::sync::OnceLock::new(),
-            file_path,
-        }
-    }
-
+impl<T> EntryInner<T> {
     pub fn data<C: ContentContext>(&self, ctx: &mut C) -> &T {
         self.cached_data.get_or_init(|| {
             if let Some(ref loader) = self.data_loader {
@@ -369,12 +376,12 @@ impl ContentSources {
     }
 }
 
-type ContentSourceInitMethod<T> = Box<dyn Fn() -> Vec<ContentEntry<T>> + Send + Sync>;
+type ContentSourceInitMethod<T> = Box<dyn Fn() -> Vec<Arc<EntryInner<T>>> + Send + Sync>;
 
 /// A source of content such as articles, blog posts, etc.
 pub struct ContentSource<T = Untyped> {
     pub name: String,
-    pub entries: Vec<ContentEntry<T>>,
+    pub entries: Vec<Arc<EntryInner<T>>>,
     pub(crate) init_method: ContentSourceInitMethod<T>,
 }
 
@@ -390,18 +397,18 @@ impl<T> ContentSource<T> {
         }
     }
 
-    pub fn get_entry(&self, id: &str) -> &ContentEntry<T> {
+    pub fn get_entry(&self, id: &str) -> &Entry<T> {
         self.entries
             .iter()
             .find(|entry| entry.id == id)
             .unwrap_or_else(|| panic!("Entry with id '{}' not found", id))
     }
 
-    pub fn get_entry_safe(&self, id: &str) -> Option<&ContentEntry<T>> {
+    pub fn get_entry_safe(&self, id: &str) -> Option<&Entry<T>> {
         self.entries.iter().find(|entry| entry.id == id)
     }
 
-    pub fn into_params<P>(&self, cb: impl Fn(&ContentEntry<T>) -> P) -> Vec<P>
+    pub fn into_params<P>(&self, cb: impl Fn(&Entry<T>) -> P) -> Vec<P>
     where
         P: Into<PageParams>,
     {
@@ -410,7 +417,7 @@ impl<T> ContentSource<T> {
 
     pub fn into_pages<Params, Props>(
         &self,
-        cb: impl Fn(&ContentEntry<T>) -> crate::route::Page<Params, Props>,
+        cb: impl Fn(&Entry<T>) -> crate::route::Page<Params, Props>,
     ) -> crate::route::Pages<Params, Props>
     where
         Params: Into<PageParams>,

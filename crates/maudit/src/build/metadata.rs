@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap;
 pub struct PageOutput {
     pub route: String,
     pub file_path: String,
-    pub params: Option<FxHashMap<String, String>>,
+    pub params: Option<FxHashMap<String, Option<String>>>,
 }
 
 /// Metadata returned by [`coronate()`](crate::coronate) for a single static asset after a successful build.
@@ -42,7 +42,7 @@ impl BuildOutput {
         &mut self,
         route: String,
         file_path: String,
-        params: Option<FxHashMap<String, String>>,
+        params: Option<FxHashMap<String, Option<String>>>,
     ) {
         self.pages.push(PageOutput {
             route,

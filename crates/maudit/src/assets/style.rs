@@ -11,7 +11,6 @@ pub struct StyleOptions {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-#[non_exhaustive]
 pub struct Style {
     pub path: PathBuf,
     pub(crate) hash: String,

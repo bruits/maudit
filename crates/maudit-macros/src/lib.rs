@@ -74,12 +74,12 @@ pub fn derive_params(item: TokenStream) -> TokenStream {
                     quote! {
                         map.insert(
                             #field_name_str.to_string(),
-                            self.#field_name.as_ref().map_or("__MAUDIT_NONE__".to_string(), |v| v.to_string())
+                            self.#field_name.as_ref().map(|v| v.to_string())
                         );
                     }
                 } else {
                     quote! {
-                        map.insert(#field_name_str.to_string(), self.#field_name.to_string());
+                        map.insert(#field_name_str.to_string(), Some(self.#field_name.to_string()));
                     }
                 }
             })

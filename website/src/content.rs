@@ -1,5 +1,5 @@
 use maud::{PreEscaped, Render};
-use maudit::content::{glob_markdown, markdown_entry, ContentSources};
+use maudit::content::{glob_markdown, markdown_entry, ContentSources, MarkdownOptions};
 use maudit::content_sources;
 use serde::Deserialize;
 
@@ -39,5 +39,8 @@ pub struct NewsContent {
 }
 
 pub fn content_sources() -> ContentSources {
-    content_sources!["docs" => glob_markdown::<DocsContent>("content/docs/*.md", None), "news" => glob_markdown::<NewsContent>("content/news/*.md", None)]
+    content_sources!["docs" => glob_markdown::<DocsContent>("content/docs/*.md", Some(MarkdownOptions {
+        highlight_theme: "base16-eighties.dark".into(),
+        ..Default::default()
+    })), "news" => glob_markdown::<NewsContent>("content/news/*.md", None)]
 }

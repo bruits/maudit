@@ -3,7 +3,7 @@
 //! Every route must implement the [`Route`] trait. Then, pages can be passed to [`coronate()`](crate::coronate), through the [`routes!`](crate::routes) macro, to be built.
 use crate::assets::RouteAssets;
 use crate::build::finish_route;
-use crate::content::RouteContent;
+use crate::content::{Entry, RouteContent};
 use crate::routing::{
     extract_params_from_raw_route, get_route_type_from_route_params, guess_if_route_is_endpoint,
 };
@@ -111,7 +111,8 @@ where
 }
 
 /// Pagination page for any type of items
-pub struct PaginationPage<'a, T> {
+#[derive(Clone)]
+pub struct PaginationPage<T> {
     pub page: usize,
     pub per_page: usize,
     pub total_items: usize,
@@ -122,11 +123,11 @@ pub struct PaginationPage<'a, T> {
     pub prev_page: Option<usize>,
     pub start_index: usize,
     pub end_index: usize,
-    pub items: &'a [T],
+    pub items: Vec<T>,
 }
 
-impl<'a, T> PaginationPage<'a, T> {
-    pub fn new(page: usize, per_page: usize, total_items: usize, items: &'a [T]) -> Self {
+impl<T> PaginationPage<T> {
+    pub fn new(page: usize, per_page: usize, total_items: usize, page_items: Vec<T>) -> Self {
         let total_pages = if total_items == 0 {
             1
         } else {
@@ -150,12 +151,12 @@ impl<'a, T> PaginationPage<'a, T> {
             prev_page: if page > 0 { Some(page - 1) } else { None },
             start_index,
             end_index,
-            items: &items[start_index..end_index],
+            items: page_items,
         }
     }
 }
 
-impl<'a, T> std::fmt::Debug for PaginationPage<'a, T> {
+impl<T> std::fmt::Debug for PaginationPage<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PaginationPage")
             .field("page", &self.page)
@@ -174,15 +175,22 @@ impl<'a, T> std::fmt::Debug for PaginationPage<'a, T> {
     }
 }
 
-/// Helper function to create paginated routes from any slice
-pub fn paginate<T, Params>(
-    items: &[T],
+/// Type alias for pagination pages of content entries, for easier usage
+pub type PaginatedContentPage<T> = PaginationPage<Entry<T>>;
+
+/// Helper function to create paginated routes from any iterator
+pub fn paginate<T, I, Params>(
+    items: I,
     per_page: usize,
     mut params_fn: impl FnMut(usize) -> Params,
-) -> Pages<Params, PaginationPage<'_, T>>
+) -> Pages<Params, PaginationPage<T>>
 where
+    I: IntoIterator<Item = T>,
     Params: Into<PageParams>,
+    T: Clone,
 {
+    let items: Vec<T> = items.into_iter().collect();
+
     if items.is_empty() {
         return vec![];
     }
@@ -193,7 +201,13 @@ where
 
     for page in 0..total_pages {
         let params = params_fn(page);
-        let props = PaginationPage::new(page, per_page, total_items, items);
+
+        // Calculate the slice for this specific page
+        let start_index = page * per_page;
+        let end_index = ((page + 1) * per_page).min(total_items);
+        let page_items = items[start_index..end_index].to_vec();
+
+        let props = PaginationPage::new(page, per_page, total_items, page_items);
 
         routes.push(Page::new(params, props));
     }
@@ -374,7 +388,7 @@ where
 ///
 /// Can be accessed through [`PageContext`]'s `raw_params`.
 #[derive(Clone, Default, Debug)]
-pub struct PageParams(pub FxHashMap<String, String>);
+pub struct PageParams(pub FxHashMap<String, Option<String>>);
 
 impl PageParams {
     pub fn from_vec<T>(params: Vec<T>) -> Vec<PageParams>
@@ -441,9 +455,18 @@ pub trait InternalRoute {
             let value = params.0.get(&param_def.key);
 
             match value {
-                Some(value) => {
-                    route.replace_range(param_def.index..param_def.index + param_def.length, value);
-                }
+                Some(value) => match value {
+                    Some(value) => {
+                        route.replace_range(
+                            param_def.index..param_def.index + param_def.length,
+                            value,
+                        );
+                    }
+                    None => {
+                        route
+                            .replace_range(param_def.index..param_def.index + param_def.length, "");
+                    }
+                },
                 None => {
                     panic!(
                         "Route {:?} is missing parameter {:?}",
@@ -454,42 +477,53 @@ pub trait InternalRoute {
             }
         }
 
-        route
+        // Collapse multiple slashes into single slashes
+        route.replace("//", "/")
     }
 
     fn file_path(&self, params: &PageParams, output_dir: &Path) -> PathBuf {
-        let mut params_def = extract_params_from_raw_route(&self.route_raw());
-        let mut route = self.route_raw();
+        let params_def = extract_params_from_raw_route(&self.route_raw());
+        let route_template = self.route_raw();
 
-        // Sort params by index in reverse order to avoid index shifting issues
-        params_def.sort_by(|a, b| b.index.cmp(&a.index));
+        let mut sorted_params = params_def;
+        sorted_params.sort_by_key(|p| p.index);
 
-        for param_def in params_def {
-            let value = params.0.get(&param_def.key);
+        let mut path = PathBuf::from(output_dir);
+        let mut last_index = 0;
+        let mut current_component = String::new();
 
-            match value {
-                Some(value) => {
-                    route.replace_range(param_def.index..param_def.index + param_def.length, value);
-                }
-                None => {
-                    panic!(
-                        "Route {:?} is missing parameter {:?}",
-                        self.route_raw(),
-                        param_def.key
-                    );
-                }
+        for param_def in sorted_params.iter() {
+            // Push everything before this param into current_component
+            current_component.push_str(&route_template[last_index..param_def.index]);
+
+            // Append param value if present
+            let value = params.0.get(&param_def.key).unwrap_or_else(|| {
+                panic!(
+                    "Route {:?} is missing parameter {:?}",
+                    route_template, param_def.key
+                )
+            });
+            if let Some(v) = value {
+                current_component.push_str(v);
             }
+
+            last_index = param_def.index + param_def.length;
         }
 
-        let cleaned_raw_route = route.trim_start_matches('/').to_string();
+        // Append remainder of the route
+        current_component.push_str(&route_template[last_index..]);
 
-        output_dir.join(match self.is_endpoint() {
-            true => cleaned_raw_route,
-            false => match cleaned_raw_route.is_empty() {
-                true => "index.html".into(),
-                false => format!("{}/index.html", cleaned_raw_route),
-            },
-        })
+        // Split by '/' and push non-empty components into the PathBuf
+        for part in current_component.split('/').filter(|s| !s.is_empty()) {
+            path.push(part);
+        }
+
+        // Handle endpoint vs. page
+        if !self.is_endpoint() {
+            path.push("index.html");
+        }
+
+        path
     }
 }
 
@@ -555,11 +589,13 @@ pub mod prelude {
     //! use maudit::route::prelude::*;
     //! ```
     pub use super::{
-        DynamicRouteContext, FullRoute, Page, PageContext, PageParams, Pages, PaginationPage,
-        RenderResult, Route, RouteExt, paginate,
+        DynamicRouteContext, FullRoute, Page, PageContext, PageParams, Pages, PaginatedContentPage,
+        PaginationPage, RenderResult, Route, RouteExt, paginate,
     };
-    pub use crate::assets::{Asset, Image, Style, StyleOptions};
-    pub use crate::content::MarkdownContent;
+    pub use crate::assets::{Asset, Image, ImageFormat, ImageOptions, Script, Style, StyleOptions};
+    pub use crate::content::{
+        ContentContext, ContentEntry, Entry, EntryInner, MarkdownContent, RouteContent,
+    };
     pub use maudit_macros::{Params, route};
 }
 
@@ -587,7 +623,7 @@ mod tests {
         };
 
         let mut params = FxHashMap::default();
-        params.insert("slug".to_string(), "hello-world".to_string());
+        params.insert("slug".to_string(), Some("hello-world".to_string()));
         let route_params = PageParams(params);
 
         assert_eq!(page.url(&route_params), "/articles/hello-world");
@@ -600,8 +636,8 @@ mod tests {
         };
 
         let mut params = FxHashMap::default();
-        params.insert("tag".to_string(), "rust".to_string());
-        params.insert("page".to_string(), "2".to_string());
+        params.insert("tag".to_string(), Some("rust".to_string()));
+        params.insert("page".to_string(), Some("2".to_string()));
         let route_params = PageParams(params);
 
         assert_eq!(page.url(&route_params), "/articles/tags/rust/2");
@@ -616,8 +652,11 @@ mod tests {
         };
 
         let mut params = FxHashMap::default();
-        params.insert("tag".to_string(), "development-experience".to_string()); // Long replacement
-        params.insert("page".to_string(), "1".to_string()); // Short replacement
+        params.insert(
+            "tag".to_string(),
+            Some("development-experience".to_string()),
+        ); // Long replacement
+        params.insert("page".to_string(), Some("1".to_string())); // Short replacement
         let route_params = PageParams(params);
 
         assert_eq!(
@@ -644,7 +683,7 @@ mod tests {
         };
 
         let mut params = FxHashMap::default();
-        params.insert("lang".to_string(), "en".to_string());
+        params.insert("lang".to_string(), Some("en".to_string()));
         let route_params = PageParams(params);
 
         assert_eq!(page.url(&route_params), "/en/about");
@@ -657,7 +696,7 @@ mod tests {
         };
 
         let mut params = FxHashMap::default();
-        params.insert("id".to_string(), "123".to_string());
+        params.insert("id".to_string(), Some("123".to_string()));
         let route_params = PageParams(params);
 
         assert_eq!(page.url(&route_params), "/api/users/123");
@@ -670,7 +709,7 @@ mod tests {
         };
 
         let mut params = FxHashMap::default();
-        params.insert("slug".to_string(), "hello-world".to_string());
+        params.insert("slug".to_string(), Some("hello-world".to_string()));
         let route_params = PageParams(params);
 
         let output_dir = Path::new("/dist");
@@ -686,8 +725,8 @@ mod tests {
         };
 
         let mut params = FxHashMap::default();
-        params.insert("tag".to_string(), "rust".to_string());
-        params.insert("page".to_string(), "2".to_string());
+        params.insert("tag".to_string(), Some("rust".to_string()));
+        params.insert("page".to_string(), Some("2".to_string()));
         let route_params = PageParams(params);
 
         let output_dir = Path::new("/dist");
@@ -743,7 +782,7 @@ mod tests {
         };
 
         let mut params = FxHashMap::default();
-        params.insert("page".to_string(), "1".to_string());
+        params.insert("page".to_string(), Some("1".to_string()));
         let route_params = PageParams(params);
 
         let output_dir = Path::new("/dist");
@@ -753,121 +792,13 @@ mod tests {
     }
 
     #[test]
-    fn test_pagination_page_with_entries() {
-        // Create some mock content entries
-        use crate::content::ContentEntry;
-        use std::path::PathBuf;
-
-        let entries = vec![
-            ContentEntry::new(
-                "entry1".to_string(),
-                None,
-                Some("content1".to_string()),
-                (),
-                Some(PathBuf::from("file1.md")),
-            ),
-            ContentEntry::new(
-                "entry2".to_string(),
-                None,
-                Some("content2".to_string()),
-                (),
-                Some(PathBuf::from("file2.md")),
-            ),
-            ContentEntry::new(
-                "entry3".to_string(),
-                None,
-                Some("content3".to_string()),
-                (),
-                Some(PathBuf::from("file3.md")),
-            ),
-            ContentEntry::new(
-                "entry4".to_string(),
-                None,
-                Some("content4".to_string()),
-                (),
-                Some(PathBuf::from("file4.md")),
-            ),
-            ContentEntry::new(
-                "entry5".to_string(),
-                None,
-                Some("content5".to_string()),
-                (),
-                Some(PathBuf::from("file5.md")),
-            ),
-        ];
-
-        let pagination = PaginationPage::new(1, 2, 5, &entries);
-
-        assert_eq!(pagination.page, 1);
-        assert_eq!(pagination.per_page, 2);
-        assert_eq!(pagination.total_items, 5);
-        assert_eq!(pagination.total_pages, 3);
-        assert!(pagination.has_next);
-        assert!(pagination.has_prev);
-        assert_eq!(pagination.start_index, 2);
-        assert_eq!(pagination.end_index, 4);
-        assert_eq!(pagination.items.len(), 2);
-        assert_eq!(pagination.items[0].id, "entry3");
-        assert_eq!(pagination.items[1].id, "entry4");
-    }
-
-    #[test]
-    fn test_paginate_content_function() {
-        use crate::content::ContentEntry;
-        use std::path::PathBuf;
-
-        let entries = vec![
-            ContentEntry::new(
-                "entry1".to_string(),
-                None,
-                Some("content1".to_string()),
-                (),
-                Some(PathBuf::from("file1.md")),
-            ),
-            ContentEntry::new(
-                "entry2".to_string(),
-                None,
-                Some("content2".to_string()),
-                (),
-                Some(PathBuf::from("file2.md")),
-            ),
-            ContentEntry::new(
-                "entry3".to_string(),
-                None,
-                Some("content3".to_string()),
-                (),
-                Some(PathBuf::from("file3.md")),
-            ),
-        ];
-
-        let routes = paginate(&entries, 2, |page| {
-            let mut params = FxHashMap::default();
-            params.insert("page".to_string(), page.to_string());
-            PageParams(params)
-        });
-
-        assert_eq!(routes.len(), 2);
-
-        // First page
-        assert_eq!(routes[0].props.page, 0);
-        assert_eq!(routes[0].props.items.len(), 2);
-        assert_eq!(routes[0].props.items[0].id, "entry1");
-        assert_eq!(routes[0].props.items[1].id, "entry2");
-
-        // Second page
-        assert_eq!(routes[1].props.page, 1);
-        assert_eq!(routes[1].props.items.len(), 1);
-        assert_eq!(routes[1].props.items[0].id, "entry3");
-    }
-
-    #[test]
     fn test_paginate_generic_function() {
         // Test with simple strings
         let tags = vec!["rust", "javascript", "python", "go", "typescript"];
 
         let routes = paginate(&tags, 2, |page| {
             let mut params = FxHashMap::default();
-            params.insert("page".to_string(), page.to_string());
+            params.insert("page".to_string(), Some(page.to_string()));
             PageParams(params)
         });
 
@@ -876,18 +807,111 @@ mod tests {
         // First page
         assert_eq!(routes[0].props.page, 0);
         assert_eq!(routes[0].props.items.len(), 2);
-        assert_eq!(routes[0].props.items[0], "rust");
-        assert_eq!(routes[0].props.items[1], "javascript");
+        assert_eq!(routes[0].props.items[0], &"rust");
+        assert_eq!(routes[0].props.items[1], &"javascript");
 
         // Second page
         assert_eq!(routes[1].props.page, 1);
         assert_eq!(routes[1].props.items.len(), 2);
-        assert_eq!(routes[1].props.items[0], "python");
-        assert_eq!(routes[1].props.items[1], "go");
+        assert_eq!(routes[1].props.items[0], &"python");
+        assert_eq!(routes[1].props.items[1], &"go");
 
         // Third page
         assert_eq!(routes[2].props.page, 2);
         assert_eq!(routes[2].props.items.len(), 1);
-        assert_eq!(routes[2].props.items[0], "typescript");
+        assert_eq!(routes[2].props.items[0], &"typescript");
+    }
+
+    #[test]
+    fn test_url_optional_parameter_with_value() {
+        let page = TestPage {
+            route: "/articles/[slug]/[page]".to_string(),
+        };
+
+        let mut params = FxHashMap::default();
+        params.insert("slug".to_string(), Some("hello-world".to_string()));
+        params.insert("page".to_string(), Some("2".to_string()));
+        let route_params = PageParams(params);
+
+        assert_eq!(page.url(&route_params), "/articles/hello-world/2");
+    }
+
+    #[test]
+    fn test_url_optional_parameter_none() {
+        let page = TestPage {
+            route: "/articles/[slug]/[page]".to_string(),
+        };
+
+        let mut params = FxHashMap::default();
+        params.insert("slug".to_string(), Some("hello-world".to_string()));
+        params.insert("page".to_string(), None);
+        let route_params = PageParams(params);
+
+        assert_eq!(page.url(&route_params), "/articles/hello-world/");
+    }
+
+    #[test]
+    fn test_url_multiple_optional_parameters() {
+        let page = TestPage {
+            route: "/[lang]/articles/[category]/[page]".to_string(),
+        };
+
+        let mut params = FxHashMap::default();
+        params.insert("lang".to_string(), None);
+        params.insert("category".to_string(), Some("rust".to_string()));
+        params.insert("page".to_string(), None);
+        let route_params = PageParams(params);
+
+        assert_eq!(page.url(&route_params), "/articles/rust/");
+    }
+
+    #[test]
+    fn test_file_path_optional_parameter_with_value() {
+        let page = TestPage {
+            route: "/articles/[slug]/[page]".to_string(),
+        };
+
+        let mut params = FxHashMap::default();
+        params.insert("slug".to_string(), Some("hello-world".to_string()));
+        params.insert("page".to_string(), Some("2".to_string()));
+        let route_params = PageParams(params);
+
+        let output_dir = Path::new("/dist");
+        let expected = Path::new("/dist/articles/hello-world/2/index.html");
+
+        assert_eq!(page.file_path(&route_params, output_dir), expected);
+    }
+
+    #[test]
+    fn test_file_path_optional_parameter_none() {
+        let page = TestPage {
+            route: "/articles/[slug]/[page]".to_string(),
+        };
+
+        let mut params = FxHashMap::default();
+        params.insert("slug".to_string(), Some("hello-world".to_string()));
+        params.insert("page".to_string(), None);
+        let route_params = PageParams(params);
+
+        let output_dir = Path::new("/dist");
+        let expected = Path::new("/dist/articles/hello-world/index.html");
+
+        assert_eq!(page.file_path(&route_params, output_dir), expected);
+    }
+
+    #[test]
+    fn test_file_path_optional_parameter_endpoint() {
+        let page = TestPage {
+            route: "/api/[version]/data.json".to_string(),
+        };
+
+        let mut params = FxHashMap::default();
+        params.insert("version".to_string(), None);
+        let route_params = PageParams(params);
+
+        let output_dir = Path::new("/dist");
+        let expected = Path::new("/dist/api/data.json");
+
+        assert_eq!(page.file_path(&route_params, output_dir), expected);
     }
 }
