@@ -20,7 +20,7 @@ impl Default for SeoMeta {
     fn default() -> Self {
         Self {
             title: "Maudit".to_string(),
-            description: Some("A modern static site generator built with Rust".to_string()),
+            description: Some("A Rust library to build static websites.".to_string()),
             canonical_url: None,
         }
     }
@@ -61,7 +61,7 @@ impl SeoMeta {
             }
 
             // Twitter Card meta tags
-            meta name="twitter:card" content="summary_large_image";
+            meta name="twitter:card" content="summary";
             meta name="twitter:title" content=(formatted_title);
             meta name="twitter:description" content=(description);
             meta name="twitter:image" content=(social_image_url);
