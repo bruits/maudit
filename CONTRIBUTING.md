@@ -31,7 +31,7 @@ Maudit is a fairly standard Rust project with a typical directory structure. It 
 ### Prerequisites
 
 - Latest stable version of [Rust](https://www.rust-lang.org/)
-- (Optional, for website, examples using Tailwind and the CLI) [Node.js](https://nodejs.org/) and [pnpm](https://pnpm.io/).
+- (Optional, for the CLI) [Node.js](https://nodejs.org/) and [pnpm](https://pnpm.io/).
   - We recommend installing pnpm using [Corepack](https://pnpm.io/installation#using-corepack).
 
 ### Project structure
@@ -43,8 +43,8 @@ Maudit is a Rust monorepo using [Cargo workspaces](https://doc.rust-lang.org/boo
 │   ├── maudit/ # Maudit
 │   ├── maudit-macros/ # Proc macros the library exposes (e.g. #[route])
 │   └── maudit-cli/ # Maudit's CLI and dev server
-├── examples/ # Various examples showcasing Maudit's capabilities, also used as templates
-└── website/ # Maudit's website and documentation
+├── benchmarks/ # Benchmarking code
+└── examples/ # Various examples showcasing Maudit's capabilities, also used as templates
 ```
 
 ---

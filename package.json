@@ -6,12 +6,10 @@
 	"dependencies": {
 		"@tailwindcss/cli": "^4.0.0",
 		"@tailwindcss/typography": "^0.5.15",
-		"tailwindcss": "^4.0.0",
-		"thumbhash": "^0.1.1"
+		"tailwindcss": "^4.0.0"
 	},
 	"devDependencies": {
 		"ansi_up": "^6.0.6",
-		"netlify-plugin-debug-cache": "^1.0.4",
 		"typescript": "^5.9.2"
 	}
 }
