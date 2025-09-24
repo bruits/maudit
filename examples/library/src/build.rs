@@ -10,7 +10,7 @@ use maudit::{
 pub fn build_website(
     routes: &[&dyn FullRoute],
     mut content_sources: ContentSources,
-    options: BuildOptions,
+    options: &BuildOptions,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize all the content sources;
     content_sources.init_all();
@@ -35,7 +35,12 @@ pub fn build_website(
 
                 // Every page has a PageContext, which contains information about the current page, as well as access to content and assets.
                 let url = route.url(&params);
-                let mut ctx = PageContext::from_static_route(&content, &mut page_assets, &url);
+                let mut ctx = PageContext::from_static_route(
+                    &content,
+                    &mut page_assets,
+                    &url,
+                    &options.base_url,
+                );
 
                 let content = route.build(&mut ctx)?;
 
@@ -78,8 +83,13 @@ pub fn build_website(
 
                     // Here the context is created from a dynamic route, as the context has to include the page parameters and properties.
                     let url = route.url(params);
-                    let mut ctx =
-                        PageContext::from_dynamic_route(&page, &content, &mut page_assets, &url);
+                    let mut ctx = PageContext::from_dynamic_route(
+                        &page,
+                        &content,
+                        &mut page_assets,
+                        &url,
+                        &options.base_url,
+                    );
 
                     // Everything below here is the same as for static routes.
 

@@ -238,6 +238,7 @@ pub async fn build(
                     &content,
                     &mut page_assets,
                     &url,
+                    &options.base_url,
                 ))?;
 
                 let file_path = route.file_path(&params, &options.output_dir);
@@ -284,6 +285,7 @@ pub async fn build(
                         &content,
                         &mut page_assets,
                         &url,
+                        &options.base_url,
                     ))?;
 
                     let file_path = route.file_path(&page.0, &options.output_dir);

@@ -1,7 +1,7 @@
 use maud::{html, PreEscaped};
 use maudit::route::prelude::*;
 
-use crate::layout::layout;
+use crate::layout::{layout, SeoMeta};
 
 #[route("404.html")]
 pub struct NotFound;
@@ -20,6 +20,13 @@ impl Route for NotFound {
             false,
             false,
             ctx,
+            Some(SeoMeta {
+                title: "404 - Page Not Found".to_string(),
+                description: Some(
+                    "All the site's a stage, but this page plays not its part.".to_string(),
+                ),
+                ..Default::default()
+            }),
         )
     }
 }

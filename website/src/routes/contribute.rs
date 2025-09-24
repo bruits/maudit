@@ -1,9 +1,9 @@
 use maud::html;
 use maudit::route::prelude::*;
 
-use crate::layout::layout;
+use crate::layout::{layout, SeoMeta};
 
-#[route("/contribute")]
+#[route("/contribute/")]
 pub struct Contribute;
 
 impl Route for Contribute {
@@ -62,6 +62,13 @@ impl Route for Contribute {
             true,
             false,
             ctx,
+            Some(SeoMeta {
+                title: "Contribute to Maudit".to_string(),
+                description: Some(
+                    "Discover various ways to contribute to the Maudit project.".to_string(),
+                ),
+                canonical_url: ctx.canonical_url(),
+            }),
         )
     }
 }

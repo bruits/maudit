@@ -165,6 +165,9 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
                         let start_time = Instant::now();
 
                         // Run the build command
+                        // TODO: Right now we always run `cargo run`, but for the sake of performance, we should detect in advance
+                        // if the change even needs a full rebuild (e.g. if only content files changed, we can skip rebuilding the Rust binary)
+                        // Perhaps this could be done by parsing the `.d` files that cargo generates.
                         let child = std::process::Command::new("cargo")
                             .args(["run", "--quiet"])
                             .envs([

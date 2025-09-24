@@ -253,21 +253,26 @@ pub struct PageContext<'a> {
     pub props: &'a dyn Any,
     pub content: &'a RouteContent<'a>,
     pub assets: &'a mut RouteAssets,
-    pub current_url: &'a String,
+    /// The current path being rendered, e.g. `/articles/my-article`.
+    pub current_path: &'a String,
+    /// The base URL as defined in [`BuildOptions::base_url`](crate::BuildOptions::base_url)
+    pub base_url: &'a Option<String>,
 }
 
 impl<'a> PageContext<'a> {
     pub fn from_static_route(
         content: &'a RouteContent,
         assets: &'a mut RouteAssets,
-        current_url: &'a String,
+        current_path: &'a String,
+        base_url: &'a Option<String>,
     ) -> Self {
         Self {
             params: &(),
             props: &(),
             content,
             assets,
-            current_url,
+            current_path,
+            base_url,
         }
     }
 
@@ -275,14 +280,16 @@ impl<'a> PageContext<'a> {
         dynamic_page: &'a PagesResult,
         content: &'a RouteContent,
         assets: &'a mut RouteAssets,
-        current_url: &'a String,
+        current_path: &'a String,
+        base_url: &'a Option<String>,
     ) -> Self {
         Self {
             params: dynamic_page.1.as_ref(),
             props: dynamic_page.2.as_ref(),
             content,
             assets,
-            current_url,
+            current_path,
+            base_url,
         }
     }
 
@@ -310,6 +317,13 @@ impl<'a> PageContext<'a> {
         self.props
             .downcast_ref::<T>()
             .unwrap_or_else(|| panic!("Props type mismatch: got {}", std::any::type_name::<T>()))
+    }
+
+    /// Returns the canonical URL for the current page. If [`BuildOptions::base_url`](crate::BuildOptions::base_url) is not set, this will return `None`.
+    pub fn canonical_url(&self) -> Option<String> {
+        self.base_url
+            .as_ref()
+            .map(|base| format!("{}{}", base, self.current_path))
     }
 }
 

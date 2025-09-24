@@ -1,9 +1,12 @@
 use maud::{html, Markup, PreEscaped};
 use maudit::{content::EntryInner, route::prelude::*};
 
-use crate::{content::DocsContent, layout::docs_layout};
+use crate::{
+    content::DocsContent,
+    layout::{docs_layout, SeoMeta},
+};
 
-#[route("/docs")]
+#[route("/docs/")]
 pub struct DocsIndex;
 
 impl Route for DocsIndex {
@@ -15,7 +18,19 @@ impl Route for DocsIndex {
 
         let headings = index_page.data(ctx).get_headings().clone();
 
-        docs_layout(render_entry(index_page, ctx), ctx, &headings)
+        docs_layout(
+            render_entry(index_page, ctx),
+            ctx,
+            &headings,
+            Some(SeoMeta {
+                title: "Documentation".to_string(),
+                description: Some(
+                    "Comprehensive guides and documentation to help you start working with Maudit."
+                        .to_string(),
+                ),
+                canonical_url: ctx.canonical_url(),
+            }),
+        )
     }
 }
 
@@ -36,7 +51,7 @@ fn render_entry(entry: &EntryInner<DocsContent>, ctx: &mut PageContext) -> Marku
     }
 }
 
-#[route("/docs/[slug]")]
+#[route("/docs/[slug]/")]
 pub struct DocsPage;
 
 #[derive(Params, Clone)]
@@ -62,7 +77,18 @@ impl Route<DocsPageParams> for DocsPage {
             .get_source::<DocsContent>("docs")
             .get_entry(&slug);
 
-        let headings = entry.data(ctx).get_headings().clone();
-        docs_layout(render_entry(entry, ctx), ctx, &headings)
+        let entry_data = entry.data(ctx);
+
+        let headings = entry_data.get_headings().clone();
+        docs_layout(
+            render_entry(entry, ctx),
+            ctx,
+            &headings,
+            Some(SeoMeta {
+                title: format!("{} - Documentation", entry_data.title),
+                description: entry_data.description.clone(),
+                canonical_url: ctx.canonical_url(),
+            }),
+        )
     }
 }

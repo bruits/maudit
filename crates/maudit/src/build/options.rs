@@ -43,6 +43,10 @@ use crate::{assets::RouteAssetsOptions, is_dev};
 /// }
 /// ```
 pub struct BuildOptions {
+    /// Base URL for the site, e.g. `https://example.com` or `https://example.com/subdir`.
+    /// This value is used to generate canonical URLs and can be used wherever the full site URL is needed (e.g. in SEO meta tags) through [`PageContext::base_url`](crate::route::PageContext::base_url) in pages.
+    pub base_url: Option<String>,
+
     pub output_dir: PathBuf,
     pub static_dir: PathBuf,
 
@@ -126,6 +130,7 @@ impl Default for AssetsOptions {
 impl Default for BuildOptions {
     fn default() -> Self {
         Self {
+            base_url: None,
             output_dir: "dist".into(),
             static_dir: "static".into(),
             clean_output_dir: true,

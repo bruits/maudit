@@ -60,7 +60,7 @@ pub fn build_website(
 
         // Every page has a PageContext, which contains information about the current route, as well as access to content and assets.
         let url = route.url(&params);
-        let mut ctx = PageContext::from_static_route(&content, &mut route_assets, &url);
+        let mut ctx = PageContext::from_static_route(&content, &mut route_assets, &url, &options.base_url);
 
         let content = route.build(&mut ctx)?;
 
@@ -152,6 +152,7 @@ RouteType::Dynamic => {
           &content,
           &mut page_assets,
           &url,
+          &options.base_url
       );
 
       // Everything after this is the same as for static routes.

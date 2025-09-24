@@ -10,10 +10,70 @@ use maudit::content::MarkdownHeading;
 use maudit::maud::generator;
 use maudit::route::{PageContext, RenderResult};
 
+pub struct SeoMeta {
+    pub title: String,
+    pub description: Option<String>,
+    pub canonical_url: Option<String>,
+}
+
+impl Default for SeoMeta {
+    fn default() -> Self {
+        Self {
+            title: "Maudit".to_string(),
+            description: Some("A modern static site generator built with Rust".to_string()),
+            canonical_url: None,
+        }
+    }
+}
+
+impl SeoMeta {
+    /// Create a new `SeoMeta` with the given title.
+    pub fn render(&self, base_url: &Option<String>) -> Markup {
+        let base_url = base_url.as_ref().unwrap();
+
+        let formatted_title = if self.title == "Maudit" {
+            self.title.clone()
+        } else {
+            format!("{} - Maudit", self.title)
+        };
+
+        let description = self
+            .description
+            .clone()
+            .unwrap_or_else(|| SeoMeta::default().description.unwrap());
+
+        let canonical_url = self.canonical_url.as_ref();
+
+        let social_image_url = format!("{}/social-image.png", base_url);
+
+        html! {
+            title { (formatted_title) }
+            meta name="description" content=(description);
+
+            // Open Graph meta tags
+            meta property="og:title" content=(formatted_title);
+            meta property="og:description" content=(description);
+            meta property="og:type" content="website";
+            meta property="og:image" content=(social_image_url);
+            @if let Some(canonical_url) = &canonical_url {
+                meta property="og:url" content=(canonical_url);
+                link rel="canonical" href=(canonical_url);
+            }
+
+            // Twitter Card meta tags
+            meta name="twitter:card" content="summary_large_image";
+            meta name="twitter:title" content=(formatted_title);
+            meta name="twitter:description" content=(description);
+            meta name="twitter:image" content=(social_image_url);
+        }
+    }
+}
+
 pub fn docs_layout(
     main: Markup,
     ctx: &mut PageContext,
     headings: &[MarkdownHeading],
+    seo: Option<SeoMeta>,
 ) -> impl Into<RenderResult> {
     layout(
         html! {
@@ -32,6 +92,7 @@ pub fn docs_layout(
         true,
         false,
         ctx,
+        seo,
     )
 }
 
@@ -40,9 +101,12 @@ pub fn layout(
     bottom_border: bool,
     licenses: bool,
     ctx: &mut PageContext,
+    seo: Option<SeoMeta>,
 ) -> impl Into<RenderResult> {
     ctx.assets
         .include_style_with_options("assets/prin.css", StyleOptions { tailwind: true });
+
+    let seo_data = seo.unwrap_or_default();
 
     html! {
         (DOCTYPE)
@@ -50,9 +114,9 @@ pub fn layout(
             head {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
-                title { "Maudit" }
                 (generator())
                 link rel="icon" href="/favicon.svg";
+                (seo_data.render(&ctx.base_url))
             }
             body {
                 div.bg-our-white {

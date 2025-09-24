@@ -5,8 +5,9 @@ use std::collections::BTreeMap;
 
 use crate::content::NewsContent;
 use crate::layout::layout;
+use crate::layout::SeoMeta;
 
-#[route("/news")]
+#[route("/news/")]
 pub struct NewsIndex;
 
 impl Route for NewsIndex {
@@ -74,11 +75,18 @@ impl Route for NewsIndex {
             true,
             true,
             ctx,
+            Some(SeoMeta {
+                title: "News".to_string(),
+                description: Some(
+                    "Stay updated with the latest news and articles about Maudit.".to_string(),
+                ),
+                canonical_url: ctx.canonical_url(),
+            }),
         )
     }
 }
 
-#[route("/news/[slug]")]
+#[route("/news/[slug]/")]
 pub struct NewsPage;
 
 #[derive(Params, Clone)]
@@ -104,15 +112,23 @@ impl Route<NewsPageParams> for NewsPage {
             .get_source::<NewsContent>("news")
             .get_entry(&slug);
 
+        let NewsContent {
+            title,
+            description,
+            author,
+            date,
+            ..
+        } = entry.data(ctx);
+
         layout(
             html! {
                 div.container.mx-auto."py-10"."pb-24"."max-w-[80ch]"."px-8"."sm:px-0" {
                     section.mb-4.border-b."border-[#e9e9e7]".pb-2 {
-                        @if let Some(date) = &entry.data(ctx).date {
+                        @if let Some(date) = &date {
                             p.text-sm.font-bold { (date) }
                         }
-                        h1."text-6xl"."sm:text-7xl".font-bold { (entry.data(ctx).title) }
-                        @if let Some(description) = &entry.data(ctx).description {
+                        h1."text-6xl"."sm:text-7xl".font-bold { (title) }
+                        @if let Some(description) = &description {
                             p.text-xl."sm:text-2xl" { (description) }
                         }
                     }
@@ -121,7 +137,7 @@ impl Route<NewsPageParams> for NewsPage {
                         (PreEscaped(entry.render(ctx)))
                     }
 
-                    @if let Some(author) = &entry.data(ctx).author {
+                    @if let Some(author) = &author {
                         h2."text-xl".font-bold.mt-12.text-center { (author) }
                     }
                 }
@@ -129,6 +145,11 @@ impl Route<NewsPageParams> for NewsPage {
             false,
             true,
             ctx,
+            Some(SeoMeta {
+                title: title.to_string(),
+                description: description.clone(),
+                canonical_url: ctx.canonical_url(),
+            }),
         )
     }
 }

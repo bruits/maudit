@@ -21,6 +21,7 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
         ],
         content_sources(),
         BuildOptions {
+            base_url: Some("https://maudit.org".to_string()),
             assets: AssetsOptions {
                 tailwind_binary_path: "../node_modules/.bin/tailwindcss".into(),
                 ..Default::default()

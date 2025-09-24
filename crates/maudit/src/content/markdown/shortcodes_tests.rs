@@ -72,9 +72,10 @@ mod tests {
         let mut ctx = PageContext {
             content: &content,
             assets: &mut page_assets,
-            current_url: &"/test".to_string(),
+            current_path: &"/test".to_string(),
             params: &(),
             props: &(),
+            base_url: &None,
         };
 
         f(&mut ctx)

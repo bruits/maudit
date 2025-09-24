@@ -20,6 +20,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         content_sources![
             "articles" => glob_markdown::<ArticleContent>("content/articles/*.md", None)
         ],
-        BuildOptions::default(),
+        &BuildOptions::default(),
     )
 }

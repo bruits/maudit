@@ -3,6 +3,7 @@ use maud::PreEscaped;
 use maudit::route::prelude::*;
 
 use crate::layout::layout;
+use crate::layout::SeoMeta;
 
 #[route("/")]
 pub struct Index;
@@ -75,6 +76,11 @@ impl Route for Index {
             true,
             true,
             ctx,
+            Some(SeoMeta {
+                title: "Maudit".to_string(),
+                description: None,
+                canonical_url: ctx.canonical_url(),
+            }),
         )
     }
 }
