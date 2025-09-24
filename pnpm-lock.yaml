@@ -21,9 +21,6 @@ importers:
         specifier: ^0.1.1
         version: 0.1.1
     devDependencies:
-      ansi_up:
-        specifier: ^6.0.6
-        version: 6.0.6
       netlify-plugin-debug-cache:
         specifier: ^1.0.4
         version: 1.0.4
@@ -196,9 +193,6 @@ packages:
     resolution: {integrity: sha512-AqhlCXl+8grUz8uqExv5OTtgpjuVIwFTSXTrh8y9/pw6q2ek7fJ+Y8ZEVw7EB2DCcuCOtEjf9w3+J3rzts01uA==}
     peerDependencies:
       tailwindcss: '>=3.0.0 || insiders || >=4.0.0-alpha.20'
-
-  ansi_up@6.0.6:
-    resolution: {integrity: sha512-yIa1x3Ecf8jWP4UWEunNjqNX6gzE4vg2gGz+xqRGY+TBSucnYp6RRdPV4brmtg6bQ1ljD48mZ5iGSEj7QEpRKA==}
 
   braces@3.0.3:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
@@ -502,8 +496,6 @@ snapshots:
       lodash.merge: 4.6.2
       postcss-selector-parser: 6.0.10
       tailwindcss: 4.0.0
-
-  ansi_up@6.0.6: {}
 
   braces@3.0.3:
     dependencies:

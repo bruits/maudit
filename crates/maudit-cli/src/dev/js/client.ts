@@ -3,7 +3,7 @@
  * It might be better to use a more sophisticated approach, using some sort of diffing, handling reconnecting, etc.
  */
 
-import { AnsiUp } from "ansi_up";
+import { AnsiUp } from "./vendor/ansi_up";
 import { createErrorOverlay } from "./overlay";
 import { error, log } from "./utils";
 

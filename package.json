@@ -10,7 +10,6 @@
 		"thumbhash": "^0.1.1"
 	},
 	"devDependencies": {
-		"ansi_up": "^6.0.6",
 		"netlify-plugin-debug-cache": "^1.0.4",
 		"typescript": "^5.9.2"
 	}
