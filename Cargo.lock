@@ -2431,7 +2431,7 @@ dependencies = [
 
 [[package]]
 name = "maudit-cli"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "axum",
  "brk_rolldown",

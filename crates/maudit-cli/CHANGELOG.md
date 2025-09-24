@@ -1,5 +1,12 @@
 # maudit-cli
 
+## 0.5.1
+
+### Patch changes
+
+- [8f7edcc](https://github.com/bruits/maudit/commit/8f7edcc28898774c89408e9bc915f75cf483ee2f) Fixes hot reloading not working — Thanks @Princesseuh!
+
+
 ## 0.5.0
 
 ### Minor changes
