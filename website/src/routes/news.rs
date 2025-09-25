@@ -36,7 +36,7 @@ impl Route for NewsIndex {
 
         layout(
             html! {
-                div.container.mx-auto."px-24"."py-10"."pb-24".flex {
+                div.container.mx-auto."px-4"."sm:px-24"."py-10"."pb-24".flex {
                     div.flex-1 {
                         @for (year, articles) in articles_by_year.iter().rev() {
                             h2.text-3xl.font-bold.mb-4#(year) { (year) }
@@ -133,7 +133,7 @@ impl Route<NewsPageParams> for NewsPage {
                         }
                     }
 
-                    section.prose."lg:prose-lg".max-w-none {
+                    section.prose.prose-lg.max-w-none {
                         (PreEscaped(entry.render(ctx)))
                     }
 

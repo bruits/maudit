@@ -45,7 +45,7 @@ fn render_entry(entry: &EntryInner<DocsContent>, ctx: &mut PageContext) -> Marku
                 h3.text-lg { (description) }
             }
         }
-        section.prose."lg:prose-lg".max-w-none {
+        section.prose.prose-lg.max-w-none {
             (PreEscaped(entry.render(ctx)))
         }
     }

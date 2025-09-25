@@ -77,16 +77,121 @@ pub fn docs_layout(
 ) -> impl Into<RenderResult> {
     layout(
         html! {
-            div.container.mx-auto."grid-cols-(--docs-columns)".grid."min-h-[calc(100%-64px)]" {
-                aside.bg-linear-to-l."from-darker-white"."py-8"."h-full".border-r.border-r-borders {
+            // Second header for docs navigation (mobile only)
+            header.bg-our-white.border-b.border-borders.sm:hidden.bg-linear-to-b."from-darker-white" {
+                div.flex.items-center.justify-between {
+                    button id="left-sidebar-toggle" .px-4.py-3.flex.items-center.gap-x-2.text-base.font-medium.text-our-black aria-label="Toggle navigation menu" {
+                        (PreEscaped(include_str!("../assets/side-menu.svg")))
+                        span { "Menu" }
+                    }
+                    button id="right-sidebar-toggle" .px-4.py-3.flex.items-center.gap-x-2.text-base.font-medium.text-our-black aria-label="Toggle table of contents" {
+                        span { "On this page" }
+                        (PreEscaped(include_str!("../assets/toc.svg")))
+                    }
+                }
+            }
+
+            // Mobile left sidebar overlay
+            div id="mobile-left-sidebar" .fixed.left-0.w-full.bg-our-white.transform."-translate-x-full".transition-all.opacity-0.pointer-events-none.z-50.overflow-y-auto style="top: 116px; bottom: 0;" {
+                div.px-6.py-4 {
                     (left_sidebar(ctx))
                 }
-                main.w-full.max-w-larger-prose.mx-auto.py-8 {
-                    (main)
-                }
-                aside."py-8" {
+            }
+
+            // Mobile right sidebar overlay
+            div id="mobile-right-sidebar" .fixed.right-0.w-full.bg-our-white.transform."translate-x-full".transition-all.opacity-0.pointer-events-none.z-50.overflow-y-auto style="top: 116px; bottom: 0;" {
+                div.px-6.py-4 {
                     (right_sidebar(headings))
                 }
+            }
+
+            div.container.mx-auto."sm:grid-cols-(--docs-columns)".sm:grid."min-h-[calc(100%-64px)]".px-4.sm:px-0.pt-2.sm:pt-0 {
+                aside.bg-linear-to-l."from-darker-white"."py-8"."h-full".border-r.border-r-borders.hidden.sm:block {
+                    (left_sidebar(ctx))
+                }
+                main.w-full.max-w-larger-prose.mx-auto.sm:py-8.py-4 {
+                    (main)
+                }
+                aside."py-8".hidden."sm:block" {
+                    (right_sidebar(headings))
+                }
+            }
+
+            script {
+                (PreEscaped(r#"
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const leftSidebarToggle = document.getElementById('left-sidebar-toggle');
+                        const rightSidebarToggle = document.getElementById('right-sidebar-toggle');
+                        const leftSidebar = document.getElementById('mobile-left-sidebar');
+                        const rightSidebar = document.getElementById('mobile-right-sidebar');
+
+                        let leftOpen = false;
+                        let rightOpen = false;
+
+                        function toggleLeftSidebar() {
+                            leftOpen = !leftOpen;
+
+                            leftSidebar.classList.toggle('-translate-x-full', !leftOpen);
+                            leftSidebar.classList.toggle('translate-x-0', leftOpen);
+                            leftSidebar.classList.toggle('opacity-0', !leftOpen);
+                            leftSidebar.classList.toggle('opacity-100', leftOpen);
+                            leftSidebar.classList.toggle('pointer-events-none', !leftOpen);
+
+                            if (leftOpen) {
+                                document.body.style.overflow = 'hidden';
+                            } else if (!rightOpen) {
+                                document.body.style.overflow = '';
+                            }
+                        }
+
+                        function toggleRightSidebar() {
+                            rightOpen = !rightOpen;
+
+                            rightSidebar.classList.toggle('translate-x-full', !rightOpen);
+                            rightSidebar.classList.toggle('translate-x-0', rightOpen);
+                            rightSidebar.classList.toggle('opacity-0', !rightOpen);
+                            rightSidebar.classList.toggle('opacity-100', rightOpen);
+                            rightSidebar.classList.toggle('pointer-events-none', !rightOpen);
+
+                            if (rightOpen) {
+                                document.body.style.overflow = 'hidden';
+                            } else if (!leftOpen) {
+                                document.body.style.overflow = '';
+                            }
+                        }
+
+                        // Close sidebars when clicking outside
+                        function closeSidebars(event) {
+                            if (leftOpen && !leftSidebar.contains(event.target) && !leftSidebarToggle.contains(event.target)) {
+                                toggleLeftSidebar();
+                            }
+                            if (rightOpen && !rightSidebar.contains(event.target) && !rightSidebarToggle.contains(event.target)) {
+                                toggleRightSidebar();
+                            }
+                        }
+
+                        leftSidebarToggle.addEventListener('click', toggleLeftSidebar);
+                        rightSidebarToggle.addEventListener('click', toggleRightSidebar);
+                        document.addEventListener('click', closeSidebars);
+
+                        // Close right sidebar when clicking on table of contents links
+                        rightSidebar.addEventListener('click', function(event) {
+                            if (event.target.tagName === 'A' && event.target.getAttribute('href').startsWith('#')) {
+                                if (rightOpen) {
+                                    toggleRightSidebar();
+                                }
+                            }
+                        });
+
+                        // Close sidebars on escape key
+                        document.addEventListener('keydown', function(event) {
+                            if (event.key === 'Escape') {
+                                if (leftOpen) toggleLeftSidebar();
+                                if (rightOpen) toggleRightSidebar();
+                            }
+                        });
+                    });
+                "#))
             }
         },
         true,

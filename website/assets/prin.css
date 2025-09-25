@@ -1,4 +1,6 @@
 @import "tailwindcss";
+
+/* TODO: Get rid of this and build our own `prose` class */
 @plugin "@tailwindcss/typography";
 
 @theme {

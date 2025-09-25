@@ -37,14 +37,22 @@ pub fn left_sidebar(ctx: &mut PageContext) -> Markup {
 
     let entries = sections.iter().map(|(section, entries)| {
         html! {
-            li.mb-4 {
-                h2.text-lg.font-bold { (section) }
+            li.mb-6.sm:mb-4 {
+                h2.text-xl.sm:text-lg.font-bold { (section) }
                 ul {
                     @for entry in entries {
                         @let url = &format!("/docs/{}", entry.id);
                         @let is_current_page = url == ctx.current_path;
-                        li."border-l-2"."hover:border-brand-red"."pl-3"."py-1".(if is_current_page { "text-brand-red border-brand-red" } else { "border-borders" }) {
-                            a.block href=(format!("/docs/{}/", entry.id)) { (entry.data(ctx).title) } // TODO: Use type-safe routing
+                        li {
+                            @let base_classes = "block py-2 sm:py-1 px-4 sm:px-3 text-lg sm:text-base font-medium sm:font-normal transition-colors border-b border-borders sm:border-0";
+                            @let conditional_classes = if is_current_page {
+                                "text-brand-red sm:border-l-2 sm:border-l-brand-red"
+                            } else {
+                                "text-our-black hover:text-brand-red sm:border-l-2 sm:border-l-borders sm:hover:border-l-brand-red"
+                            };
+                            a class=(format!("{} {}", base_classes, conditional_classes)) href=(format!("/docs/{}/", entry.id)) {
+                                (entry.data(ctx).title)
+                            }
                         }
                     }
                 }
@@ -53,14 +61,14 @@ pub fn left_sidebar(ctx: &mut PageContext) -> Markup {
     });
 
     html! {
-        ul.mb-4 {
+        ul.mb-6.sm:mb-4.space-y-0.sm:space-y-1 {
             @for (name, link) in static_links {
-                li.mb-1 {
-                    a.text-lg href=(link) { (name) }
+                li {
+                    a.block.py-2.sm:py-0.px-4.sm:px-0.text-xl.sm:text-lg.font-medium.text-our-black.border-b.border-borders.sm:border-0.transition-colors."hover:text-brand-red".sm:bg-transparent.sm:hover:bg-transparent href=(link) { (name) }
                 }
             }
         }
-        ul {
+        ul.space-y-1 {
             @for entry in entries {
                 (entry)
             }
@@ -97,14 +105,16 @@ pub fn right_sidebar(headings: &[MarkdownHeading]) -> Markup {
         }
         html_headings.push(html! {
             li.(pad).(border).(margin_top) {
-                a href=(format!("#{}", heading.id)) { (heading.title) }
+                a.block.py-1.px-3.sm:px-0.sm:py-0.text-lg.sm:text-base.transition-colors."hover:bg-gray-50".sm:hover:bg-transparent."hover:text-brand-red" href=(format!("#{}", heading.id)) {
+                    (heading.title)
+                }
             }
         });
         i += 1;
     }
 
     html!(
-        h2.text-lg.font-bold { "On This Page" }
+        h2.text-xl.sm:text-lg.font-bold.mb-4.sm:mb-0 { "On This Page" }
         nav.sticky.top-8 {
             ul {
                 @for heading in html_headings {

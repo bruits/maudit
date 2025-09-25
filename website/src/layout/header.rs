@@ -5,9 +5,27 @@ use maudit::route::PageContext;
 
 pub fn header(_: &mut PageContext, bottom_border: bool) -> Markup {
     let border = if bottom_border { "border-b" } else { "" };
+    let nav_links = vec![
+        ("/docs/", "Documentation"),
+        ("/news/", "News"),
+        ("/contribute/", "Contribute"),
+        ("https://github.com/bruits/maudit/issues/1", "Roadmap"),
+    ];
+    let social_links = vec![
+        (
+            "/chat/",
+            "Join our Discord",
+            include_str!("../../assets/discord.svg"),
+        ),
+        (
+            "https://github.com/bruits/maudit",
+            "View on GitHub",
+            include_str!("../../assets/github.svg"),
+        ),
+    ];
 
     html! {
-        header.px-8.py-4.text-our-black.bg-our-white."border-borders".(border) {
+        header.px-4.sm:px-8.py-4.text-our-black.bg-our-white."border-borders".(border) {
             div.container.flex.items-center.mx-auto.justify-between {
                 div.flex.items-center.gap-x-8 {
                     a.flex.gap-x-2.items-center href="/" {
@@ -15,24 +33,76 @@ pub fn header(_: &mut PageContext, bottom_border: bool) -> Markup {
                         h1.text-2xl.tracking-wide { "Maudit" }
                     }
                     nav.text-lg.gap-x-12.relative."top-[2px]".hidden."sm:flex" {
-                        a href="/docs/" { "Documentation" }
-                        a href="/news/" { "News" }
-                        a href="/contribute/" { "Contribute" }
-                        a href="https://github.com/bruits/maudit/issues/1" { "Roadmap" }
+                        @for (href, text) in &nav_links {
+                            a href=(href) { (text) }
+                        }
                     }
                 }
 
-                div.flex.gap-x-6 {
-                    a href="/chat/" {
-                        span.sr-only { "Join the Maudit community on Discord" }
-                        (PreEscaped(include_str!("../../assets/discord.svg")))
+                div.gap-x-6.hidden.sm:flex {
+                    @for (href, _text, icon_svg) in &social_links {
+                        a href=(href) {
+                            span.sr-only { (_text) }
+                            (PreEscaped(icon_svg))
+                        }
                     }
-                    a href="https://github.com/bruits/maudit" {
-                        span.sr-only { "View Maudit on GitHub" }
-                        (PreEscaped(include_str!("../../assets/github.svg")))
+                }
+
+                div.sm:hidden.flex.align-middle.justify-center.items-center {
+                    button id="mobile-menu-button" aria-label="Toggle main menu" {
+                        span id="hamburger-icon" {
+                            (PreEscaped(include_str!("../../assets/hamburger.svg")))
+                        }
+                        span id="close-icon" .hidden {
+                            (PreEscaped(include_str!("../../assets/close.svg")))
+                        }
                     }
                 }
             }
+        }
+
+        // Mobile menu panel
+        div id="mobile-menu-panel" .fixed.left-0.w-full.bg-our-white.transform."-translate-x-4".transition-all.opacity-0.pointer-events-none.z-50 style="top: 65px; bottom: 0;" {
+            nav {
+                @for (href, text) in &nav_links {
+                    a.block.text-2xl.font-medium.text-our-black.px-4.py-4.border-b.border-borders href=(href) { (text) }
+                }
+            }
+            div.px-6.py-8.flex.flex-wrap.gap-8 {
+                @for (href, text, icon_svg) in &social_links {
+                    a.flex.items-center href=(href) {
+                        span.sr-only { (text) }
+                        (PreEscaped(icon_svg))
+                    }
+                }
+            }
+        }
+
+        script {
+            (PreEscaped(r#"
+                document.addEventListener('DOMContentLoaded', function() {
+                    const menuButton = document.getElementById('mobile-menu-button');
+                    const panel = document.getElementById('mobile-menu-panel');
+                    const hamburgerIcon = document.getElementById('hamburger-icon');
+                    const closeIcon = document.getElementById('close-icon');
+                    let isOpen = false;
+
+                    function toggleMenu() {
+                        isOpen = !isOpen;
+
+                        panel.classList.toggle('-translate-x-4', !isOpen);
+                        panel.classList.toggle('opacity-0', !isOpen);
+                        panel.classList.toggle('pointer-events-none', !isOpen);
+
+                        hamburgerIcon.classList.toggle('hidden', isOpen);
+                        closeIcon.classList.toggle('hidden', !isOpen);
+
+                        document.body.style.overflow = isOpen ? 'hidden' : '';
+                    }
+
+                    menuButton.addEventListener('click', toggleMenu);
+                });
+            "#))
         }
     }
 }
