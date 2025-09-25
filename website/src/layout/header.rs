@@ -3,7 +3,9 @@ use maud::Markup;
 use maud::PreEscaped;
 use maudit::route::PageContext;
 
-pub fn header(_: &mut PageContext, bottom_border: bool) -> Markup {
+pub fn header(ctx: &mut PageContext, bottom_border: bool) -> Markup {
+    ctx.assets.include_script("assets/mobile-menu.ts");
+
     let border = if bottom_border { "border-b" } else { "" };
     let nav_links = vec![
         ("/docs/", "Documentation"),
@@ -76,33 +78,6 @@ pub fn header(_: &mut PageContext, bottom_border: bool) -> Markup {
                     }
                 }
             }
-        }
-
-        script {
-            (PreEscaped(r#"
-                document.addEventListener('DOMContentLoaded', function() {
-                    const menuButton = document.getElementById('mobile-menu-button');
-                    const panel = document.getElementById('mobile-menu-panel');
-                    const hamburgerIcon = document.getElementById('hamburger-icon');
-                    const closeIcon = document.getElementById('close-icon');
-                    let isOpen = false;
-
-                    function toggleMenu() {
-                        isOpen = !isOpen;
-
-                        panel.classList.toggle('-translate-x-4', !isOpen);
-                        panel.classList.toggle('opacity-0', !isOpen);
-                        panel.classList.toggle('pointer-events-none', !isOpen);
-
-                        hamburgerIcon.classList.toggle('hidden', isOpen);
-                        closeIcon.classList.toggle('hidden', !isOpen);
-
-                        document.body.style.overflow = isOpen ? 'hidden' : '';
-                    }
-
-                    menuButton.addEventListener('click', toggleMenu);
-                });
-            "#))
         }
     }
 }

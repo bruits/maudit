@@ -75,6 +75,8 @@ pub fn docs_layout(
     headings: &[MarkdownHeading],
     seo: Option<SeoMeta>,
 ) -> impl Into<RenderResult> {
+    ctx.assets.include_script("assets/docs-sidebar.ts");
+
     layout(
         html! {
             // Second header for docs navigation (mobile only)
@@ -115,83 +117,6 @@ pub fn docs_layout(
                 aside."py-8".hidden."sm:block" {
                     (right_sidebar(headings))
                 }
-            }
-
-            script {
-                (PreEscaped(r#"
-                    document.addEventListener('DOMContentLoaded', function() {
-                        const leftSidebarToggle = document.getElementById('left-sidebar-toggle');
-                        const rightSidebarToggle = document.getElementById('right-sidebar-toggle');
-                        const leftSidebar = document.getElementById('mobile-left-sidebar');
-                        const rightSidebar = document.getElementById('mobile-right-sidebar');
-
-                        let leftOpen = false;
-                        let rightOpen = false;
-
-                        function toggleLeftSidebar() {
-                            leftOpen = !leftOpen;
-
-                            leftSidebar.classList.toggle('-translate-x-full', !leftOpen);
-                            leftSidebar.classList.toggle('translate-x-0', leftOpen);
-                            leftSidebar.classList.toggle('opacity-0', !leftOpen);
-                            leftSidebar.classList.toggle('opacity-100', leftOpen);
-                            leftSidebar.classList.toggle('pointer-events-none', !leftOpen);
-
-                            if (leftOpen) {
-                                document.body.style.overflow = 'hidden';
-                            } else if (!rightOpen) {
-                                document.body.style.overflow = '';
-                            }
-                        }
-
-                        function toggleRightSidebar() {
-                            rightOpen = !rightOpen;
-
-                            rightSidebar.classList.toggle('translate-x-full', !rightOpen);
-                            rightSidebar.classList.toggle('translate-x-0', rightOpen);
-                            rightSidebar.classList.toggle('opacity-0', !rightOpen);
-                            rightSidebar.classList.toggle('opacity-100', rightOpen);
-                            rightSidebar.classList.toggle('pointer-events-none', !rightOpen);
-
-                            if (rightOpen) {
-                                document.body.style.overflow = 'hidden';
-                            } else if (!leftOpen) {
-                                document.body.style.overflow = '';
-                            }
-                        }
-
-                        // Close sidebars when clicking outside
-                        function closeSidebars(event) {
-                            if (leftOpen && !leftSidebar.contains(event.target) && !leftSidebarToggle.contains(event.target)) {
-                                toggleLeftSidebar();
-                            }
-                            if (rightOpen && !rightSidebar.contains(event.target) && !rightSidebarToggle.contains(event.target)) {
-                                toggleRightSidebar();
-                            }
-                        }
-
-                        leftSidebarToggle.addEventListener('click', toggleLeftSidebar);
-                        rightSidebarToggle.addEventListener('click', toggleRightSidebar);
-                        document.addEventListener('click', closeSidebars);
-
-                        // Close right sidebar when clicking on table of contents links
-                        rightSidebar.addEventListener('click', function(event) {
-                            if (event.target.tagName === 'A' && event.target.getAttribute('href').startsWith('#')) {
-                                if (rightOpen) {
-                                    toggleRightSidebar();
-                                }
-                            }
-                        });
-
-                        // Close sidebars on escape key
-                        document.addEventListener('keydown', function(event) {
-                            if (event.key === 'Escape') {
-                                if (leftOpen) toggleLeftSidebar();
-                                if (rightOpen) toggleRightSidebar();
-                            }
-                        });
-                    });
-                "#))
             }
         },
         true,
