@@ -28,6 +28,8 @@ jobs:
 
       - name: Setup Rust
         uses: moonrepo/setup-rust@v1
+        with:
+          components: clippy
 
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features
