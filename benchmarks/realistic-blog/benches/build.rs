@@ -13,7 +13,7 @@ fn main() {
 }
 
 #[divan::bench(sample_count = 3)]
-fn full_build(bencher: Bencher) {
+fn realistic_blog(bencher: Bencher) {
     bencher
         .with_inputs(|| {
             // Clear dist directory before each sample, otherwise later samples will either be very quick if we don't clean

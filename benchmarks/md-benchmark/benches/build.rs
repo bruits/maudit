@@ -13,7 +13,7 @@ fn main() {
 }
 
 #[divan::bench(args = [250, 500, 1000, 2000, 4000], sample_count = 3)]
-fn full_build(bencher: Bencher, markdown_count: u32) {
+fn markdown(bencher: Bencher, markdown_count: u32) {
     bencher
         .with_inputs(|| {
             // Clear dist directory before each sample, otherwise later samples will either be very quick if we don't clean
