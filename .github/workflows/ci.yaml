@@ -57,8 +57,5 @@ jobs:
       - name: Setup Rust
         uses: moonrepo/setup-rust@v1
 
-      - name: Build
-        run: cargo build
-
       - name: Test
         run: cargo test
