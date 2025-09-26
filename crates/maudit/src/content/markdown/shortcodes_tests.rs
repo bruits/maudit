@@ -962,11 +962,11 @@ fn main() {
 
         // Test cases where we encounter \{{
         let test_cases = vec![
-            (r#"\{{"hello"}}"#, r#"\{{"hello"}}"#),
-            (r#"Before \{{test}} after"#, r#"Before \{{test}} after"#),
+            (r#"\{{"hello"}}"#, r#"{{"hello"}}"#),
+            (r#"Before \{{test}} after"#, r#"Before {{test}} after"#),
             (
                 r#"\{{invalid}} and {{ simple /}}"#,
-                r#"\{{invalid}} and SIMPLE_OUTPUT"#,
+                r#"{{invalid}} and SIMPLE_OUTPUT"#,
             ),
         ];
 
