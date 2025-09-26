@@ -2,7 +2,7 @@
 title: "Prologue"
 ---
 
-Welcome to the Maudit documentation! Maudit (pronounced /mo.di/, meaning _cursed_ in French) is a static site generator.
+Welcome to the Maudit documentation! Maudit (pronounced `/mo.di/`, meaning _cursed_ in French) is [a Rust library](/docs/philosophy/#maudit-is-a-library-not-a-framework) for generating static websites.
 
 [Static site generators](https://en.wikipedia.org/wiki/Static_site_generator) are tools that take a collection of files and convert them into a website, once in a build step. This is in contrast to dynamic websites, which are generated on-the-fly by a server. Other similar tools to Maudit include [Jekyll](https://jekyllrb.com), [Hugo](https://gohugo.io), [Astro](https://astro.build), [Eleventy](https://www.11ty.dev), [Zola](https://www.getzola.org) and [many more](https://jamstack.org/generators/).
 

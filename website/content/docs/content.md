@@ -15,7 +15,7 @@ In Maudit, this concept is called Content Sources. A content source is a collect
 Content sources are defined in the coronate entry point through the `content_sources!` macro.
 
 ```rs
-use maudit::content::content_sources;
+use maudit::content::{content_sources, markdown_entry, glob_markdown};
 
 #[markdown_entry]
 pub struct BlogPost {
@@ -30,14 +30,16 @@ fn main() {
     ],
     content_sources![
       "source_name" => loader(...),
-      "another_source" => glob_markdown<BlogPost>("path/to/files/*.md", None)
+      "another_source" => glob_markdown::<BlogPost>("path/to/files/*.md")
     ],
     Default::default()
   );
 }
 ```
 
-Where `loader` and `glob_markdown` are functions returning a Vec of `Entry`. Typically, a loader also accepts a type argument specifying the shape of the data for each entries it returns, which will be used inside your pages to provide typed content.
+Where `loader` and `glob_markdown` are functions returning a Vec of `Entry`.
+
+Typically, a loader also accepts a type argument specifying the shape of the data for each entries it returns, which will be used inside your pages to provide typed content.
 
 ## Using a content source in pages
 
@@ -89,10 +91,16 @@ pub struct DocsContent {
     pub section: Option<DocsSection>,
 }
 
-"docs" => glob_markdown::<DocsContent>("content/docs/*.md", None)
+"docs" => glob_markdown::<DocsContent>("content/docs/*.md")
 ```
 
-This loader take a glob pattern (compatible with [the `glob` crate](https://github.com/rust-lang/glob)) as its first argument, and an optional `MarkdownOptions` struct as its second argument to customise Markdown rendering. The frontmatter of each Markdown file will be deserialized using [Serde](https://serde.rs) into the type argument provided to `glob_markdown`, which can use the `#[markdown_entry]` macro to derive the necessary traits and add the necessary properties to the struct. Note that using this feature require the installation of Serde into your project as the macro uses Serde's derive macros.
+This loader take a glob pattern (compatible with [the `glob` crate](https://github.com/rust-lang/glob)) as its sole argument.
+
+The frontmatter of each Markdown file will be deserialized using [Serde](https://serde.rs) into the type argument provided to `glob_markdown`, which can use the `#[markdown_entry]` macro to derive the necessary traits and add the necessary properties to the struct. Note that using this feature require the installation of Serde into your project as the macro uses Serde's derive macros.
+
+##### Markdown options
+
+Markdown rendering can be customized by using [`glob_markdown_with_options`](https://docs.rs/maudit/latest/maudit/content/markdown/fn.glob_markdown_with_options.html), which takes an additional [`MarkdownOptions`](https://docs.rs/maudit/latest/maudit/content/markdown/struct.MarkdownOptions.html) argument. See the [Markdown rendering](#markdown-rendering) section for more details.
 
 ### Custom loaders
 
@@ -225,7 +233,7 @@ fn main() {
             // ...
         ],
         content_sources![
-            "blog" => glob_markdown::<BlogPost>("content/blog/**/*.md", Some(create_markdown_options())),
+            "blog" => glob_markdown_with_options::<BlogPost>("content/blog/**/*.md", create_markdown_options()),
         ],
         ..Default::default()
     );
@@ -279,7 +287,7 @@ fn main() {
             // ...
         ],
         content_sources![
-            "blog" => glob_markdown::<BlogPost>("content/blog/**/*.md", Some(create_markdown_options())),
+            "blog" => glob_markdown_with_options::<BlogPost>("content/blog/**/*.md", create_markdown_options()),
         ],
         ..Default::default(),
     );

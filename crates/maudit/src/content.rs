@@ -41,7 +41,7 @@ pub use markdown::{
 ///   coronate(
 ///     routes![],
 ///     content_sources![
-///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md", None)
+///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
 ///     ],
 ///     BuildOptions::default(),
 ///   )
@@ -102,7 +102,7 @@ pub use maudit_macros::markdown_entry;
 ///   coronate(
 ///     routes![],
 ///     content_sources![
-///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md", None)
+///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
 ///     ],
 ///     BuildOptions::default(),
 ///   )
@@ -346,7 +346,7 @@ pub type Untyped = FxHashMap<String, String>;
 /// # }
 ///
 /// pub fn content_sources() -> ContentSources {
-///   content_sources!["docs" => glob_markdown::<ArticleContent>("content/docs/*.md", None)]
+///   content_sources!["docs" => glob_markdown::<ArticleContent>("content/docs/*.md")]
 /// }
 pub struct ContentSources(pub(crate) Vec<Box<dyn ContentSourceInternal>>);
 

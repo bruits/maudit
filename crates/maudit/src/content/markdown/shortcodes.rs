@@ -68,8 +68,9 @@ pub fn preprocess_shortcodes(
     while let Some(start) = rest.find("{{") {
         // Check for escaped shortcode syntax like `\{{` - if found, skip this occurrence
         if start > 0 && rest.chars().nth(start - 1) == Some('\\') {
-            // This is an escaped shortcode, add everything up to and including the {{
-            output.push_str(&rest[..start + 2]);
+            // Remove the backslash and output the literal {{
+            output.push_str(&rest[..start - 1]); // up to the backslash
+            output.push_str("{{"); // output {{
             rest = &rest[start + 2..];
             continue;
         }

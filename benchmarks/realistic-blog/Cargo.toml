@@ -1,0 +1,18 @@
+[package]
+name = "realistic-blog-benchmark"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+maudit = { workspace = true }
+maud = "0.27.0"
+serde = { version = "1.0.216" }
+chrono = { version = "0.4.42", features = ["serde"] }
+
+[dev-dependencies]
+divan = { version = "3.0.5", package = "codspeed-divan-compat" }
+
+[[bench]]
+name = "build"
+harness = false

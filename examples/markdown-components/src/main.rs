@@ -1,4 +1,4 @@
-use maudit::content::{glob_markdown, MarkdownComponents, MarkdownOptions};
+use maudit::content::{glob_markdown_with_options, MarkdownComponents, MarkdownOptions};
 use maudit::{content_sources, coronate, routes, BuildOptions, BuildOutput};
 
 mod components;
@@ -11,7 +11,7 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(
         routes![IndexPage],
         content_sources![
-            "examples" => glob_markdown::<ComponentExample>("content/*.md", Some(
+            "examples" => glob_markdown_with_options::<ComponentExample>("content/*.md",
                 MarkdownOptions::with_components(
                     MarkdownComponents::new()
                         .heading(CustomHeading)
@@ -32,7 +32,6 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
                         .table_head(CustomTableHead)
                         .table_row(CustomTableRow)
                         .table_cell(CustomTableCell), Default::default()
-                )
             ))
         ],
         BuildOptions::default(),

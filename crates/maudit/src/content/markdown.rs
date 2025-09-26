@@ -122,7 +122,7 @@ pub trait InternalMarkdownContent {
 ///   coronate(
 ///     routes![],
 ///     content_sources![
-///       "articles" => glob_markdown::<UntypedMarkdownContent>("content/spooky/*.md", None)
+///       "articles" => glob_markdown::<UntypedMarkdownContent>("content/spooky/*.md")
 ///     ],
 ///     BuildOptions::default(),
 ///   )
@@ -183,7 +183,7 @@ impl MarkdownOptions {
 /// ## Example
 /// ```rs
 /// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
-/// use maudit::content::{markdown_entry, glob_markdown};
+/// use maudit::content::{markdown_entry, glob_markdown_with_options, MarkdownOptions};
 ///
 /// #[markdown_entry]
 /// pub struct ArticleContent {
@@ -195,16 +195,17 @@ impl MarkdownOptions {
 ///   coronate(
 ///     routes![],
 ///     content_sources![
-///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md", None)
+///       "articles" => glob_markdown_with_options::<ArticleContent>("content/articles/*.md", )
 ///     ],
 ///     BuildOptions::default(),
 ///   )
 /// }
 /// ```
-pub fn glob_markdown<T>(pattern: &str, options: Option<MarkdownOptions>) -> Vec<Entry<T>>
+pub fn glob_markdown_with_options<T>(pattern: &str, options: MarkdownOptions) -> Vec<Entry<T>>
 where
     T: DeserializeOwned + MarkdownContent + InternalMarkdownContent + Send + Sync + 'static,
 {
+    let options = Some(options);
     let mut entries = vec![];
     let options = options.map(Arc::new);
 
@@ -245,6 +246,40 @@ where
     }
 
     entries
+}
+
+/// Glob for Markdown files and return a vector of [`Entry`]s.
+///
+/// Typically used by [`content_sources!`](crate::content_sources) to define a Markdown content source in [`coronate()`](crate::coronate).
+///
+/// To provide custom options for Markdown rendering, use [`glob_markdown_with_options`] instead.
+///
+/// ## Example
+/// ```rs
+/// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
+/// use maudit::content::{markdown_entry, glob_markdown};
+///
+/// #[markdown_entry]
+/// pub struct ArticleContent {
+///   pub title: String,
+///   pub description: String,
+/// }
+///
+/// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
+///   coronate(
+///     routes![],
+///     content_sources![
+///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
+///     ],
+///     BuildOptions::default(),
+///   )
+/// }
+/// ```
+pub fn glob_markdown<T>(pattern: &str) -> Vec<Entry<T>>
+where
+    T: DeserializeOwned + MarkdownContent + InternalMarkdownContent + Send + Sync + 'static,
+{
+    glob_markdown_with_options(pattern, MarkdownOptions::default())
 }
 
 fn get_text_from_events(events_slice: &[Event]) -> String {

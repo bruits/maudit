@@ -859,6 +859,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link 0.2.0",
 ]
@@ -2925,6 +2926,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a80800c0488c3a21695ea981a54918fbb37abf04f4d0720c453632255e2ff0e"
 
 [[package]]
+name = "overhead-benchmark"
+version = "0.1.0"
+dependencies = [
+ "codspeed-divan-compat",
+ "itoa",
+ "maudit",
+]
+
+[[package]]
 name = "overload"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4000,6 +4010,17 @@ checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
+]
+
+[[package]]
+name = "realistic-blog-benchmark"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "codspeed-divan-compat",
+ "maud",
+ "maudit",
+ "serde",
 ]
 
 [[package]]

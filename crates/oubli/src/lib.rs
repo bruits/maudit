@@ -60,7 +60,7 @@ macro_rules! archetypes {
                         stringify!($ident),
                         Box::new({
                             let glob = $glob.to_string();
-                            move || maudit::content::glob_markdown::<oubli::archetypes::blog::BlogEntryContent>(&glob, None)
+                            move || maudit::content::glob_markdown::<oubli::archetypes::blog::BlogEntryContent>(&glob)
                         }),
                     );
                     // Generate the pages

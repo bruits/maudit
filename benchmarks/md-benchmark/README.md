@@ -9,43 +9,21 @@ The generated Markdown files were taken from https://github.com/zachleat/bench-f
 To run the benchmark, execute the following command:
 
 ```sh
-cargo run --release
-```
-
-By default, this will build 1000 pages. You can change the number of pages to build by using the `MARKDOWN_COUNT` environment variable:
-
-```sh
-MARKDOWN_COUNT=4000 cargo run --release
-```
-
-Valid values for `MARKDOWN_COUNT` are 250, 500, 1000, 2000, and 4000.
-
-Note that `cargo run` has a certain overhead, as such if checking the total time, it's more useful to run the compiled binary (`target/release/maudit-benchmark`) directly
-
-## `cargo bench`
-
-All 5 benchmarks can be run at once using the `cargo bench` command:
-
-```sh
 cargo bench
 ```
+
+5 benchmarks with different number of pages (250, 500, 1000, 2000, 4000) will be run and the time for each benchmark will be printed to the console.
 
 ## Results
 
 The following results were obtained on 2025-08-27 using a MacBook Pro (13-inch, M1, 2020) with 16 GB of RAM:
 
-| Pages | Full Build Time (ms) |
-| ----- | -------------------- |
-| 250   | 37                   |
-| 500   | 75                   |
-| 1000  | 151                  |
-| 2000  | 319                  |
-| 4000  | 676                  |
+| Pages | Median Full Build Time (ms) |
+| ----- | --------------------------- |
+| 250   | 37                          |
+| 500   | 75                          |
+| 1000  | 151                         |
+| 2000  | 319                         |
+| 4000  | 676                         |
 
 These numbers are not scientific and only serve as a rough estimate of the performance of Maudit. Your mileage may vary.
-
-## On compile times
-
-All the numbers in this document only include the **running time** of the benchmark. [Maudit operates on the idea that your content and assets change way more often than any parts that would require re-compilation](https://maudit.org/docs/philosophy/#your-website-changes-less-often-than-its-content) (static templates, pretty much anything in a `*.rs` file) and as such expect that the vast majority of your builds won't require compilation.
-
-This is not a gotcha moment or anything we're trying to hide: **With compilation times included, Maudit is slower than most static site generators.**

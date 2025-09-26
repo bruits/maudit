@@ -12,7 +12,7 @@ As such, in this guide, we'll be building our own minimal [entrypoint](/docs/ent
 
 ## Function signature
 
-The built-in `coronate` function takes a list of routes (which all implements the [FullRoute](https://docs.rs/maudit/latest/maudit/page/trait.FullRoute.html) trait), content sources, and some build options. We'll do the same.
+The built-in `coronate` function takes a list of routes (which all implements the [FullRoute](https://docs.rs/maudit/latest/maudit/route/trait.FullRoute.html) trait), [content sources](/docs/content), and some build options. We'll do the same.
 
 ```rs
 use maudit::{

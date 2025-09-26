@@ -11,7 +11,7 @@ use rustc_hash::FxHashMap;
 use std::any::Any;
 use std::path::{Path, PathBuf};
 
-/// The result of a page render, can be either text or raw bytes.
+/// The result of a page render, can be either text, raw bytes, or an error.
 ///
 /// Typically used through the [`Into<RenderResult>`](std::convert::Into) and [`From<RenderResult>`](std::convert::From) implementations for common types.
 /// End users should rarely need to interact with this enum directly.
@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 ///
 /// impl Route for Index {
 ///   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-///    "<h1>Hello, world!</h1>".into()
+///    "<h1>Hello, world!</h1>"
 ///   }
 /// }
 /// ```
@@ -119,8 +119,6 @@ pub struct PaginationPage<T> {
     pub total_pages: usize,
     pub has_next: bool,
     pub has_prev: bool,
-    pub next_page: Option<usize>,
-    pub prev_page: Option<usize>,
     pub start_index: usize,
     pub end_index: usize,
     pub items: Vec<T>,
@@ -143,12 +141,6 @@ impl<T> PaginationPage<T> {
             total_pages,
             has_next: page < total_pages - 1,
             has_prev: page > 0,
-            next_page: if page < total_pages - 1 {
-                Some(page + 1)
-            } else {
-                None
-            },
-            prev_page: if page > 0 { Some(page - 1) } else { None },
             start_index,
             end_index,
             items: page_items,
@@ -165,8 +157,6 @@ impl<T> std::fmt::Debug for PaginationPage<T> {
             .field("total_pages", &self.total_pages)
             .field("has_next", &self.has_next)
             .field("has_prev", &self.has_prev)
-            .field("next_page", &self.next_page)
-            .field("prev_page", &self.prev_page)
             .field("start_index", &self.start_index)
             .field("end_index", &self.end_index)
             // I don't really want to force users to implement Debug for T, so just show the length of items
@@ -179,6 +169,31 @@ impl<T> std::fmt::Debug for PaginationPage<T> {
 pub type PaginatedContentPage<T> = PaginationPage<Entry<T>>;
 
 /// Helper function to create paginated routes from any iterator
+///
+/// Example:
+/// ```rs
+/// use maudit::route::prelude::*;
+///
+/// #[route("/tags/[page]")]
+/// pub struct Tags;
+///
+/// #[derive(Params)]
+/// pub struct TagsParams {
+///     pub page: usize,
+/// }
+///
+/// impl Route<TagsParams, PaginationPage<String>> for Tags {
+///     fn pages(&self, ctx: &mut DynamicRouteContext) -> Vec<Page<TagsParams, PaginationPage<String>>> {
+///         let tags = vec!["rust".to_string(), "javascript".to_string(), "python".to_string()];
+///         paginate(tags, 2, |page| TagsParams { page })
+///     }
+///
+///     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+///         let props = ctx.props::<PaginationPage<String>>();
+///         format!("Page {} of tags: {:?}", props.page + 1, props.items)
+///     }
+/// }
+/// ```
 pub fn paginate<T, I, Params>(
     items: I,
     per_page: usize,
@@ -564,8 +579,8 @@ where
 {
 }
 
-/// Used internally by Maudit and should not be implemented by the user.
-/// We expose it because [`maudit_macros::route`] implements it for the user behind the scenes.
+/// Internal trait implemented by all routes, used by Maudit to render pages.
+/// [`maudit_macros::route`] implements it automatically for the user.
 pub trait FullRoute: InternalRoute + Sync + Send {
     #[doc(hidden)]
     fn render_internal(

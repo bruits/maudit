@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     build_website(
         routes![routes::Index],
         content_sources![
-            "articles" => glob_markdown::<ArticleContent>("content/articles/*.md", None)
+            "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
         ],
         &BuildOptions::default(),
     )

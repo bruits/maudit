@@ -72,6 +72,8 @@ impl Route for Index {
 
                 div.h-12.bg-linear-to-b."from-darker-white".border-t.border-t-borders{}
 
+                h3.text-4xl.block.mb-12.mt-6.px-12.lg:container.mx-auto { "The court's library, not its king." }
+
             },
             true,
             true,
