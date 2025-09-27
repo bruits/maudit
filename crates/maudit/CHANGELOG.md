@@ -1,5 +1,12 @@
 # maudit
 
+## 0.6.1
+
+### Patch changes
+
+- [0113efe](https://github.com/bruits/maudit/commit/0113efe432936c4f4fd874e5ea0714cd3919974d) Add a new `base_url` setting and `canonical_url()` method on PageContext to make it easier to build absolute URLs inside pages — Thanks @Princesseuh!
+
+
 ## 0.6.0
 
 ### Minor changes
