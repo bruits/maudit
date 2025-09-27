@@ -538,7 +538,8 @@ pub trait FullRoute: InternalRoute + Sync + Send {
 use crate::routing::ParameterDef;
 use std::sync::OnceLock;
 
-// Helper functions for URL and path generation that work with pre-extracted parameters
+// This function and the one below are extremely performance-sensitive, as they are called for every single page during the build.
+// It'd be great to optimize them as much as possible, make them allocation-free, etc. But, I'm not smart enough right now to do that!
 fn build_url_with_params(
     route_template: &str,
     params_def: &[ParameterDef],
