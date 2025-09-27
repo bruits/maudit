@@ -87,14 +87,6 @@ impl RouteAssets {
             Some(options)
         };
 
-        if let Some(existing_image) = self
-            .images
-            .iter()
-            .find(|img| img.path == image_path && img.options == image_options)
-        {
-            return existing_image.clone();
-        }
-
         let hash = calculate_hash(
             &image_path,
             Some(&HashConfig {
@@ -123,21 +115,11 @@ impl RouteAssets {
     ///
     /// The script will not automatically be included in the page, but can be included through the `.url()` method on the returned `Script` object.
     /// Alternatively, a script can be included automatically using the [RouteAssets::include_script] method instead.
-    ///
-    /// Subsequent calls to this function using the same path will return the same script, as such, the value returned by this function can be cloned and used multiple times without issue.
     pub fn add_script<P>(&mut self, script_path: P) -> Script
     where
         P: Into<PathBuf>,
     {
         let script_path = script_path.into();
-
-        if let Some(existing_script) = self
-            .scripts
-            .iter()
-            .find(|script| script.path == script_path)
-        {
-            return existing_script.clone();
-        }
 
         let hash = calculate_hash(
             &script_path,
@@ -201,14 +183,6 @@ impl RouteAssets {
         P: Into<PathBuf>,
     {
         let style_path = style_path.into();
-
-        if let Some(existing_style) = self
-            .styles
-            .iter()
-            .find(|style| style.path == style_path && style.tailwind == options.tailwind)
-        {
-            return existing_style.clone();
-        }
 
         let hash = calculate_hash(
             &style_path,

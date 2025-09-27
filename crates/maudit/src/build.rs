@@ -120,7 +120,7 @@ pub async fn build(
     let mut page_count = 0;
 
     // This is fully serial. It is somewhat trivial to make it parallel, but it currently isn't because every time I've tried to
-    // (uncommited, #25 and #41) it either made no difference or was slower. The overhead of parallelism is just too high for
+    // (uncommited, #25, #41, #46) it either made no difference or was slower. The overhead of parallelism is just too high for
     // how fast most sites build. Ideally, it'd be configurable and default to serial, but I haven't found an ergonomic way to do that yet.
     // If you manage to make it parallel and it actually improves performance, please open a PR!
     for route in routes {
@@ -154,7 +154,7 @@ pub async fn build(
                 build_pages_styles.extend(page_assets.styles);
 
                 build_metadata.add_page(
-                    cached_route.route_raw().to_string(),
+                    route.route_raw().to_string(),
                     file_path.to_string_lossy().to_string(),
                     None,
                 );
@@ -197,7 +197,7 @@ pub async fn build(
                     info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
                     build_metadata.add_page(
-                        cached_route.route_raw().to_string(),
+                        route.route_raw().to_string(),
                         file_path.to_string_lossy().to_string(),
                         Some(page.0.0),
                     );

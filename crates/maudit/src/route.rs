@@ -544,30 +544,28 @@ fn build_url_with_params(
     params_def: &[ParameterDef],
     params: &PageParams,
 ) -> String {
-    let mut route = route_template.to_string();
-
-    for param_def in params_def {
-        let value = params.0.get(&param_def.key);
-
-        match value {
-            Some(value) => match value {
-                Some(value) => {
-                    route.replace_range(param_def.index..param_def.index + param_def.length, value);
-                }
-                None => {
-                    route.replace_range(param_def.index..param_def.index + param_def.length, "");
-                }
-            },
-            None => {
-                panic!(
-                    "Route {:?} is missing parameter {:?}",
-                    route_template, param_def.key
-                );
-            }
-        }
+    if params_def.is_empty() {
+        return route_template.to_string();
     }
 
-    route.replace("//", "/")
+    let mut result = route_template.to_string();
+
+    for param_def in params_def {
+        let value = params.0.get(&param_def.key).unwrap_or_else(|| {
+            panic!(
+                "Route {:?} is missing parameter {:?}",
+                route_template, param_def.key
+            )
+        });
+
+        let replacement = value.as_deref().unwrap_or("");
+        result.replace_range(
+            param_def.index..param_def.index + param_def.length,
+            replacement,
+        );
+    }
+
+    result.replace("//", "/")
 }
 
 fn build_file_path_with_params(
@@ -577,31 +575,52 @@ fn build_file_path_with_params(
     output_dir: &Path,
     is_endpoint: bool,
 ) -> PathBuf {
-    let mut path = PathBuf::from(output_dir);
-    let mut last_index = 0;
-    let mut current_component = String::new();
+    let route = if params_def.is_empty() {
+        // No parameters, use template directly
+        route_template
+    } else {
+        // Build route with reverse-ordered parameters (avoiding clone + sort)
+        let mut route = route_template.to_string();
 
-    for param_def in params_def.iter() {
-        current_component.push_str(&route_template[last_index..param_def.index]);
+        for param_def in params_def {
+            let value = params.0.get(&param_def.key).unwrap_or_else(|| {
+                panic!(
+                    "Route {:?} is missing parameter {:?}",
+                    route_template, param_def.key
+                )
+            });
 
-        let value = params.0.get(&param_def.key).unwrap_or_else(|| {
-            panic!(
-                "Route {:?} is missing parameter {:?}",
-                route_template, param_def.key
-            )
-        });
-        if let Some(v) = value {
-            current_component.push_str(v);
+            let replacement = value.as_deref().unwrap_or("");
+            route.replace_range(
+                param_def.index..param_def.index + param_def.length,
+                replacement,
+            );
         }
 
-        last_index = param_def.index + param_def.length;
+        return build_path_from_route(&route, output_dir, is_endpoint);
+    };
+
+    build_path_from_route(route, output_dir, is_endpoint)
+}
+
+// Helper to build PathBuf from route string
+fn build_path_from_route(route: &str, output_dir: &Path, is_endpoint: bool) -> PathBuf {
+    // Collect all path components at once
+    let parts: Vec<&str> = route.split('/').filter(|s| !s.is_empty()).collect();
+
+    if parts.is_empty() {
+        // Root route case
+        let mut path = PathBuf::from(output_dir);
+        if !is_endpoint {
+            path.push("index.html");
+        }
+        return path;
     }
 
-    current_component.push_str(&route_template[last_index..]);
-
-    for part in current_component.split('/').filter(|s| !s.is_empty()) {
-        path.push(part);
-    }
+    // Build the complete path efficiently
+    let mut path = PathBuf::with_capacity(output_dir.as_os_str().len() + route.len() + 20);
+    path.push(output_dir);
+    path.extend(&parts);
 
     if !is_endpoint {
         path.push("index.html");
