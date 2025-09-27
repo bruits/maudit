@@ -18,7 +18,10 @@ use crate::{
     content::{ContentSources, RouteContent},
     is_dev,
     logging::print_title,
-    route::{DynamicRouteContext, FullRoute, PageContext, PageParams, RouteType},
+    route::{
+        CachedRoute, DynamicRouteContext, FullRoute, InternalRoute, PageContext, PageParams,
+        RouteType,
+    },
 };
 use colored::{ColoredString, Colorize};
 use log::{debug, info, trace, warn};
@@ -53,22 +56,21 @@ pub async fn build(
     // Create a directory for the output
     trace!(target: "build", "Setting up required directories...");
 
-    let old_dist_tmp_dir = if options.clean_output_dir {
-        let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-        let num = (duration.as_secs() + duration.subsec_nanos() as u64) % 100000;
-        let new_dir_for_old_dist = env::temp_dir().join(format!("maudit_old_dist_{}", num));
-        let _ = fs::rename(&options.output_dir, &new_dir_for_old_dist);
-        Some(new_dir_for_old_dist)
+    let clean_up_handle = if options.clean_output_dir {
+        let old_dist_tmp_dir = {
+            let duration = SystemTime::now().duration_since(UNIX_EPOCH)?;
+            let num = (duration.as_secs() + duration.subsec_nanos() as u64) % 100000;
+            let new_dir_for_old_dist = env::temp_dir().join(format!("maudit_old_dist_{}", num));
+            let _ = fs::rename(&options.output_dir, &new_dir_for_old_dist);
+            new_dir_for_old_dist
+        };
+
+        Some(tokio::spawn(async {
+            let _ = fs::remove_dir_all(old_dist_tmp_dir);
+        }))
     } else {
         None
     };
-
-    let should_clear_dist = options.clean_output_dir;
-    let clean_up_handle = tokio::spawn(async move {
-        if should_clear_dist {
-            let _ = fs::remove_dir_all(old_dist_tmp_dir.unwrap());
-        }
-    });
 
     let route_assets_options = options.route_assets_options();
 
@@ -122,7 +124,9 @@ pub async fn build(
     // how fast most sites build. Ideally, it'd be configurable and default to serial, but I haven't found an ergonomic way to do that yet.
     // If you manage to make it parallel and it actually improves performance, please open a PR!
     for route in routes {
-        match route.route_type() {
+        let cached_route = CachedRoute::new(*route);
+
+        match cached_route.route_type() {
             RouteType::Static => {
                 let route_start = Instant::now();
 
@@ -130,7 +134,7 @@ pub async fn build(
                 let mut page_assets = RouteAssets::new(&route_assets_options);
 
                 let params = PageParams::default();
-                let url = route.url(&params);
+                let url = cached_route.url(&params);
 
                 let result = route.build(&mut PageContext::from_static_route(
                     &content,
@@ -139,7 +143,7 @@ pub async fn build(
                     &options.base_url,
                 ))?;
 
-                let file_path = route.file_path(&params, &options.output_dir);
+                let file_path = cached_route.file_path(&params, &options.output_dir);
 
                 write_route_file(&result, &file_path)?;
 
@@ -150,7 +154,7 @@ pub async fn build(
                 build_pages_styles.extend(page_assets.styles);
 
                 build_metadata.add_page(
-                    route.route_raw().to_string(),
+                    cached_route.route_raw().to_string(),
                     file_path.to_string_lossy().to_string(),
                     None,
                 );
@@ -176,7 +180,7 @@ pub async fn build(
                 for page in pages {
                     let route_start = Instant::now();
 
-                    let url = route.url(&page.0);
+                    let url = cached_route.url(&page.0);
 
                     let content = route.build(&mut PageContext::from_dynamic_route(
                         &page,
@@ -186,14 +190,14 @@ pub async fn build(
                         &options.base_url,
                     ))?;
 
-                    let file_path = route.file_path(&page.0, &options.output_dir);
+                    let file_path = cached_route.file_path(&page.0, &options.output_dir);
 
                     write_route_file(&content, &file_path)?;
 
                     info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
                     build_metadata.add_page(
-                        route.route_raw().to_string(),
+                        cached_route.route_raw().to_string(),
                         file_path.to_string_lossy().to_string(),
                         Some(page.0.0),
                     );
@@ -327,7 +331,6 @@ pub async fn build(
                     debug!("Failed to copy from cache {} to dest {}", cache_path.display(), dest_path.display());
                 }
             } else if !dest_path.exists() {
-                // TODO: Check if copying should be done in this parallel iterator, I/O doesn't benefit from parallelism so having those tasks here might just be slowing processing
                 fs::copy(image.path(), dest_path).unwrap_or_else(|e| {
                     panic!(
                         "Failed to copy image from {} to {}: {}",
@@ -348,7 +351,6 @@ pub async fn build(
         let assets_start = Instant::now();
         print_title("copying assets");
 
-        // Copy the static directory to the dist directory
         copy_recursively(
             &options.static_dir,
             &options.output_dir,
@@ -361,7 +363,9 @@ pub async fn build(
     info!(target: "SKIP_FORMAT", "{}", "");
     info!(target: "build", "{}", format!("Build completed in {}", format_elapsed_time(build_start.elapsed(), &section_format_options)).bold());
 
-    clean_up_handle.await.unwrap();
+    if let Some(clean_up_handle) = clean_up_handle {
+        clean_up_handle.await?;
+    }
 
     Ok(build_metadata)
 }

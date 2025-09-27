@@ -473,88 +473,19 @@ pub trait InternalRoute {
     }
 
     fn url(&self, params: &PageParams) -> String {
-        let mut params_def = extract_params_from_raw_route(&self.route_raw());
-
-        // Replace every param_def with the value from the params hashmap for said key
-        // So, ex: "/articles/[article]" (params: Hashmap {article: "truc"}) -> "/articles/truc"
-        let mut route = self.route_raw();
-
-        // Sort params by index in reverse order to avoid index shifting issues
-        params_def.sort_by(|a, b| b.index.cmp(&a.index));
-
-        for param_def in params_def {
-            let value = params.0.get(&param_def.key);
-
-            match value {
-                Some(value) => match value {
-                    Some(value) => {
-                        route.replace_range(
-                            param_def.index..param_def.index + param_def.length,
-                            value,
-                        );
-                    }
-                    None => {
-                        route
-                            .replace_range(param_def.index..param_def.index + param_def.length, "");
-                    }
-                },
-                None => {
-                    panic!(
-                        "Route {:?} is missing parameter {:?}",
-                        self.route_raw(),
-                        param_def.key
-                    );
-                }
-            }
-        }
-
-        // Collapse multiple slashes into single slashes
-        route.replace("//", "/")
+        let params_def = extract_params_from_raw_route(&self.route_raw());
+        build_url_with_params(&self.route_raw(), &params_def, params)
     }
 
     fn file_path(&self, params: &PageParams, output_dir: &Path) -> PathBuf {
         let params_def = extract_params_from_raw_route(&self.route_raw());
-        let route_template = self.route_raw();
-
-        let mut sorted_params = params_def;
-        sorted_params.sort_by_key(|p| p.index);
-
-        let mut path = PathBuf::from(output_dir);
-        let mut last_index = 0;
-        let mut current_component = String::new();
-
-        for param_def in sorted_params.iter() {
-            // Push everything before this param into current_component
-            current_component.push_str(&route_template[last_index..param_def.index]);
-
-            // Append param value if present
-            let value = params.0.get(&param_def.key).unwrap_or_else(|| {
-                panic!(
-                    "Route {:?} is missing parameter {:?}",
-                    route_template, param_def.key
-                )
-            });
-            if let Some(v) = value {
-                current_component.push_str(v);
-            }
-
-            last_index = param_def.index + param_def.length;
-        }
-
-        // Append remainder of the route
-        current_component.push_str(&route_template[last_index..]);
-
-        // Split by '/' and push non-empty components into the PathBuf
-        for part in current_component.split('/').filter(|s| !s.is_empty()) {
-            path.push(part);
-        }
-
-        // Handle endpoint vs. page
-        if !self.is_endpoint() {
-            path.push("index.html");
-        }
-
-        path
+        build_file_path_with_params(
+            &self.route_raw(),
+            &params_def,
+            params,
+            output_dir,
+            self.is_endpoint(),
+        )
     }
 }
 
@@ -604,6 +535,133 @@ pub trait FullRoute: InternalRoute + Sync + Send {
     }
 }
 
+use crate::routing::ParameterDef;
+use std::sync::OnceLock;
+
+// Helper functions for URL and path generation that work with pre-extracted parameters
+fn build_url_with_params(
+    route_template: &str,
+    params_def: &[ParameterDef],
+    params: &PageParams,
+) -> String {
+    let mut route = route_template.to_string();
+
+    for param_def in params_def {
+        let value = params.0.get(&param_def.key);
+
+        match value {
+            Some(value) => match value {
+                Some(value) => {
+                    route.replace_range(param_def.index..param_def.index + param_def.length, value);
+                }
+                None => {
+                    route.replace_range(param_def.index..param_def.index + param_def.length, "");
+                }
+            },
+            None => {
+                panic!(
+                    "Route {:?} is missing parameter {:?}",
+                    route_template, param_def.key
+                );
+            }
+        }
+    }
+
+    route.replace("//", "/")
+}
+
+fn build_file_path_with_params(
+    route_template: &str,
+    params_def: &[ParameterDef],
+    params: &PageParams,
+    output_dir: &Path,
+    is_endpoint: bool,
+) -> PathBuf {
+    let mut path = PathBuf::from(output_dir);
+    let mut last_index = 0;
+    let mut current_component = String::new();
+
+    for param_def in params_def.iter() {
+        current_component.push_str(&route_template[last_index..param_def.index]);
+
+        let value = params.0.get(&param_def.key).unwrap_or_else(|| {
+            panic!(
+                "Route {:?} is missing parameter {:?}",
+                route_template, param_def.key
+            )
+        });
+        if let Some(v) = value {
+            current_component.push_str(v);
+        }
+
+        last_index = param_def.index + param_def.length;
+    }
+
+    current_component.push_str(&route_template[last_index..]);
+
+    for part in current_component.split('/').filter(|s| !s.is_empty()) {
+        path.push(part);
+    }
+
+    if !is_endpoint {
+        path.push("index.html");
+    }
+
+    path
+}
+
+/// Wrapper around a route that caches its parameter extraction and endpoint status to avoid redundant computations.
+pub struct CachedRoute<'a> {
+    inner: &'a dyn FullRoute,
+    params_cache: OnceLock<Vec<ParameterDef>>,
+    is_endpoint: OnceLock<bool>,
+}
+
+impl<'a> CachedRoute<'a> {
+    pub fn new(route: &'a dyn FullRoute) -> Self {
+        Self {
+            inner: route,
+            params_cache: OnceLock::new(),
+            is_endpoint: OnceLock::new(),
+        }
+    }
+
+    fn get_cached_params(&self) -> &Vec<ParameterDef> {
+        self.params_cache
+            .get_or_init(|| extract_params_from_raw_route(&self.inner.route_raw()))
+    }
+
+    fn is_endpoint(&self) -> bool {
+        *self
+            .is_endpoint
+            .get_or_init(|| guess_if_route_is_endpoint(&self.inner.route_raw()))
+    }
+}
+
+impl<'a> InternalRoute for CachedRoute<'a> {
+    fn route_raw(&self) -> String {
+        self.inner.route_raw()
+    }
+
+    fn route_type(&self) -> RouteType {
+        get_route_type_from_route_params(self.get_cached_params())
+    }
+
+    fn url(&self, params: &PageParams) -> String {
+        build_url_with_params(&self.route_raw(), self.get_cached_params(), params)
+    }
+
+    fn file_path(&self, params: &PageParams, output_dir: &Path) -> PathBuf {
+        build_file_path_with_params(
+            &self.route_raw(),
+            self.get_cached_params(),
+            params,
+            output_dir,
+            self.is_endpoint(),
+        )
+    }
+}
+
 pub fn finish_route(
     render_result: RenderResult,
     page_assets: &RouteAssets,
@@ -625,26 +683,14 @@ pub fn finish_route(
                 element!("head", |el| {
                     for style in &included_styles {
                         el.append(
-                            &format!(
-                                "<link rel=\"stylesheet\" href=\"{}\">",
-                                style.url().unwrap_or_else(|| panic!(
-                                    "Failed to get URL for style: {:?}. This should not happen, please report this issue",
-                                    style.path()
-                                ))
-                            ),
+                            &format!("<link rel=\"stylesheet\" href=\"{}\">", style.url()),
                             lol_html::html_content::ContentType::Html,
                         );
                     }
 
                     for script in &included_scripts {
                         el.append(
-                            &format!(
-                                "<script src=\"{}\" type=\"module\"></script>",
-                                script.url().unwrap_or_else(|| panic!(
-                                    "Failed to get URL for script: {:?}. This should not happen, please report this issue.",
-                                    script.path()
-                                ))
-                            ),
+                            &format!("<script src=\"{}\" type=\"module\"></script>", script.url()),
                             lol_html::html_content::ContentType::Html,
                         );
                     }
@@ -692,8 +738,8 @@ pub mod prelude {
     //! use maudit::route::prelude::*;
     //! ```
     pub use super::{
-        DynamicRouteContext, FullRoute, Page, PageContext, PageParams, Pages, PaginatedContentPage,
-        PaginationPage, RenderResult, Route, RouteExt, paginate,
+        CachedRoute, DynamicRouteContext, FullRoute, Page, PageContext, PageParams, Pages,
+        PaginatedContentPage, PaginationPage, RenderResult, Route, RouteExt, paginate,
     };
     pub use crate::assets::{Asset, Image, ImageFormat, ImageOptions, Script, Style, StyleOptions};
     pub use crate::content::{

@@ -210,8 +210,7 @@ pub fn coronate(
 
     let async_runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
-        .build()
-        .unwrap();
+        .build()?;
 
     execute_build(routes, &mut content_sources, &options, &async_runtime)
 }
