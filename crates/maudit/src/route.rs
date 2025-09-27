@@ -1,15 +1,17 @@
 //! Core traits and structs to define the pages of your website.
 //!
 //! Every route must implement the [`Route`] trait. Then, pages can be passed to [`coronate()`](crate::coronate), through the [`routes!`](crate::routes) macro, to be built.
-use crate::assets::RouteAssets;
-use crate::build::finish_route;
+use crate::assets::{Asset, RouteAssets};
 use crate::content::{Entry, RouteContent};
+use crate::errors::BuildError;
 use crate::routing::{
     extract_params_from_raw_route, get_route_type_from_route_params, guess_if_route_is_endpoint,
 };
 use rustc_hash::FxHashMap;
 use std::any::Any;
 use std::path::{Path, PathBuf};
+
+use lol_html::{RewriteStrSettings, element, rewrite_str};
 
 /// The result of a page render, can be either text, raw bytes, or an error.
 ///
@@ -599,6 +601,78 @@ pub trait FullRoute: InternalRoute + Sync + Send {
         let bytes = finish_route(result, ctx.assets, self.route_raw())?;
 
         Ok(bytes)
+    }
+}
+
+pub fn finish_route(
+    render_result: RenderResult,
+    page_assets: &RouteAssets,
+    route: String,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    match render_result {
+        // We've handled errors already at this point, but just in case, handle them again here
+        RenderResult::Err(e) => Err(e),
+        RenderResult::Text(html) => {
+            let included_styles: Vec<_> = page_assets.included_styles().collect();
+            let included_scripts: Vec<_> = page_assets.included_scripts().collect();
+
+            if included_scripts.is_empty() && included_styles.is_empty() {
+                return Ok(html.into_bytes());
+            }
+
+            let element_content_handlers = vec![
+                // Add included scripts and styles to the head
+                element!("head", |el| {
+                    for style in &included_styles {
+                        el.append(
+                            &format!(
+                                "<link rel=\"stylesheet\" href=\"{}\">",
+                                style.url().unwrap_or_else(|| panic!(
+                                    "Failed to get URL for style: {:?}. This should not happen, please report this issue",
+                                    style.path()
+                                ))
+                            ),
+                            lol_html::html_content::ContentType::Html,
+                        );
+                    }
+
+                    for script in &included_scripts {
+                        el.append(
+                            &format!(
+                                "<script src=\"{}\" type=\"module\"></script>",
+                                script.url().unwrap_or_else(|| panic!(
+                                    "Failed to get URL for script: {:?}. This should not happen, please report this issue.",
+                                    script.path()
+                                ))
+                            ),
+                            lol_html::html_content::ContentType::Html,
+                        );
+                    }
+
+                    Ok(())
+                }),
+            ];
+
+            let output = rewrite_str(
+                &html,
+                RewriteStrSettings {
+                    element_content_handlers,
+                    ..RewriteStrSettings::new()
+                },
+            )?;
+
+            Ok(output.into_bytes())
+        }
+        RenderResult::Raw(content) => {
+            let included_styles: Vec<_> = page_assets.included_styles().collect();
+            let included_scripts: Vec<_> = page_assets.included_scripts().collect();
+
+            if !included_scripts.is_empty() || !included_styles.is_empty() {
+                Err(BuildError::InvalidRenderResult { route })?;
+            }
+
+            Ok(content)
+        }
     }
 }
 
