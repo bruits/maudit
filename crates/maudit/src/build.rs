@@ -297,7 +297,7 @@ pub async fn build(
         let _ = fs::create_dir_all(IMAGE_CACHE_DIR);
 
         let start_time = Instant::now();
-        build_pages_images.iter().for_each(|image| {
+        build_pages_images.par_iter().for_each(|image| {
             let start_process = Instant::now();
             let dest_path: &PathBuf = image.build_path();
 
