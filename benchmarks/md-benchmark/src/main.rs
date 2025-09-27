@@ -7,5 +7,5 @@ fn main() {
         .unwrap();
 
     println!("Building with {} markdown files", markdown_count);
-    build_website(markdown_count.try_into().unwrap());
+    build_website(markdown_count);
 }

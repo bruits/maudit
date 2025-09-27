@@ -24,6 +24,8 @@ pub use markdown::{
     *,
 };
 
+pub use highlight::{HighlightOptions, highlight_code};
+
 /// Helps implement a struct as a Markdown content entry.
 ///
 /// ## Example

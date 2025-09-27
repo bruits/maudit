@@ -4,7 +4,7 @@ use maudit::{
 };
 mod page;
 
-pub fn build_website(markdown_count: u32) {
+pub fn build_website(markdown_count: usize) {
     let _ = coronate(
         routes![page::Article],
         content_sources!["articles" => glob_markdown::<UntypedMarkdownContent>(&format!("content/{}/*.md", markdown_count))],

@@ -439,19 +439,19 @@ pub fn render_markdown(
 
             // TODO: Handle this differently so it's compatible with the component system - erika, 2025-08-24
             Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(fence))) => {
-                let (block, begin) = CodeBlock::new(fence);
+                let (block, begin) = CodeBlock::new(
+                    fence,
+                    &options
+                        .unwrap_or(&MarkdownOptions::default())
+                        .highlight_theme,
+                );
                 code_block = Some(block);
                 events[i] = Event::Html(begin.into());
             }
 
             Event::End(TagEnd::CodeBlock) => {
                 if let Some(ref mut code_block) = code_block {
-                    let html = code_block.highlight(
-                        &code_block_content,
-                        &options
-                            .unwrap_or(&MarkdownOptions::default())
-                            .highlight_theme,
-                    );
+                    let html = code_block.highlight(&code_block_content);
                     events[i] =
                         Event::Html(format!("{}{}", html.unwrap(), "</code></pre>\n").into());
                 }

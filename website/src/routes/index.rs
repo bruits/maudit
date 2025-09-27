@@ -1,9 +1,22 @@
 use maud::html;
 use maud::PreEscaped;
+use maudit::content::highlight_code;
+use maudit::content::HighlightOptions;
 use maudit::route::prelude::*;
 
 use crate::layout::layout;
 use crate::layout::SeoMeta;
+
+const CODE_EXAMPLE: &str = r#"use maudit::prelude::*;
+
+#[route("/")]
+pub struct Home;
+
+impl Route for Home {
+  fn render(&self, _: &mut PageContext) -> impl Into<RenderResult> {
+    your_template_engine::render("home.html")
+  }
+}"#;
 
 #[route("/")]
 pub struct Index;
@@ -16,8 +29,14 @@ impl Route for Index {
             ("Style your way", "Style with plain CSS, or opt for frameworks and preprocessors such as Tailwind and Sass."),
             ("Powerful routing", "Flexible and powerful routing system allows you to create complex sites with ease."),
             ("Ecosystem-ready", "Maudit utilize <a class=\"underline\" href=\"https://rolldown.rs\">Rolldown</a>, a fast bundler for JavaScript and CSS, enabling the usage of TypeScript and the npm ecosystem."),
-            ("Bring your templates", "Use your preferred templating engine to craft your website's pages. If it renders to HTML, Maudit supports it."),
+            ("Bring your templates", "Use your preferred templating engine to craft your website's pages. If it can return a String, Maudit supports it."),
         ].map(|(name, description)| {(name, PreEscaped(description))});
+
+        let code_example = highlight_code(
+            CODE_EXAMPLE,
+            &HighlightOptions::new("rust", "base16-eighties.dark"),
+        )
+        .unwrap();
 
         layout(
             html! {
@@ -58,7 +77,7 @@ impl Route for Index {
                 }
 
                 section.features.py-14 {
-                    div."px-12"."lg:container".mx-auto {
+                    div."px-6"."sm:px-12"."lg:container".mx-auto {
                         div.grid."grid-cols-1"."md:grid-cols-2"."lg:grid-cols-3"."gap-8"."gap-y-12" {
                             @for (name, description) in features {
                                 div.feature-card {
@@ -72,8 +91,23 @@ impl Route for Index {
 
                 div.h-12.bg-linear-to-b."from-darker-white".border-t.border-t-borders{}
 
-                h3.text-4xl.block.mb-12.mt-6.px-12.lg:container.mx-auto { "The court's library, not its king." }
-
+                section."mb-12"."mt-6"."px-6"."sm:px-12".lg:container.mx-auto {
+                    div.grid.grid-cols-1.lg:grid-cols-2.gap-8.items-center {
+                        div {
+                            h3.text-4xl.block.font-bold.mb-4 { "The court's library, not its king" }
+                            p {
+                                a.underline href="/docs/philosophy/#maudit-is-a-library-not-a-framework" { "Maudit is a library, not a framework." } " A Maudit site is a normal Rust program that you have full control over. Hook into the build process, customize the output, and use any libraries you want."
+                            }
+                        }
+                        div {
+                            pre.bg-gray-900.p-4.rounded-lg.overflow-x-auto.sm:text-base.text-sm {
+                                code {
+                                    (PreEscaped(code_example))
+                                }
+                            }
+                        }
+                    }
+                }
             },
             true,
             true,
