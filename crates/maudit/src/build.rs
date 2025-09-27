@@ -11,7 +11,7 @@ use std::{
 use crate::{
     BuildOptions, BuildOutput,
     assets::{
-        RouteAssets, TailwindPlugin,
+        self, RouteAssets, TailwindPlugin,
         image_cache::{IMAGE_CACHE_DIR, ImageCache},
     },
     build::images::process_image,
@@ -111,95 +111,102 @@ pub async fn build(
         ..Default::default()
     };
 
-    let (build_pages_images, build_pages_scripts, build_pages_styles, page_count) = routes.iter().try_fold(
-        (FxHashSet::default(), FxHashSet::default(), FxHashSet::default(), 0),
-        |(mut images, mut scripts, mut styles, mut count), route| -> Result<_, Box<dyn std::error::Error>> {
-            match route.route_type() {
-                RouteType::Static => {
+    let mut build_pages_images: FxHashSet<assets::Image> = FxHashSet::default();
+    let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
+    let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
+
+    let mut page_count = 0;
+
+    // This is fully serial. It is somewhat trivial to make it parallel, but it currently isn't because every time I've tried to
+    // (uncommited, #25 and #41) it either made no difference or was slower. The overhead of parallelism is just too high for
+    // how fast most sites build. Ideally, it'd be configurable and default to serial, but I haven't found an ergonomic way to do that yet.
+    // If you manage to make it parallel and it actually improves performance, please open a PR!
+    for route in routes {
+        match route.route_type() {
+            RouteType::Static => {
+                let route_start = Instant::now();
+
+                let content = RouteContent::new(content_sources);
+                let mut page_assets = RouteAssets::new(&route_assets_options);
+
+                let params = PageParams::default();
+                let url = route.url(&params);
+
+                let result = route.build(&mut PageContext::from_static_route(
+                    &content,
+                    &mut page_assets,
+                    &url,
+                    &options.base_url,
+                ))?;
+
+                let file_path = route.file_path(&params, &options.output_dir);
+
+                write_route_file(&result, &file_path)?;
+
+                info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
+
+                build_pages_images.extend(page_assets.images);
+                build_pages_scripts.extend(page_assets.scripts);
+                build_pages_styles.extend(page_assets.styles);
+
+                build_metadata.add_page(
+                    route.route_raw().to_string(),
+                    file_path.to_string_lossy().to_string(),
+                    None,
+                );
+
+                page_count += 1;
+            }
+            RouteType::Dynamic => {
+                let content = RouteContent::new(content_sources);
+                let mut page_assets = RouteAssets::new(&route_assets_options);
+
+                let pages = route.get_pages(&mut DynamicRouteContext {
+                    content: &content,
+                    assets: &mut page_assets,
+                });
+
+                if pages.is_empty() {
+                    warn!(target: "build", "{} is a dynamic route, but its implementation of Route::pages returned an empty Vec. No pages will be generated for this route.", route.route_raw().to_string().bold());
+                    continue;
+                } else {
+                    info!(target: "build", "{}", route.route_raw().to_string().bold());
+                }
+
+                for page in pages {
                     let route_start = Instant::now();
 
-                    let content = RouteContent::new(content_sources);
-                    let mut page_assets = RouteAssets::new(&route_assets_options);
+                    let url = route.url(&page.0);
 
-                    let params = PageParams::default();
-                    let url = route.url(&params);
-
-                    let result = route.build(&mut PageContext::from_static_route(
+                    let content = route.build(&mut PageContext::from_dynamic_route(
+                        &page,
                         &content,
                         &mut page_assets,
                         &url,
                         &options.base_url,
                     ))?;
 
-                    let file_path = route.file_path(&params, &options.output_dir);
+                    let file_path = route.file_path(&page.0, &options.output_dir);
 
-                    write_route_file(&result, &file_path)?;
+                    write_route_file(&content, &file_path)?;
 
-                    info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
-
-                    images.extend(page_assets.images);
-                    scripts.extend(page_assets.scripts);
-                    styles.extend(page_assets.styles);
+                    info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
                     build_metadata.add_page(
                         route.route_raw().to_string(),
                         file_path.to_string_lossy().to_string(),
-                        None,
+                        Some(page.0.0),
                     );
 
-                    count += 1;
+                    page_count += 1;
                 }
-                RouteType::Dynamic => {
-                    let content = RouteContent::new(content_sources);
-                    let mut page_assets = RouteAssets::new(&route_assets_options);
 
-                    let pages = route.get_pages(&mut DynamicRouteContext {
-                        content: &content,
-                        assets: &mut page_assets,
-                    });
-
-                    if pages.is_empty() {
-                        warn!(target: "build", "{} is a dynamic route, but its implementation of Route::pages returned an empty Vec. No pages will be generated for this route.", route.route_raw().to_string().bold());
-                    } else {
-                        info!(target: "build", "{}", route.route_raw().to_string().bold());
-
-                        for page in pages {
-                            let route_start = Instant::now();
-
-                            let url = route.url(&page.0);
-
-                            let content = route.build(&mut PageContext::from_dynamic_route(
-                                &page,
-                                &content,
-                                &mut page_assets,
-                                &url,
-                                &options.base_url,
-                            ))?;
-
-                            let file_path = route.file_path(&page.0, &options.output_dir);
-
-                            write_route_file(&content, &file_path)?;
-
-                            info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
-
-                            build_metadata.add_page(
-                                route.route_raw().to_string(),
-                                file_path.to_string_lossy().to_string(),
-                                Some(page.0.0),
-                            );
-
-                            count += 1;
-                        }
-                    }
-
-                    images.extend(page_assets.images);
-                    scripts.extend(page_assets.scripts);
-                    styles.extend(page_assets.styles);
-                }
+                build_pages_images.extend(page_assets.images);
+                build_pages_scripts.extend(page_assets.scripts);
+                build_pages_styles.extend(page_assets.styles);
             }
-            Ok((images, scripts, styles, count))
-        },
-    )?;
+        }
+    }
 
     info!(target: "pages", "{}", format!("generated {} pages in {}", page_count,  format_elapsed_time(pages_start.elapsed(), &section_format_options)).bold());
 
@@ -290,7 +297,7 @@ pub async fn build(
         let _ = fs::create_dir_all(IMAGE_CACHE_DIR);
 
         let start_time = Instant::now();
-        build_pages_images.par_iter().for_each(|image| {
+        build_pages_images.iter().for_each(|image| {
             let start_process = Instant::now();
             let dest_path: &PathBuf = image.build_path();
 
