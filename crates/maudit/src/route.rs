@@ -575,52 +575,27 @@ fn build_file_path_with_params(
     output_dir: &Path,
     is_endpoint: bool,
 ) -> PathBuf {
-    let route = if params_def.is_empty() {
-        // No parameters, use template directly
-        route_template
-    } else {
-        // Build route with reverse-ordered parameters (avoiding clone + sort)
-        let mut route = route_template.to_string();
+    // Build route string with parameters
+    let mut route = route_template.to_string();
 
-        for param_def in params_def {
-            let value = params.0.get(&param_def.key).unwrap_or_else(|| {
-                panic!(
-                    "Route {:?} is missing parameter {:?}",
-                    route_template, param_def.key
-                )
-            });
+    for param_def in params_def {
+        let value = params.0.get(&param_def.key).unwrap_or_else(|| {
+            panic!(
+                "Route {:?} is missing parameter {:?}",
+                route_template, param_def.key
+            )
+        });
 
-            let replacement = value.as_deref().unwrap_or("");
-            route.replace_range(
-                param_def.index..param_def.index + param_def.length,
-                replacement,
-            );
-        }
-
-        return build_path_from_route(&route, output_dir, is_endpoint);
-    };
-
-    build_path_from_route(route, output_dir, is_endpoint)
-}
-
-// Helper to build PathBuf from route string
-fn build_path_from_route(route: &str, output_dir: &Path, is_endpoint: bool) -> PathBuf {
-    // Collect all path components at once
-    let parts: Vec<&str> = route.split('/').filter(|s| !s.is_empty()).collect();
-
-    if parts.is_empty() {
-        // Root route case
-        let mut path = PathBuf::from(output_dir);
-        if !is_endpoint {
-            path.push("index.html");
-        }
-        return path;
+        let replacement = value.as_deref().unwrap_or("");
+        route.replace_range(
+            param_def.index..param_def.index + param_def.length,
+            replacement,
+        );
     }
 
-    // Build the complete path efficiently
-    let mut path = PathBuf::with_capacity(output_dir.as_os_str().len() + route.len() + 20);
-    path.push(output_dir);
-    path.extend(&parts);
+    // Build path from route string
+    let mut path = PathBuf::from(output_dir);
+    path.extend(route.split('/').filter(|s| !s.is_empty()));
 
     if !is_endpoint {
         path.push("index.html");
