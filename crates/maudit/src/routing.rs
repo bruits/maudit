@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::route::RouteType;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ParameterDef {
     pub(crate) key: String,
     pub(crate) index: usize,
@@ -43,6 +43,9 @@ pub fn extract_params_from_raw_route(raw_route: &str) -> Vec<ParameterDef> {
             break;
         }
     }
+
+    // Sort by index in reverse order to avoid index shifting issues during replacement
+    params.sort_by(|a, b| b.index.cmp(&a.index));
 
     params
 }
@@ -85,14 +88,14 @@ mod tests {
         let input = "/articles/[article]/[id]";
         let expected = vec![
             ParameterDef {
-                key: "article".to_string(),
-                index: 10,
-                length: 9,
-            },
-            ParameterDef {
                 key: "id".to_string(),
                 index: 20,
                 length: 4,
+            },
+            ParameterDef {
+                key: "article".to_string(),
+                index: 10,
+                length: 9,
             },
         ];
 

@@ -20,11 +20,11 @@ impl Route for Index {
         html! {
             head {
                 title { "Index" }
-                link rel="stylesheet" href=(style.url().unwrap()) {}
+                link rel="stylesheet" href=(style.url()) {}
             }
             h1 { "Index" }
-            img src=(image.url().unwrap()) {}
-            script src=(script.url().unwrap()) {}
+            img src=(image.url()) {}
+            script src=(script.url()) {}
             a."text-red-500" href=(link_to_first_dynamic) { "Go to first dynamic page" }
         }
     }

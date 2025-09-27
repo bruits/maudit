@@ -9,7 +9,7 @@ use crate::{
 impl Render for Style {
     fn render(&self) -> Markup {
         html! {
-            link rel="stylesheet" type="text/css" href=(self.url().unwrap());
+            link rel="stylesheet" type="text/css" href=(self.url());
         }
     }
 }
@@ -17,7 +17,7 @@ impl Render for Style {
 impl Render for Script {
     fn render(&self) -> Markup {
         html! {
-            script src=(self.url().unwrap()) type="module" {}
+            script src=(self.url()) type="module" {}
         }
     }
 }
@@ -26,7 +26,7 @@ impl Render for Image {
     fn render(&self) -> Markup {
         let (width, height) = self.dimensions();
         html! {
-            img src=(self.url().unwrap()) width=(width) height=(height) loading="lazy" decoding="async";
+            img src=(self.url()) width=(width) height=(height) loading="lazy" decoding="async";
         }
     }
 }

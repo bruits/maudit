@@ -7,10 +7,7 @@ use log::debug;
 use thumbhash::{rgba_to_thumb_hash, thumb_hash_to_average_rgba, thumb_hash_to_rgba};
 
 use super::image_cache::ImageCache;
-use crate::assets::{
-    HashAssetType, HashConfig, RouteAssetsOptions, calculate_hash, make_filename, make_final_path,
-    make_final_url,
-};
+use crate::assets::{RouteAssetsOptions, make_filename, make_final_path, make_final_url};
 use crate::is_dev;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -78,18 +75,9 @@ impl Image {
     pub fn new(
         path: PathBuf,
         image_options: Option<ImageOptions>,
+        hash: String,
         route_assets_options: &RouteAssetsOptions,
     ) -> Self {
-        let hash = calculate_hash(
-            &path,
-            Some(&HashConfig {
-                asset_type: HashAssetType::Image(
-                    image_options.as_ref().unwrap_or(&ImageOptions::default()),
-                ),
-                hashing_strategy: &route_assets_options.hashing_strategy,
-            }),
-        );
-
         let filename = make_filename(
             &path,
             &hash,

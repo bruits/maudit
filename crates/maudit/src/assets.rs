@@ -1,7 +1,5 @@
-use dyn_eq::DynEq;
 use log::debug;
 use rustc_hash::FxHashSet;
-use std::hash::Hash;
 use std::path::Path;
 use std::time::Instant;
 use std::{fs, path::PathBuf};
@@ -77,33 +75,29 @@ impl RouteAssets {
     /// Add an image to the page assets, causing the file to be created in the output directory. The image is resolved relative to the current working directory.
     ///
     /// The image will not automatically be included in the page, but can be included through the `.url()` method on the returned `Image` object.
-    ///
-    /// Subsequent calls to this function using the same path will return the same image, as such, the value returned by this function can be cloned and used multiple times without issue.
     pub fn add_image_with_options<P>(&mut self, image_path: P, options: ImageOptions) -> Image
     where
         P: Into<PathBuf>,
     {
         let image_path = image_path.into();
 
-        // Check if the image already exists in the assets, if so, return it
-        if let Some(image) = self.images.iter().find_map(|asset| {
-            asset.as_any().downcast_ref::<Image>().filter(|image| {
-                image.path == image_path
-                    && options == *image.options.as_ref().unwrap_or(&ImageOptions::default())
-            })
-        }) {
-            return image.clone();
-        }
+        let image_options = if options == ImageOptions::default() {
+            None
+        } else {
+            Some(options)
+        };
 
-        let image = Image::new(
-            image_path,
-            if options == ImageOptions::default() {
-                None
-            } else {
-                Some(options)
-            },
-            &self.options,
+        let hash = calculate_hash(
+            &image_path,
+            Some(&HashConfig {
+                asset_type: HashAssetType::Image(
+                    image_options.as_ref().unwrap_or(&ImageOptions::default()),
+                ),
+                hashing_strategy: &self.options.hashing_strategy,
+            }),
         );
+
+        let image = Image::new(image_path, image_options, hash, &self.options);
 
         self.images.insert(image.clone());
 
@@ -121,13 +115,21 @@ impl RouteAssets {
     ///
     /// The script will not automatically be included in the page, but can be included through the `.url()` method on the returned `Script` object.
     /// Alternatively, a script can be included automatically using the [RouteAssets::include_script] method instead.
-    ///
-    /// Subsequent calls to this function using the same path will return the same script, as such, the value returned by this function can be cloned and used multiple times without issue.
     pub fn add_script<P>(&mut self, script_path: P) -> Script
     where
         P: Into<PathBuf>,
     {
-        let script = Script::new(script_path.into(), false, &self.options);
+        let script_path = script_path.into();
+
+        let hash = calculate_hash(
+            &script_path,
+            Some(&HashConfig {
+                asset_type: HashAssetType::Script,
+                hashing_strategy: &self.options.hashing_strategy,
+            }),
+        );
+
+        let script = Script::new(script_path, false, hash, &self.options);
 
         self.scripts.insert(script.clone());
 
@@ -143,7 +145,17 @@ impl RouteAssets {
     where
         P: Into<PathBuf>,
     {
-        let script = Script::new(script_path.into(), true, &self.options);
+        let script_path = script_path.into();
+
+        let hash = calculate_hash(
+            &script_path,
+            Some(&HashConfig {
+                asset_type: HashAssetType::Script,
+                hashing_strategy: &self.options.hashing_strategy,
+            }),
+        );
+
+        let script = Script::new(script_path, true, hash, &self.options);
 
         self.scripts.insert(script);
     }
@@ -153,7 +165,7 @@ impl RouteAssets {
     /// The style will not automatically be included in the page, but can be included through the `.url()` method on the returned `Style` object.
     /// Alternatively, a style can be included automatically using the [RouteAssets::include_style] method instead.
     ///
-    /// Subsequent calls to this method using the same path will return the same style, as such, the value returned by this method can be cloned and used multiple times without issue. this method is equivalent to calling `add_style_with_options` with the default `StyleOptions` and is purely provided for convenience.
+    /// Subsequent calls to this method using the same path will return the same style, as such, the value returned by this method can be cloned and used multiple times without issue. This method is equivalent to calling `add_style_with_options` with the default `StyleOptions` and is purely provided for convenience.
     pub fn add_style<P>(&mut self, style_path: P) -> Style
     where
         P: Into<PathBuf>,
@@ -170,7 +182,17 @@ impl RouteAssets {
     where
         P: Into<PathBuf>,
     {
-        let style = Style::new(style_path.into(), false, &options, &self.options);
+        let style_path = style_path.into();
+
+        let hash = calculate_hash(
+            &style_path,
+            Some(&HashConfig {
+                asset_type: HashAssetType::Style(&options),
+                hashing_strategy: &self.options.hashing_strategy,
+            }),
+        );
+
+        let style = Style::new(style_path, false, &options, hash, &self.options);
 
         self.styles.insert(style.clone());
 
@@ -198,15 +220,25 @@ impl RouteAssets {
     where
         P: Into<PathBuf>,
     {
-        let style = Style::new(style_path.into(), true, &options, &self.options);
+        let style_path = style_path.into();
+
+        let hash = calculate_hash(
+            &style_path,
+            Some(&HashConfig {
+                asset_type: HashAssetType::Style(&options),
+                hashing_strategy: &self.options.hashing_strategy,
+            }),
+        );
+
+        let style = Style::new(style_path, true, &options, hash, &self.options);
 
         self.styles.insert(style);
     }
 }
 
-pub trait Asset: DynEq + Sync + Send {
+pub trait Asset: Sync + Send {
     fn build_path(&self) -> &PathBuf;
-    fn url(&self) -> Option<&String>;
+    fn url(&self) -> &String;
     fn path(&self) -> &PathBuf;
     fn filename(&self) -> &PathBuf;
 }
@@ -226,8 +258,8 @@ macro_rules! implement_asset_trait {
                 &self.build_path
             }
 
-            fn url(&self) -> Option<&String> {
-                Some(&self.url)
+            fn url(&self) -> &String {
+                &self.url
             }
         }
     };
@@ -332,14 +364,6 @@ fn calculate_hash(path: &Path, options: Option<&HashConfig>) -> String {
     hex[..5].to_string()
 }
 
-impl Hash for dyn Asset {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.path().hash(state);
-    }
-}
-
-dyn_eq::eq_trait_object!(Asset);
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -411,13 +435,13 @@ mod tests {
         let mut page_assets = RouteAssets::default();
 
         let image = page_assets.add_image(temp_dir.join("image.png"));
-        assert_eq!(image.url().unwrap().chars().next(), Some('/'));
+        assert_eq!(image.url().chars().next(), Some('/'));
 
         let script = page_assets.add_script(temp_dir.join("script.js"));
-        assert_eq!(script.url().unwrap().chars().next(), Some('/'));
+        assert_eq!(script.url().chars().next(), Some('/'));
 
         let style = page_assets.add_style(temp_dir.join("style.css"));
-        assert_eq!(style.url().unwrap().chars().next(), Some('/'));
+        assert_eq!(style.url().chars().next(), Some('/'));
     }
 
     #[test]
@@ -426,13 +450,13 @@ mod tests {
         let mut page_assets = RouteAssets::default();
 
         let image = page_assets.add_image(temp_dir.join("image.png"));
-        assert!(image.url().unwrap().contains(&image.hash));
+        assert!(image.url().contains(&image.hash));
 
         let script = page_assets.add_script(temp_dir.join("script.js"));
-        assert!(script.url().unwrap().contains(&script.hash));
+        assert!(script.url().contains(&script.hash));
 
         let style = page_assets.add_style(temp_dir.join("style.css"));
-        assert!(style.url().unwrap().contains(&style.hash));
+        assert!(style.url().contains(&style.hash));
     }
 
     #[test]

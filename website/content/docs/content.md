@@ -176,6 +176,37 @@ Entry::create(
 
 Either through loaders or by using the [`render_markdown`](https://docs.rs/maudit/latest/maudit/content/markdown/fn.render_markdown.html) function directly, Maudit supports rendering local and remote Markdown and enriching it with shortcodes and custom components.
 
+### Syntax Highlighting
+
+Maudit uses [Syntect](https://github.com/trishume/syntect) to provide syntax highlighting for code blocks in Markdown at build time. No client-side JavaScript is used to provide syntax highlighting. Syntax highlighting can also be used outside of Markdown by using the `maudit::content::highlight_code` function.
+
+By default, the theme `base16-ocean.dark` is used, but you can customize this by providing a different theme name in the `highlight_theme` field of `MarkdownOptions`. Maudit includes all of Syntect's built-in themes:
+
+- `base16-ocean.dark`,`base16-eighties.dark`,`base16-mocha.dark`,`base16-ocean.light`
+- `InspiredGitHub` from [here](https://github.com/sethlopezme/InspiredGitHub.tmtheme)
+- `Solarized (dark)` and `Solarized (light)`
+
+```rust
+use maudit::content::markdown::MarkdownOptions;
+
+fn main() {
+  coronate(
+    routes![
+        // ...
+    ],
+    content_sources![
+      "blog" => glob_markdown_with_options::<BlogPost>("content/blog/**/*.md", MarkdownOptions {
+        highlight_theme: "InspiredGitHub".into(),
+        ..Default::default()
+      }),
+    ],
+    ..Default::default(),
+  );
+}
+```
+
+You may also provide your own custom theme by passing a path to a `.tmTheme` file in the `highlight_theme` field of `MarkdownOptions`. This path is relative to the current working directory when building the site.
+
 ### Shortcodes
 
 Shortcodes provide a way to extend Markdown with custom functionality. They serve a similar role to [components in MDX](https://mdxjs.com) or [tags in Markdoc](https://markdoc.dev/docs/tags), allowing authors to define and reuse snippets throughout their content. Shortcodes can accept attributes and content, and can be self-closing or not.

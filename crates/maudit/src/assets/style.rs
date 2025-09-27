@@ -1,9 +1,6 @@
 use std::path::PathBuf;
 
-use crate::assets::{
-    HashAssetType, HashConfig, RouteAssetsOptions, calculate_hash, make_filename, make_final_path,
-    make_final_url,
-};
+use crate::assets::{RouteAssetsOptions, make_filename, make_final_path, make_final_url};
 
 #[derive(Clone, PartialEq, Eq, Hash, Default)]
 pub struct StyleOptions {
@@ -27,16 +24,9 @@ impl Style {
         path: PathBuf,
         included: bool,
         style_options: &StyleOptions,
+        hash: String,
         route_assets_options: &RouteAssetsOptions,
     ) -> Self {
-        let hash = calculate_hash(
-            &path,
-            Some(&HashConfig {
-                asset_type: HashAssetType::Style(style_options),
-                hashing_strategy: &route_assets_options.hashing_strategy,
-            }),
-        );
-
         let filename = make_filename(&path, &hash, Some("css"));
         let build_path = make_final_path(&route_assets_options.output_assets_dir, &filename);
         let url = make_final_url(&route_assets_options.assets_dir, &filename);
