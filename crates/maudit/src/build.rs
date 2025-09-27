@@ -4,7 +4,6 @@ use std::{
     fs::{self},
     io::{self},
     path::{Path, PathBuf},
-    process::Command,
     sync::Arc,
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
@@ -12,129 +11,27 @@ use std::{
 use crate::{
     BuildOptions, BuildOutput,
     assets::{
-        self, RouteAssets,
+        RouteAssets, TailwindPlugin,
         image_cache::{IMAGE_CACHE_DIR, ImageCache},
     },
     build::images::process_image,
     content::{ContentSources, RouteContent},
-    errors::BuildError,
     is_dev,
     logging::print_title,
-    route::{DynamicRouteContext, FullRoute, PageContext, PageParams, RenderResult, RouteType},
+    route::{DynamicRouteContext, FullRoute, PageContext, PageParams, RouteType},
 };
 use colored::{ColoredString, Colorize};
 use log::{debug, info, trace, warn};
-use oxc_sourcemap::SourceMap;
-use rolldown::{
-    Bundler, BundlerOptions, InputItem, ModuleType,
-    plugin::{HookUsage, Plugin},
-};
+use rolldown::{Bundler, BundlerOptions, InputItem, ModuleType};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::assets::Asset;
 use crate::logging::{FormatElapsedTimeOptions, format_elapsed_time};
-
-use lol_html::{RewriteStrSettings, element, rewrite_str};
 use rayon::prelude::*;
 
 pub mod images;
 pub mod metadata;
 pub mod options;
-
-#[derive(Debug)]
-struct TailwindPlugin {
-    tailwind_path: PathBuf,
-    tailwind_entries: Vec<PathBuf>,
-}
-
-impl Plugin for TailwindPlugin {
-    fn name(&self) -> std::borrow::Cow<'static, str> {
-        "builtin:tailwind".into()
-    }
-
-    fn register_hook_usage(&self) -> rolldown::plugin::HookUsage {
-        HookUsage::Transform
-    }
-
-    async fn transform(
-        &self,
-        _ctx: rolldown::plugin::SharedTransformPluginContext,
-        args: &rolldown::plugin::HookTransformArgs<'_>,
-    ) -> rolldown::plugin::HookTransformReturn {
-        if *args.module_type != ModuleType::Css {
-            return Ok(None);
-        }
-
-        if self
-            .tailwind_entries
-            .iter()
-            .any(|entry| entry.canonicalize().unwrap().to_string_lossy() == args.id)
-        {
-            let start_tailwind = Instant::now();
-            let mut command = Command::new(&self.tailwind_path);
-            command.args(["--input", args.id]);
-
-            // Add minify in production, source maps in development
-            if !crate::is_dev() {
-                command.arg("--minify");
-            }
-            if crate::is_dev() {
-                command.arg("--map");
-            }
-
-            let tailwind_output = command.output()
-                    .unwrap_or_else(|e| {
-                        // TODO: Return a proper error instead of panicking
-                        let args_str = if crate::is_dev() {
-                            format!("['--input', '{}', '--map']", args.id)
-                        } else {
-                            format!("['--input', '{}', '--minify']", args.id)
-                        };
-                        panic!(
-                            "Failed to execute Tailwind CSS command, is it installed and is the path to its binary correct?\nCommand: '{}', Args: {}. Error: {}",
-                            &self.tailwind_path.display(),
-                            args_str,
-                            e
-                        )
-            });
-
-            if !tailwind_output.status.success() {
-                let stderr = String::from_utf8_lossy(&tailwind_output.stderr);
-                let error_message = format!(
-                    "Tailwind CSS process failed with status {}: {}",
-                    tailwind_output.status, stderr
-                );
-                panic!("{}", error_message);
-            }
-
-            info!("Tailwind took {:?}", start_tailwind.elapsed());
-
-            let output = String::from_utf8_lossy(&tailwind_output.stdout);
-            let (code, map) = if let Some((code, map)) = output.split_once("/*# sourceMappingURL") {
-                (code.to_string(), Some(map.to_string()))
-            } else {
-                (output.to_string(), None)
-            };
-
-            if let Some(map) = map {
-                let source_map = SourceMap::from_json_string(&map).ok();
-
-                return Ok(Some(rolldown::plugin::HookTransformOutput {
-                    code: Some(code),
-                    map: source_map,
-                    ..Default::default()
-                }));
-            }
-
-            return Ok(Some(rolldown::plugin::HookTransformOutput {
-                code: Some(code),
-                ..Default::default()
-            }));
-        }
-
-        Ok(None)
-    }
-}
 
 pub fn execute_build(
     routes: &[&dyn FullRoute],
@@ -214,101 +111,95 @@ pub async fn build(
         ..Default::default()
     };
 
-    let mut build_pages_images: FxHashSet<assets::Image> = FxHashSet::default();
-    let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
-    let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
-
-    let mut page_count = 0;
-
-    // This is fully serial. It is trivial to make it parallel, but it currently isn't because every time I've tried to
-    // (uncommited, #25 and #41) it either made no difference or was slower. The overhead of Rayon is just too high for
-    // how fast most sites build. Ideally, it'd be configurable and default to serial, but I haven't found an ergonomic way to do that yet.
-    for route in routes {
-        match route.route_type() {
-            RouteType::Static => {
-                let route_start = Instant::now();
-
-                let content = RouteContent::new(content_sources);
-                let mut page_assets = RouteAssets::new(&route_assets_options);
-
-                let params = PageParams::default();
-                let url = route.url(&params);
-
-                let result = route.build(&mut PageContext::from_static_route(
-                    &content,
-                    &mut page_assets,
-                    &url,
-                    &options.base_url,
-                ))?;
-
-                let file_path = route.file_path(&params, &options.output_dir);
-
-                write_route_file(&result, &file_path)?;
-
-                info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
-
-                build_pages_images.extend(page_assets.images);
-                build_pages_scripts.extend(page_assets.scripts);
-                build_pages_styles.extend(page_assets.styles);
-
-                build_metadata.add_page(
-                    route.route_raw().to_string(),
-                    file_path.to_string_lossy().to_string(),
-                    None,
-                );
-
-                page_count += 1;
-            }
-            RouteType::Dynamic => {
-                let content = RouteContent::new(content_sources);
-                let mut page_assets = RouteAssets::new(&route_assets_options);
-
-                let pages = route.get_pages(&mut DynamicRouteContext {
-                    content: &content,
-                    assets: &mut page_assets,
-                });
-
-                if pages.is_empty() {
-                    warn!(target: "build", "{} is a dynamic route, but its implementation of Route::pages returned an empty Vec. No pages will be generated for this route.", route.route_raw().to_string().bold());
-                    continue;
-                } else {
-                    info!(target: "build", "{}", route.route_raw().to_string().bold());
-                }
-
-                for page in pages {
+    let (build_pages_images, build_pages_scripts, build_pages_styles, page_count) = routes.iter().try_fold(
+        (FxHashSet::default(), FxHashSet::default(), FxHashSet::default(), 0),
+        |(mut images, mut scripts, mut styles, mut count), route| -> Result<_, Box<dyn std::error::Error>> {
+            match route.route_type() {
+                RouteType::Static => {
                     let route_start = Instant::now();
 
-                    let url = route.url(&page.0);
+                    let content = RouteContent::new(content_sources);
+                    let mut page_assets = RouteAssets::new(&route_assets_options);
 
-                    let content = route.build(&mut PageContext::from_dynamic_route(
-                        &page,
+                    let params = PageParams::default();
+                    let url = route.url(&params);
+
+                    let result = route.build(&mut PageContext::from_static_route(
                         &content,
                         &mut page_assets,
                         &url,
                         &options.base_url,
                     ))?;
 
-                    let file_path = route.file_path(&page.0, &options.output_dir);
+                    let file_path = route.file_path(&params, &options.output_dir);
 
-                    write_route_file(&content, &file_path)?;
+                    write_route_file(&result, &file_path)?;
 
-                    info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
+                    info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
+
+                    images.extend(page_assets.images);
+                    scripts.extend(page_assets.scripts);
+                    styles.extend(page_assets.styles);
 
                     build_metadata.add_page(
                         route.route_raw().to_string(),
                         file_path.to_string_lossy().to_string(),
-                        Some(page.0.0),
+                        None,
                     );
 
-                    page_count += 1;
+                    count += 1;
                 }
+                RouteType::Dynamic => {
+                    let content = RouteContent::new(content_sources);
+                    let mut page_assets = RouteAssets::new(&route_assets_options);
 
-                build_pages_images.extend(page_assets.images);
-                build_pages_scripts.extend(page_assets.scripts);
-                build_pages_styles.extend(page_assets.styles);
+                    let pages = route.get_pages(&mut DynamicRouteContext {
+                        content: &content,
+                        assets: &mut page_assets,
+                    });
+
+                    if pages.is_empty() {
+                        warn!(target: "build", "{} is a dynamic route, but its implementation of Route::pages returned an empty Vec. No pages will be generated for this route.", route.route_raw().to_string().bold());
+                    } else {
+                        info!(target: "build", "{}", route.route_raw().to_string().bold());
+
+                        for page in pages {
+                            let route_start = Instant::now();
+
+                            let url = route.url(&page.0);
+
+                            let content = route.build(&mut PageContext::from_dynamic_route(
+                                &page,
+                                &content,
+                                &mut page_assets,
+                                &url,
+                                &options.base_url,
+                            ))?;
+
+                            let file_path = route.file_path(&page.0, &options.output_dir);
+
+                            write_route_file(&content, &file_path)?;
+
+                            info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
+
+                            build_metadata.add_page(
+                                route.route_raw().to_string(),
+                                file_path.to_string_lossy().to_string(),
+                                Some(page.0.0),
+                            );
+
+                            count += 1;
+                        }
+                    }
+
+                    images.extend(page_assets.images);
+                    scripts.extend(page_assets.scripts);
+                    styles.extend(page_assets.styles);
+                }
             }
-        }
-    }
+            Ok((images, scripts, styles, count))
+        },
+    )?;
 
     info!(target: "pages", "{}", format!("generated {} pages in {}", page_count,  format_elapsed_time(pages_start.elapsed(), &section_format_options)).bold());
 
@@ -508,76 +399,4 @@ fn write_route_file(content: &[u8], file_path: &PathBuf) -> Result<(), io::Error
     fs::write(file_path, content)?;
 
     Ok(())
-}
-
-pub fn finish_route(
-    render_result: RenderResult,
-    page_assets: &assets::RouteAssets,
-    route: String,
-) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    match render_result {
-        // We've handled errors already at this point, but just in case, handle them again here
-        RenderResult::Err(e) => Err(e),
-        RenderResult::Text(html) => {
-            let included_styles: Vec<_> = page_assets.included_styles().collect();
-            let included_scripts: Vec<_> = page_assets.included_scripts().collect();
-
-            if included_scripts.is_empty() && included_styles.is_empty() {
-                return Ok(html.into_bytes());
-            }
-
-            let element_content_handlers = vec![
-                // Add included scripts and styles to the head
-                element!("head", |el| {
-                    for style in &included_styles {
-                        el.append(
-                            &format!(
-                                "<link rel=\"stylesheet\" href=\"{}\">",
-                                style.url().unwrap_or_else(|| panic!(
-                                    "Failed to get URL for style: {:?}. This should not happen, please report this issue",
-                                    style.path()
-                                ))
-                            ),
-                            lol_html::html_content::ContentType::Html,
-                        );
-                    }
-
-                    for script in &included_scripts {
-                        el.append(
-                            &format!(
-                                "<script src=\"{}\" type=\"module\"></script>",
-                                script.url().unwrap_or_else(|| panic!(
-                                    "Failed to get URL for script: {:?}. This should not happen, please report this issue.",
-                                    script.path()
-                                ))
-                            ),
-                            lol_html::html_content::ContentType::Html,
-                        );
-                    }
-
-                    Ok(())
-                }),
-            ];
-
-            let output = rewrite_str(
-                &html,
-                RewriteStrSettings {
-                    element_content_handlers,
-                    ..RewriteStrSettings::new()
-                },
-            )?;
-
-            Ok(output.into_bytes())
-        }
-        RenderResult::Raw(content) => {
-            let included_styles: Vec<_> = page_assets.included_styles().collect();
-            let included_scripts: Vec<_> = page_assets.included_scripts().collect();
-
-            if !included_scripts.is_empty() || !included_styles.is_empty() {
-                Err(BuildError::InvalidRenderResult { route })?;
-            }
-
-            Ok(content)
-        }
-    }
 }

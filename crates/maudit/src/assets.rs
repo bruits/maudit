@@ -11,9 +11,11 @@ mod image;
 pub mod image_cache;
 mod script;
 mod style;
+mod tailwind;
 pub use image::{Image, ImageFormat, ImageOptions};
 pub use script::Script;
 pub use style::{Style, StyleOptions};
+pub use tailwind::TailwindPlugin;
 
 use crate::{AssetHashingStrategy, BuildOptions};
 
