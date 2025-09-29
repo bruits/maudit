@@ -35,7 +35,7 @@ fn main() {
     let runtime = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
 
     runtime.block_on(async {
-        let mut bundler = Bundler::new(bundler_options);
+        let mut bundler = Bundler::new(bundler_options).unwrap();
         if let Err(e) = bundler.write().await {
             panic!("Failed to bundle JavaScript: {:?}", e);
         }
