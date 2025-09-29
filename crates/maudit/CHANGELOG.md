@@ -1,5 +1,17 @@
 # maudit
 
+## 0.6.1
+
+### Patch changes
+
+- [c132d51](https://github.com/bruits/maudit/commit/c132d511d0038138a8bbc9b2122602a9154fa298) Assets' `url` method now always return `String` instead of `Option<String>` — Thanks @Princesseuh!
+- [0113efe](https://github.com/bruits/maudit/commit/0113efe432936c4f4fd874e5ea0714cd3919974d) Add a new `base_url` setting and `canonical_url()` method on PageContext to make it easier to build absolute URLs inside pages — Thanks @Princesseuh!
+- [c132d51](https://github.com/bruits/maudit/commit/c132d511d0038138a8bbc9b2122602a9154fa298) Fixed escaped shortcodes (i.e. `\{{ shortcode }}`) not rendering correctly — Thanks @Princesseuh!
+- [c132d51](https://github.com/bruits/maudit/commit/c132d511d0038138a8bbc9b2122602a9154fa298) Refactored syntax highlighting into a `highlight_code` function that can be used independently of Markdown rendering — Thanks @Princesseuh!
+- [c132d51](https://github.com/bruits/maudit/commit/c132d511d0038138a8bbc9b2122602a9154fa298) Improve performance when building many pages, especially when the pages are lightweight — Thanks @Princesseuh!
+- [c132d51](https://github.com/bruits/maudit/commit/c132d511d0038138a8bbc9b2122602a9154fa298) Update Rolldown version — Thanks @Princesseuh!
+
+
 ## 0.6.0
 
 ### Minor changes

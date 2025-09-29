@@ -4,7 +4,7 @@ description = "Library for generating static websites."
 documentation = "https://docs.rs/maudit"
 homepage = "https://maudit.org"
 repository = "https://github.com/bruits/maudit"
-version = "0.6.0"
+version = "0.6.1"
 license = "MIT"
 edition = "2024"
 
