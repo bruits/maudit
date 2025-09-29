@@ -200,7 +200,7 @@ fn main() {
         ..Default::default()
       }),
     ],
-    ..Default::default(),
+    BuildOptions::default()
   );
 }
 ```
@@ -320,7 +320,7 @@ fn main() {
         content_sources![
             "blog" => glob_markdown_with_options::<BlogPost>("content/blog/**/*.md", create_markdown_options()),
         ],
-        ..Default::default(),
+        BuildOptions::default()
     );
 }
 

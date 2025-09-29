@@ -67,4 +67,4 @@ impl Route for ImagePage {
 }
 ```
 
-Processing images in Markdown files is currently not supported.
+Processing images in Markdown files using the standard syntax is currently not supported, but can be achieved using a custom [shortcode](/docs/content/#shortcodes) or [component](/docs/content/#components).

@@ -410,7 +410,7 @@ impl<T> ContentSource<T> {
         self.entries.iter().find(|entry| entry.id == id)
     }
 
-    pub fn into_params<P>(&self, cb: impl Fn(&Entry<T>) -> P) -> Vec<P>
+    pub fn into_params<P>(&self, cb: impl FnMut(&Entry<T>) -> P) -> Vec<P>
     where
         P: Into<PageParams>,
     {
@@ -419,7 +419,7 @@ impl<T> ContentSource<T> {
 
     pub fn into_pages<Params, Props>(
         &self,
-        cb: impl Fn(&Entry<T>) -> crate::route::Page<Params, Props>,
+        cb: impl FnMut(&Entry<T>) -> crate::route::Page<Params, Props>,
     ) -> crate::route::Pages<Params, Props>
     where
         Params: Into<PageParams>,

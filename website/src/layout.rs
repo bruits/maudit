@@ -111,7 +111,7 @@ pub fn docs_layout(
                 aside.bg-linear-to-l."from-darker-white"."py-8"."h-full".border-r.border-r-borders.hidden.sm:block {
                     (left_sidebar(ctx))
                 }
-                main.w-full.max-w-larger-prose.mx-auto.sm:py-8.py-4 {
+                main.w-full.max-w-larger-prose.mx-auto.sm:pt-8.py-4.pb-8.sm:pb-16 {
                     (main)
                 }
                 aside."py-8".hidden."sm:block" {

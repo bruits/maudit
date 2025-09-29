@@ -1,8 +1,5 @@
 @import "tailwindcss";
 
-/* TODO: Get rid of this and build our own `prose` class */
-@plugin "@tailwindcss/typography";
-
 @theme {
     --color-our-white: #fafafa;
     --color-our-black: #262421;
@@ -75,4 +72,111 @@ a:hover {
         background-size: 100px;
         background-position-y: calc(50%);
     }
+}
+
+.prose {
+    font-size: 1.125rem;
+    line-height: 1.75;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5 {
+    font-weight: bold;
+}
+
+.prose h1 {
+    margin-top: 0;
+    margin-bottom: 0.5em;
+    font-size: 2.25rem;
+    line-height: 1.11111;
+}
+
+.prose h2 {
+    margin-top: 1.2em;
+    margin-bottom: 0.6em;
+    font-size: 1.66667em;
+    line-height: 1.33333;
+}
+
+.prose h2:first-child {
+    margin-top: 0;
+}
+
+.prose h3 {
+    margin-top: 1em;
+    margin-bottom: 0.4em;
+    font-size: 1.5rem;
+    line-height: 1.4;
+}
+
+.prose h4 {
+    margin-top: 0.8em;
+    margin-bottom: 0.3em;
+    font-size: 1.25rem;
+    line-height: 1.5;
+}
+
+.prose h5 {
+    margin-top: 0.8em;
+    margin-bottom: 0.3em;
+    font-size: 1.125rem;
+    line-height: 1.55556;
+}
+
+.prose a {
+    text-decoration: underline;
+}
+
+.prose p {
+    margin-top: 1em;
+    margin-bottom: 1em;
+    line-height: 1.75;
+}
+
+.prose code {
+    font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo,
+        Consolas, "DejaVu Sans Mono", monospace;
+    font-size: 0.888889em;
+}
+
+.prose code:not(pre code) {
+    font-weight: 600;
+}
+
+.prose code:not(pre code):before {
+    content: "`";
+}
+
+.prose code:not(pre code):after {
+    content: "`";
+}
+
+.prose pre {
+    margin-left: -1.5rem;
+    margin-right: -1.5rem;
+    background-color: var(--color-darker-black);
+    overflow-x: auto;
+    padding-top: 1em;
+    padding-inline-end: 1.5em;
+    padding-bottom: 1em;
+    border-radius: 0.375rem;
+    margin-top: 2em;
+    margin-bottom: 2em;
+    padding-inline-start: 1.5em;
+    font-size: 0.888889em;
+}
+
+.prose ul {
+    list-style-type: disc;
+    margin-top: 1em;
+    margin-bottom: 1em;
+    padding-left: 1.5em;
+}
+
+.prose li {
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
 }
