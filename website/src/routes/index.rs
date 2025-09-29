@@ -26,7 +26,7 @@ impl Route for Index {
         let features = [
             ("Performant", "Generate a site with thousands of pages in seconds using minimal resources."),
             ("Content", "Bring your content to life with built-in support for Markdown, custom components, syntax highlighting, and more."),
-            ("Style your way", "Style with plain CSS, or opt for frameworks and preprocessors such as Tailwind and Sass."),
+            ("Style your way", "Style with plain CSS, or opt for frameworks and preprocessors such as Tailwind."),
             ("Powerful routing", "Flexible and powerful routing system allows you to create complex sites with ease."),
             ("Ecosystem-ready", "Maudit utilize <a class=\"underline\" href=\"https://rolldown.rs\">Rolldown</a>, a fast bundler for JavaScript and CSS, enabling the usage of TypeScript and the npm ecosystem."),
             ("Bring your templates", "Use your preferred templating engine to craft your website's pages. If it can return a String, Maudit supports it."),

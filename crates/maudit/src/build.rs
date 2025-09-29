@@ -285,9 +285,9 @@ pub async fn build(
                         })
                         .collect::<Vec<PathBuf>>(),
                 })],
-            );
+            )?;
 
-            let _result = bundler.write().await.unwrap();
+            let _result = bundler.write().await?;
 
             // TODO: Add outputted chunks to build_metadata
         }
