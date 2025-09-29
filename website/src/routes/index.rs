@@ -24,7 +24,7 @@ pub struct Index;
 impl Route for Index {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let features = [
-            ("Performant", "Generate a site with thousands of pages in seconds using minimal resources."),
+            ("Performant", "Generate a site with thousands of pages in less than a second using minimal resources."),
             ("Content", "Bring your content to life with built-in support for Markdown, custom components, syntax highlighting, and more."),
             ("Style your way", "Style with plain CSS, or opt for frameworks and preprocessors such as Tailwind."),
             ("Powerful routing", "Flexible and powerful routing system allows you to create complex sites with ease."),
