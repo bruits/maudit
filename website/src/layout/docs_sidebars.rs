@@ -111,7 +111,7 @@ pub fn right_sidebar(headings: &[MarkdownHeading]) -> Markup {
         }
         html_headings.push(html! {
             li.(border).(margin_top) {
-                a class=(format!("block py-1 px-3 sm:px-0 sm:py-0 text-lg sm:text-base transition-colors hover:bg-gray-50 sm:hover:bg-transparent hover:text-brand-red border-b border-borders sm:border-b-0 {}", pad)) href=(format!("#{}", heading.id)) {
+                a class=(format!("block py-1 px-3 sm:py-0 text-lg sm:text-base transition-colors hover:bg-gray-50 sm:hover:bg-transparent hover:text-brand-red border-b border-borders sm:border-b-0 {}", pad)) href=(format!("#{}", heading.id)) {
                     (heading.title)
                 }
             }
