@@ -6,7 +6,7 @@ use crate::{assets::RouteAssetsOptions, is_dev};
 ///
 /// ## Examples
 /// Default values:
-/// ```rs
+/// ```rust
 /// use maudit::{
 ///  content_sources, coronate, routes, BuildOptions, BuildOutput,
 /// };
@@ -20,9 +20,9 @@ use crate::{assets::RouteAssetsOptions, is_dev};
 /// }
 /// ```
 /// Custom values:
-/// ```rs
+/// ```rust
 /// use maudit::{
-///   content_sources, coronate, routes, BuildOptions, BuildOutput,
+///   content_sources, coronate, routes, BuildOptions, BuildOutput, AssetsOptions,
 /// };
 ///
 /// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
@@ -30,11 +30,11 @@ use crate::{assets::RouteAssetsOptions, is_dev};
 ///     routes![],
 ///     content_sources![],
 ///     BuildOptions {
-///       output_dir: "public".to_string(),
-///       static_dir: "static".to_string(),
+///       output_dir: "public".into(),
+///       static_dir: "static".into(),
 ///       assets: AssetsOptions {
-///         assets_dir: "_assets".to_string(),
-///         tailwind_binary_path: "./node_modules/.bin/tailwindcss".to_string(),
+///         assets_dir: "_assets".into(),
+///         tailwind_binary_path: "./node_modules/.bin/tailwindcss".into(),
 ///         ..Default::default()
 ///       },
 ///       ..Default::default()
@@ -114,7 +114,7 @@ impl Default for AssetsOptions {
 /// Provides default values for [`crate::coronate()`]. Designed to work for most projects.
 ///
 /// ## Examples
-/// ```rs
+/// ```rust
 /// use maudit::{
 ///  content_sources, coronate, routes, BuildOptions, BuildOutput,
 /// };

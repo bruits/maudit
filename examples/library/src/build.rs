@@ -1,10 +1,10 @@
 use std::fs;
 
 use maudit::{
+    BuildOptions,
     assets::RouteAssets,
     content::{ContentSources, RouteContent},
     route::{DynamicRouteContext, FullRoute, PageContext, PageParams, RouteType},
-    BuildOptions,
 };
 
 pub fn build_website(

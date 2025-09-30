@@ -1,4 +1,4 @@
-use maud::{html, PreEscaped, DOCTYPE};
+use maud::{DOCTYPE, PreEscaped, html};
 use maudit::content::markdown_entry;
 use maudit::route::prelude::*;
 

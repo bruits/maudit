@@ -1,4 +1,4 @@
-use maud::{html, Markup};
+use maud::{Markup, html};
 use maudit::{content::MarkdownHeading, route::PageContext};
 
 use crate::content::{DocsContent, DocsSection};

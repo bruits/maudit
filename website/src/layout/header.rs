@@ -1,6 +1,6 @@
-use maud::html;
 use maud::Markup;
 use maud::PreEscaped;
+use maud::html;
 use maudit::route::PageContext;
 
 pub fn header(ctx: &mut PageContext, bottom_border: bool) -> Markup {

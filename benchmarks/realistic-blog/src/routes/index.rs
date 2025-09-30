@@ -5,8 +5,8 @@ use crate::{
     content::ArticleContent,
     layout::layout,
     routes::{
-        article::{ArticleParams, ArticlesParams},
         Article, Articles,
+        article::{ArticleParams, ArticlesParams},
     },
 };
 

@@ -1,5 +1,5 @@
 use content::content_sources;
-use maudit::{coronate, routes, AssetsOptions, BuildOptions, BuildOutput};
+use maudit::{AssetsOptions, BuildOptions, BuildOutput, coronate, routes};
 
 mod content;
 mod layout;

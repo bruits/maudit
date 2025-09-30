@@ -1,4 +1,4 @@
-use maud::{html, Markup, PreEscaped};
+use maud::{Markup, PreEscaped, html};
 use maudit::route::PageContext;
 
 pub fn layout(ctx: &mut PageContext, content: String) -> Markup {

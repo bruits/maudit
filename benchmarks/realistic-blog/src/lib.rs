@@ -3,8 +3,9 @@ mod layout;
 
 use content::ArticleContent;
 use maudit::{
-    content::{glob_markdown_with_options, shortcodes::MarkdownShortcodes, MarkdownOptions},
-    content_sources, coronate, routes, BuildOptions,
+    BuildOptions,
+    content::{MarkdownOptions, glob_markdown_with_options, shortcodes::MarkdownShortcodes},
+    content_sources, coronate, routes,
 };
 
 mod routes {

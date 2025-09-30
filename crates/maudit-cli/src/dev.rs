@@ -4,17 +4,17 @@ mod filterer;
 
 use colored::Colorize;
 use filterer::should_watch_path;
-use notify::{event::ModifyKind, EventKind, RecursiveMode, Watcher};
-use notify_debouncer_full::{new_debouncer, DebounceEventResult, DebouncedEvent};
+use notify::{EventKind, RecursiveMode, Watcher, event::ModifyKind};
+use notify_debouncer_full::{DebounceEventResult, DebouncedEvent, new_debouncer};
 use quanta::Instant;
-use server::{update_status, WebSocketMessage};
+use server::{WebSocketMessage, update_status};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
-use crate::logging::{format_elapsed_time, FormatElapsedTimeOptions};
+use crate::logging::{FormatElapsedTimeOptions, format_elapsed_time};
 
 fn should_rebuild_for_event(event: &DebouncedEvent) -> bool {
     event.paths.iter().any(|path| {

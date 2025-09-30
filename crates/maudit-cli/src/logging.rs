@@ -2,7 +2,7 @@ use colored::{ColoredString, Colorize};
 use std::{fmt, time::Duration};
 use tracing::{Event, Subscriber};
 use tracing_subscriber::{
-    fmt::{format, FmtContext, FormatEvent, FormatFields},
+    fmt::{FmtContext, FormatEvent, FormatFields, format},
     layer::SubscriberExt,
     registry::LookupSpan,
     util::SubscriberInitExt,

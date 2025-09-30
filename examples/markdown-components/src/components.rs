@@ -75,7 +75,10 @@ impl ImageComponent for CustomImage {
 
         format!(
             "<figure class=\"image-wrapper\"><img src=\"{}\" alt=\"{}\" class=\"responsive-image\"{} /><figcaption>{}</figcaption></figure>",
-            url, alt, title_attr, title.unwrap_or_default()
+            url,
+            alt,
+            title_attr,
+            title.unwrap_or_default()
         )
     }
 }

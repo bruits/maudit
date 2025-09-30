@@ -4,7 +4,7 @@ use maudit::route::prelude::*;
 use crate::{
     content::ArticleContent,
     layout::layout,
-    routes::{article::ArticleParams, Article},
+    routes::{Article, article::ArticleParams},
 };
 
 #[route("/")]

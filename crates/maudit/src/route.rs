@@ -19,7 +19,7 @@ use lol_html::{RewriteStrSettings, element, rewrite_str};
 /// End users should rarely need to interact with this enum directly.
 ///
 /// ## Example
-/// ```rs
+/// ```rust
 /// use maudit::route::prelude::*;
 ///
 /// #[route("/")]
@@ -173,7 +173,7 @@ pub type PaginatedContentPage<T> = PaginationPage<Entry<T>>;
 /// Helper function to create paginated routes from any iterator
 ///
 /// Example:
-/// ```rs
+/// ```rust
 /// use maudit::route::prelude::*;
 ///
 /// #[route("/tags/[page]")]
@@ -235,7 +235,7 @@ where
 /// Allows to access various data and assets in a [`Route`] implementation.
 ///
 /// ## Example
-/// ```rs
+/// ```rust
 /// use maudit::route::prelude::*;
 /// use maud::html;
 /// # use maudit::content::markdown_entry;
@@ -253,6 +253,7 @@ where
 ///   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
 ///     let logo = ctx.assets.add_image("logo.png");
 ///     let last_entries = &ctx.content.get_source::<ArticleContent>("articles").entries;
+///
 ///     html! {
 ///       main {
 ///         (logo)
@@ -262,7 +263,7 @@ where
 ///           }
 ///         }
 ///       }
-///     }.into()
+///     }
 ///   }
 /// }
 pub struct PageContext<'a> {
@@ -347,7 +348,7 @@ impl<'a> PageContext<'a> {
 /// Allows to access the content source in the [`Page::pages`] method.
 ///
 /// ## Example
-/// ```rs
+/// ```rust
 /// use maudit::route::prelude::*;
 /// # use maudit::content::markdown_entry;
 /// #
@@ -360,7 +361,7 @@ impl<'a> PageContext<'a> {
 /// #[route("/articles/[article]")]
 /// pub struct Article;
 ///
-/// #[derive(Params)]
+/// #[derive(Params, Clone)]
 /// pub struct ArticleParams {
 ///     pub article: String,
 /// }
@@ -370,15 +371,15 @@ impl<'a> PageContext<'a> {
 ///      let params = ctx.params::<ArticleParams>();
 ///      let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///      let article = articles.get_entry(&params.article);
-///      article.render().into()
+///      article.render(ctx)
 ///   }
 ///
-///    fn pages(&self, ctx: &mut DynamicRouteContext) -> Vec<ArticleParams> {
+///    fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<ArticleParams> {
 ///       let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///
-///       articles.into_params(|entry| ArticleParams {
-///           article: entry.id.clone(),
-///       })
+///       articles.into_pages(|entry| Page::from_params(ArticleParams {
+///          article: entry.id.clone(),
+///       }))
 ///   }
 /// }
 /// ```
@@ -392,7 +393,7 @@ pub struct DynamicRouteContext<'a> {
 /// The page struct implementing this trait can be passed to [`coronate()`](crate::coronate), through the [`routes!`](crate::routes) macro, to be built.
 ///
 /// ## Example
-/// ```rs
+/// ```rust
 /// use maudit::route::prelude::*;
 ///
 /// #[route("/")]
@@ -400,7 +401,7 @@ pub struct DynamicRouteContext<'a> {
 ///
 /// impl Route for Index {
 ///    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-///       "<h1>Hello, world!</h1>".into()
+///       "<h1>Hello, world!</h1>"
 ///   }
 /// }
 /// ```
@@ -729,7 +730,7 @@ pub mod prelude {
     //! This module is meant to be glob imported in your routes files.
     //!
     //! ## Example
-    //! ```rs
+    //! ```rust
     //! use maudit::route::prelude::*;
     //! ```
     pub use super::{

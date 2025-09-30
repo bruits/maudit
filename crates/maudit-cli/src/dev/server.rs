@@ -1,20 +1,20 @@
 use axum::{
-    body::{to_bytes, Body},
+    Router,
+    body::{Body, to_bytes},
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
         Request, State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
     },
     handler::HandlerWithoutStateExt,
     http::{HeaderValue, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::get,
-    Router,
 };
 use quanta::Instant;
 use serde_json::json;
 use tokio::{net::TcpSocket, signal, sync::broadcast};
-use tracing::{debug, Level};
+use tracing::{Level, debug};
 
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -24,9 +24,9 @@ use tower_http::{
 };
 
 use axum::extract::connect_info::ConnectInfo;
-use futures::{stream::StreamExt, SinkExt};
+use futures::{SinkExt, stream::StreamExt};
 
-use crate::server_utils::{find_open_port, log_server_start, CustomOnResponse};
+use crate::server_utils::{CustomOnResponse, find_open_port, log_server_start};
 use axum::http::header;
 use local_ip_address::local_ip;
 use tokio::fs;

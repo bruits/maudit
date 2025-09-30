@@ -1,6 +1,6 @@
 use maud::{PreEscaped, Render};
 use maudit::content::{
-    glob_markdown, glob_markdown_with_options, markdown_entry, ContentSources, MarkdownOptions,
+    ContentSources, MarkdownOptions, glob_markdown, glob_markdown_with_options, markdown_entry,
 };
 use maudit::content_sources;
 use serde::Deserialize;

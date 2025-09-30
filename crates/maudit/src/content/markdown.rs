@@ -29,7 +29,7 @@ mod shortcodes_tests;
 /// Can be used to generate a table of contents.
 ///
 /// ## Example
-/// ```rs
+/// ```rust
 /// use maudit::route::prelude::*;
 /// use maud::{html, Markup};
 /// # use maudit::content::markdown_entry;
@@ -114,7 +114,7 @@ pub trait InternalMarkdownContent {
 /// Assumes that the Markdown content has no frontmatter.
 ///
 /// ## Example
-/// ```rs
+/// ```rust
 /// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
 /// use maudit::content::{glob_markdown, UntypedMarkdownContent};
 ///
@@ -181,7 +181,7 @@ impl MarkdownOptions {
 /// Typically used by [`content_sources!`](crate::content_sources) to define a Markdown content source in [`coronate()`](crate::coronate).
 ///
 /// ## Example
-/// ```rs
+/// ```rust
 /// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
 /// use maudit::content::{markdown_entry, glob_markdown_with_options, MarkdownOptions};
 ///
@@ -195,7 +195,10 @@ impl MarkdownOptions {
 ///   coronate(
 ///     routes![],
 ///     content_sources![
-///       "articles" => glob_markdown_with_options::<ArticleContent>("content/articles/*.md", )
+///       "articles" => glob_markdown_with_options::<ArticleContent>("content/articles/*.md", MarkdownOptions {
+///         highlight_theme: "base16-ocean.dark".to_string(),
+///        ..Default::default()
+///       })
 ///     ],
 ///     BuildOptions::default(),
 ///   )
@@ -255,7 +258,7 @@ where
 /// To provide custom options for Markdown rendering, use [`glob_markdown_with_options`] instead.
 ///
 /// ## Example
-/// ```rs
+/// ```rust
 /// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
 /// use maudit::content::{markdown_entry, glob_markdown};
 ///
@@ -321,14 +324,16 @@ fn find_headings(events: &[Event]) -> Vec<InternalHeadingEvent> {
 
 /// Render Markdown content to HTML with optional custom components.
 ///
+/// To be able to resolve and include images, a path to the Markdown file and a mutable reference to the current [`PageContext`](crate::route::PageContext) must be provided.
+///
 /// ## Example
-/// ```rs
+/// ```rust
 /// use maudit::content::{render_markdown, MarkdownOptions, MarkdownComponents};
 /// use maudit::content::components::HeadingComponent;
 ///
 /// // Without components
 /// let markdown = r#"# Hello, world!"#;
-/// let html = render_markdown(markdown, None);
+/// let html = render_markdown(markdown, None, None, None);
 ///
 /// // With components
 /// struct MyCustomHeading;
@@ -350,8 +355,9 @@ fn find_headings(events: &[Event]) -> Vec<InternalHeadingEvent> {
 ///
 /// let options = MarkdownOptions {
 ///     components: MarkdownComponents::new().heading(MyCustomHeading),
+///    ..Default::default()
 /// };
-/// let html = render_markdown(markdown, Some(&options));
+/// let html = render_markdown(markdown, Some(&options), None, None);
 /// ```
 pub fn render_markdown(
     content: &str,
@@ -817,8 +823,8 @@ pub fn render_markdown(
 /// and automatically populates the headings for table of contents generation.
 ///
 /// ## Example
-/// ```rs
-/// use maudit::content::{parse_markdown_with_frontmatter, markdown_entry};
+/// ```rust
+/// use maudit::content::{parse_markdown_with_frontmatter, markdown_entry, MarkdownContent};
 ///
 /// #[markdown_entry]
 /// pub struct ArticleContent {
@@ -831,7 +837,7 @@ pub fn render_markdown(
 /// description: "A great article"
 /// ---
 ///
-/// # Introduction
+/// ## Introduction
 ///
 /// This is the content.
 /// "#;

@@ -3,7 +3,7 @@ name = "maudit-cli"
 description = "CLI to operate on maudit projects."
 version = "0.5.1"
 license = "MIT"
-edition = "2021"
+edition = "2024"
 
 [[bin]]
 name = "maudit"
@@ -19,8 +19,8 @@ futures = "0.3"
 tower-http = { version = "0.6.2", features = ["fs", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "=0.3.19", features = [
-    "env-filter",
-    "chrono",
+	"env-filter",
+	"chrono",
 ] }
 notify = "6.1.1"
 notify-debouncer-full = "0.3.1"

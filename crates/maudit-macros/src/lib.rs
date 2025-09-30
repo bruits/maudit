@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse::{self, Parse, ParseStream, Parser as _, Result};
-use syn::{parse_macro_input, Expr, ItemStruct};
+use syn::{Expr, ItemStruct, parse_macro_input};
 
 struct Args {
     path: Expr,
@@ -107,10 +107,10 @@ pub fn derive_params(item: TokenStream) -> TokenStream {
 }
 
 fn is_option_type(ty: &syn::Type) -> bool {
-    if let syn::Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            return segment.ident == "Option";
-        }
+    if let syn::Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        return segment.ident == "Option";
     }
     false
 }

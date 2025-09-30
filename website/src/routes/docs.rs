@@ -1,9 +1,9 @@
-use maud::{html, Markup, PreEscaped};
+use maud::{Markup, PreEscaped, html};
 use maudit::{content::EntryInner, route::prelude::*};
 
 use crate::{
     content::DocsContent,
-    layout::{docs_layout, SeoMeta},
+    layout::{SeoMeta, docs_layout},
 };
 
 #[route("/docs/")]
@@ -16,12 +16,12 @@ impl Route for DocsIndex {
             .get_source::<DocsContent>("docs")
             .get_entry("index");
 
-        let headings = index_page.data(ctx).get_headings().clone();
+        let headings = index_page.data(ctx).get_headings();
 
         docs_layout(
             render_entry(index_page, ctx),
             ctx,
-            &headings,
+            headings,
             Some(SeoMeta {
                 title: "Documentation".to_string(),
                 description: Some(
@@ -79,11 +79,12 @@ impl Route<DocsPageParams> for DocsPage {
 
         let entry_data = entry.data(ctx);
 
-        let headings = entry_data.get_headings().clone();
+        let headings = entry_data.get_headings();
+
         docs_layout(
             render_entry(entry, ctx),
             ctx,
-            &headings,
+            headings,
             Some(SeoMeta {
                 title: format!("{} - Documentation", entry_data.title),
                 description: entry_data.description.clone(),

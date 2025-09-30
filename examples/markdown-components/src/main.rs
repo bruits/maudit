@@ -1,5 +1,5 @@
-use maudit::content::{glob_markdown_with_options, MarkdownComponents, MarkdownOptions};
-use maudit::{content_sources, coronate, routes, BuildOptions, BuildOutput};
+use maudit::content::{MarkdownComponents, MarkdownOptions, glob_markdown_with_options};
+use maudit::{BuildOptions, BuildOutput, content_sources, coronate, routes};
 
 mod components;
 mod routes;

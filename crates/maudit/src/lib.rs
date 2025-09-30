@@ -30,15 +30,15 @@ pub mod maud {
     //! Traits and methods for [Maud](https://maud.lambda.xyz), a macro for writing HTML templates.
     //!
     //! ## Example
-    //! ```rs
+    //! ```rust
     //! use maudit::route::prelude::*;
     //! use maud::{html, Markup};
     //!
     //! #[route("/")]
     //! pub struct Index;
     //!
-    //! impl Route<PageParams, (), Markup> for Index {
-    //!   fn render(&self, ctx: &mut PageContext) -> Markup {
+    //! impl Route for Index {
+    //!   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
     //!     html! {
     //!       h1 { "Hello, world!" }
     //!     }
@@ -63,10 +63,6 @@ use route::FullRoute;
 /// This can be useful to conditionally enable features or logging that should only be active during development.
 /// Oftentimes, this is used to disable some expensive operations that would slow down build times during development.
 pub fn is_dev() -> bool {
-    if option_env!("MAUDIT_DEV") == Some("true") {
-        return true;
-    }
-
     env::var("MAUDIT_DEV").map(|v| v == "true").unwrap_or(false)
 }
 
@@ -74,7 +70,7 @@ pub fn is_dev() -> bool {
 /// Helps to define every route that should be build by [`coronate()`].
 ///
 /// ## Example
-/// ```rs
+/// ```rust
 /// use maudit::{
 ///   content_sources, coronate, routes, BuildOptions, BuildOutput,
 /// };
@@ -84,17 +80,18 @@ pub fn is_dev() -> bool {
 /// #
 /// #   #[route("/")]
 /// #   pub struct Index;
-/// #   impl Route<PageParams, (), String> for Index {
-/// #      fn render(&self, _ctx: &mut PageContext) -> String {
-/// #          "Hello, world!".to_string()
+/// #   impl Route for Index {
+/// #      fn render(&self, _ctx: &mut PageContext) -> impl Into<RenderResult> {
+/// #          "Hello, world!"
 /// #      }
 /// #   }
+/// #
 /// #   #[route("/article")]
 /// #   pub struct Article;
 /// #
-/// #   impl Route<PageParams, (), String> for Article {
-/// #      fn render(&self, _ctx: &mut PageContext) -> String {
-/// #          "Hello, world!".to_string()
+/// #   impl Route for Article {
+/// #      fn render(&self, _ctx: &mut PageContext) -> impl Into<RenderResult> {
+/// #          "Hello, world!"
 /// #      }
 /// #   }
 /// # }
@@ -117,7 +114,7 @@ macro_rules! routes {
 /// Helps to define all sources of content that should be loaded by [`coronate()`].
 ///
 /// ## Example
-/// ```rs
+/// ```rust
 /// use maudit::{
 ///  content_sources, coronate, routes, BuildOptions, BuildOutput,
 /// };
@@ -141,7 +138,7 @@ macro_rules! routes {
 /// ```
 ///
 /// ## Expand
-/// ```rs
+/// ```rust
 /// # use maudit::{content_sources};
 /// # use maudit::content::{glob_markdown, markdown_entry};
 /// # #[markdown_entry]
@@ -155,7 +152,7 @@ macro_rules! routes {
 /// ];
 /// ```
 /// expands to
-/// ```rs
+/// ```rust
 /// # use maudit::content::{glob_markdown, markdown_entry};
 /// # #[markdown_entry]
 /// # pub struct ArticleContent {
@@ -177,7 +174,7 @@ macro_rules! content_sources {
 /// Can be used to create a generator tag in the output HTML.
 ///
 /// ## Example
-/// ```rs
+/// ```rust
 /// use maudit::GENERATOR;
 ///
 /// format!("<meta name=\"generator\" content=\"{}\">", GENERATOR);
@@ -188,7 +185,7 @@ pub const GENERATOR: &str = concat!("Maudit v", env!("CARGO_PKG_VERSION"));
 ///
 /// ## Example
 /// Should be called from the main function of the binary crate.
-/// ```rs
+/// ```rust
 /// use maudit::{
 ///  content_sources, coronate, routes, BuildOptions, BuildOutput,
 /// };

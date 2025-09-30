@@ -1,6 +1,7 @@
 use maudit::{
-    content::{glob_markdown, UntypedMarkdownContent},
-    content_sources, coronate, routes, BuildOptions,
+    BuildOptions,
+    content::{UntypedMarkdownContent, glob_markdown},
+    content_sources, coronate, routes,
 };
 mod page;
 

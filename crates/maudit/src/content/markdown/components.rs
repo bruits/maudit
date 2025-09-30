@@ -483,7 +483,7 @@ impl MarkdownComponents {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::content::{render_markdown, MarkdownOptions};
+    use crate::content::{MarkdownOptions, render_markdown};
 
     struct TestCustomHeading;
 

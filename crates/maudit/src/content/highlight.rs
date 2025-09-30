@@ -89,7 +89,7 @@ pub struct HighlightOptions {
 
 impl HighlightOptions {
     /// Parse the value after the opening of a fenced Markdown code block
-    /// e.g. for ```rs ins=0, you'd get lang: "rs", ins: "0"
+    /// e.g. for ```rust ins=0, you'd get lang: "rs", ins: "0"
     pub fn new_from_fence(fence: &str, theme_path: impl Into<String>) -> Self {
         // TODO: Write the parser for this, lol
         let language = fence.to_string();

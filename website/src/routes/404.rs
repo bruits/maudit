@@ -1,7 +1,7 @@
-use maud::{html, PreEscaped};
+use maud::{PreEscaped, html};
 use maudit::route::prelude::*;
 
-use crate::layout::{layout, SeoMeta};
+use crate::layout::{SeoMeta, layout};
 
 #[route("404.html")]
 pub struct NotFound;

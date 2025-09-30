@@ -60,6 +60,23 @@ pub struct ImageOptions {
     pub format: Option<ImageFormat>,
 }
 
+/// Represents an image asset, typically obtained using `ctx.assets.add_image` in a route.
+///
+/// # Example
+/// ```rust
+/// use maudit::route::prelude::*;
+///
+/// #[route("/example")]
+/// pub struct ExampleRoute;
+///
+/// impl Route for ExampleRoute {
+///     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+///        let image = ctx.assets.add_image("path/to/image.png");
+///
+///        format!("<img src=\"{}\" alt=\"Example Image\" />", image.url())
+///     }
+/// }
+/// ```
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Image {
     pub path: PathBuf,

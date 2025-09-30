@@ -3,7 +3,7 @@ name = "oubli"
 description = "Library for generating documentation websites with Maudit."
 version = "0.1.4"
 license = "MIT"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 maudit = { path = "../maudit", version = "0.6.1" }

@@ -1,6 +1,6 @@
 mod layout;
 
-use maudit::{coronate, routes, BuildOptions, BuildOutput};
+use maudit::{BuildOptions, BuildOutput, coronate, routes};
 
 mod routes {
     mod index;

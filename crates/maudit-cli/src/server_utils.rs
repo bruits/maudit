@@ -8,9 +8,9 @@ use std::{
 };
 use tokio::net::TcpSocket;
 use tower_http::trace::OnResponse;
-use tracing::{debug, info, Span};
+use tracing::{Span, debug, info};
 
-use crate::logging::{format_elapsed_time, FormatElapsedTimeOptions};
+use crate::logging::{FormatElapsedTimeOptions, format_elapsed_time};
 
 pub fn log_server_start(start_time: Instant, host: bool, addr: SocketAddr, server_type: &str) {
     info!(name: "SKIP_FORMAT", "");

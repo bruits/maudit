@@ -2,21 +2,21 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 
 use axum::{
-    handler::HandlerWithoutStateExt,
-    http::{header, StatusCode},
-    response::IntoResponse,
     Router,
+    handler::HandlerWithoutStateExt,
+    http::{StatusCode, header},
+    response::IntoResponse,
 };
 use quanta::Instant;
 use tokio::{fs, net::TcpSocket};
-use tracing::{debug, Level};
+use tracing::{Level, debug};
 
 use tower_http::{
     services::ServeDir,
     trace::{DefaultMakeSpan, TraceLayer},
 };
 
-use crate::server_utils::{find_open_port, log_server_start, CustomOnResponse};
+use crate::server_utils::{CustomOnResponse, find_open_port, log_server_start};
 
 pub async fn start_preview_web_server(dist_dir: PathBuf, host: bool) {
     let start_time = Instant::now();

@@ -1,4 +1,4 @@
-use maud::{html, Markup, PreEscaped, DOCTYPE};
+use maud::{DOCTYPE, Markup, PreEscaped, html};
 mod docs_sidebars;
 mod header;
 

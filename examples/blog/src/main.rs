@@ -2,7 +2,7 @@ mod content;
 mod layout;
 use content::ArticleContent;
 use maudit::{
-    content::glob_markdown, content_sources, coronate, routes, BuildOptions, BuildOutput,
+    BuildOptions, BuildOutput, content::glob_markdown, content_sources, coronate, routes,
 };
 
 mod routes {

@@ -1,7 +1,7 @@
 mod content;
 mod layout;
 use content::ArticleContent;
-use maudit::{content::glob_markdown, content_sources, routes, BuildOptions};
+use maudit::{BuildOptions, content::glob_markdown, content_sources, routes};
 
 use crate::build::build_website;
 

@@ -29,7 +29,7 @@ pub use highlight::{HighlightOptions, highlight_code};
 /// Helps implement a struct as a Markdown content entry.
 ///
 /// ## Example
-/// ```rs
+/// ```rust
 /// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
 /// use maudit::content::{markdown_entry, glob_markdown};
 ///
@@ -51,7 +51,7 @@ pub use highlight::{HighlightOptions, highlight_code};
 /// ```
 ///
 /// ## Expand
-/// ```rs
+/// ```rust
 /// use maudit::content::{markdown_entry};
 ///
 /// #[markdown_entry]
@@ -61,7 +61,7 @@ pub use highlight::{HighlightOptions, highlight_code};
 /// }
 /// ```
 /// expands to
-/// ```rs
+/// ```rust
 /// #[derive(serde::Deserialize)]
 /// pub struct Article {
 ///   pub title: String,
@@ -88,9 +88,9 @@ pub use maudit_macros::markdown_entry;
 ///
 /// Can only access content sources that have been defined in [`coronate()`](crate::coronate).
 ///
-/// ## Example
+/// # Example
 /// In `main.rs`:
-/// ```rs
+/// ```rust
 /// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
 /// use maudit::content::{markdown_entry, glob_markdown};
 ///
@@ -112,7 +112,7 @@ pub use maudit_macros::markdown_entry;
 /// ```
 ///
 /// In a page:
-/// ```rs
+/// ```rust
 /// use maudit::route::prelude::*;
 /// # use maudit::content::markdown_entry;
 /// #
@@ -125,7 +125,7 @@ pub use maudit_macros::markdown_entry;
 /// #[route("/articles/[article]")]
 /// pub struct Article;
 ///
-/// #[derive(Params)]
+/// #[derive(Params, Clone)]
 /// pub struct ArticleParams {
 ///     pub article: String,
 /// }
@@ -135,15 +135,15 @@ pub use maudit_macros::markdown_entry;
 ///      let params = ctx.params::<ArticleParams>();
 ///      let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///      let article = articles.get_entry(&params.article);
-///      article.render(ctx).into()
+///      article.render(ctx)
 ///   }
 ///
-///   fn pages(&self, ctx: &mut DynamicRouteContext) -> Vec<ArticleParams> {
+///   fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<ArticleParams> {
 ///     let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///
-///     articles.into_params(|entry| ArticleParams {
-///       article: entry.id.clone(),
-///     })
+///     articles.into_pages(|entry| Page::from_params(ArticleParams {
+///        article: entry.id.clone(),
+///     }))
 ///   }
 /// }
 /// ```
@@ -204,7 +204,7 @@ impl RouteContent<'_> {
 /// A single entry of a [`ContentSource`].
 ///
 /// ## Example
-/// ```rs
+/// ```rust
 /// use maudit::route::prelude::*;
 /// # use maudit::content::markdown_entry;
 /// #
@@ -226,7 +226,8 @@ impl RouteContent<'_> {
 ///    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
 ///      let articles = ctx.content.get_source::<ArticleContent>("articles");
 ///      let article = articles.get_entry("my-article"); // returns a Entry<ArticleContent>
-///      article.render(ctx).into()
+///
+///      article.render(ctx)
 ///   }
 /// }
 /// ```
@@ -335,7 +336,7 @@ pub type Untyped = FxHashMap<String, String>;
 /// Mostly seen as the return type of [`content_sources!`](crate::content_sources).
 ///
 /// ## Example
-/// ```rs
+/// ```rust
 /// use maudit::route::prelude::*;
 /// use maudit::content::{glob_markdown, ContentSources};
 /// use maudit::content_sources;
@@ -350,7 +351,7 @@ pub type Untyped = FxHashMap<String, String>;
 /// pub fn content_sources() -> ContentSources {
 ///   content_sources!["docs" => glob_markdown::<ArticleContent>("content/docs/*.md")]
 /// }
-pub struct ContentSources(pub(crate) Vec<Box<dyn ContentSourceInternal>>);
+pub struct ContentSources(pub Vec<Box<dyn ContentSourceInternal>>);
 
 impl From<Vec<Box<dyn ContentSourceInternal>>> for ContentSources {
     fn from(content_sources: Vec<Box<dyn ContentSourceInternal>>) -> Self {

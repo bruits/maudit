@@ -1,4 +1,4 @@
-use maudit::{content_sources, coronate, routes, BuildOptions};
+use maudit::{BuildOptions, content_sources, coronate, routes};
 mod page;
 
 pub fn build_website() {

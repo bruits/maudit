@@ -1,4 +1,4 @@
-use maudit::{content_sources, coronate, routes, BuildOptions, BuildOutput};
+use maudit::{BuildOptions, BuildOutput, content_sources, coronate, routes};
 
 mod routes {
     mod index;

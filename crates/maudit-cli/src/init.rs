@@ -5,7 +5,7 @@ use std::{
 
 use colored::Colorize;
 use flate2::read::GzDecoder;
-use inquire::{validator::Validation, Confirm, Select, Text};
+use inquire::{Confirm, Select, Text, validator::Validation};
 use quanta::Instant;
 use rand::seq::IndexedRandom;
 use spinach::{Color, Spinner};

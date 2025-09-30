@@ -1,4 +1,4 @@
-use maud::{html, Markup, PreEscaped};
+use maud::{Markup, PreEscaped, html};
 
 pub fn layout(title: &str, content: String) -> Markup {
     html! {

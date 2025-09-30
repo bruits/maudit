@@ -1,6 +1,6 @@
 mod layout;
 
-use oubli::{archetypes, forget, routes, Archetype, BuildOptions, BuildOutput};
+use oubli::{Archetype, BuildOptions, BuildOutput, archetypes, forget, routes};
 
 mod routes {
     mod index;

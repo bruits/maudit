@@ -1,4 +1,4 @@
-use maudit::{coronate, routes, AssetsOptions, BuildOptions, BuildOutput};
+use maudit::{AssetsOptions, BuildOptions, BuildOutput, coronate, routes};
 
 mod routes {
     mod dynamic;

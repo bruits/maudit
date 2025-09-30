@@ -1,4 +1,4 @@
-use maud::{html, Markup, DOCTYPE};
+use maud::{DOCTYPE, Markup, html};
 
 pub fn layout(content: Markup) -> Markup {
     html! {

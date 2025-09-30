@@ -1,10 +1,10 @@
 //! Blog archetype.
 //! Represents a markdown blog archetype, with an index page and individual entry pages.
 use crate::layouts::layout;
-use maud::{html, Markup};
+use maud::{Markup, html};
 use maudit::content::markdown_entry;
-use maudit::route::prelude::*;
 use maudit::route::FullRoute;
+use maudit::route::prelude::*;
 
 pub fn blog_index_content<T: FullRoute>(
     route: impl FullRoute,
