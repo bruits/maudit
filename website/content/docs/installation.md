@@ -44,3 +44,5 @@ Maudit will then ask you a series of questions to configure your project. Once c
 cd my-website
 maudit dev
 ```
+
+Note that your first build will take some time if dependencies haven't been downloaded and compiled yet. Subsequent builds will re-use cached dependencies and be much faster.

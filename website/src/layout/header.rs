@@ -27,21 +27,21 @@ pub fn header(ctx: &mut PageContext, bottom_border: bool) -> Markup {
     ];
 
     html! {
-        header.px-4.sm:px-8.py-4.text-our-black.bg-our-white."border-borders".(border) {
+        header.px-4.md:px-8.py-4.text-our-black.bg-our-white."border-borders".(border) {
             div.container.flex.items-center.mx-auto.justify-between {
                 div.flex.items-center.gap-x-8 {
                     a.flex.gap-x-2.items-center href="/" {
                         (PreEscaped(include_str!("../../assets/logo.svg")))
                         h1.text-2xl.tracking-wide { "Maudit" }
                     }
-                    nav.text-lg.gap-x-12.relative."top-[2px]".hidden."sm:flex" {
+                    nav.text-lg.gap-x-12.relative."top-[2px]".hidden."md:flex" {
                         @for (href, text) in &nav_links {
                             a href=(href) { (text) }
                         }
                     }
                 }
 
-                div.gap-x-6.hidden.sm:flex {
+                div.gap-x-6.hidden.md:flex {
                     @for (href, _text, icon_svg) in &social_links {
                         a href=(href) {
                             span.sr-only { (_text) }
@@ -50,7 +50,7 @@ pub fn header(ctx: &mut PageContext, bottom_border: bool) -> Markup {
                     }
                 }
 
-                div.sm:hidden.flex.align-middle.justify-center.items-center {
+                div.md:hidden.flex.align-middle.justify-center.items-center {
                     button id="mobile-menu-button" aria-label="Toggle main menu" {
                         span id="hamburger-icon" {
                             (PreEscaped(include_str!("../../assets/hamburger.svg")))

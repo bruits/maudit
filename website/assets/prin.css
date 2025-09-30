@@ -180,3 +180,11 @@ a:hover {
     margin-top: 0.5em;
     margin-bottom: 0.5em;
 }
+
+@media (max-width: 768px) {
+    .prose pre {
+        border-radius: 0;
+        margin-left: -1rem;
+        margin-right: -1rem;
+    }
+}

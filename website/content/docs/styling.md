@@ -6,9 +6,7 @@ section: "core-concepts"
 
 Maudit supports styling your site with CSS.
 
-To import a stylesheet, add it anywhere in your project's directory, and use the `ctx.assets.add_style()` method to add it to a page's assets.
-
-In [supported templating languages](/docs/templating/), the return value of `ctx.assets.add_style()` can be used directly in the template.
+To import a stylesheet, add it anywhere in your project's directory, and use the `ctx.assets.add_style()` method to add it to a page's assets. Paths are relative to the project's current working directory, not the file where the method is called.
 
 ```rs
 use maudit::route::prelude::*;
@@ -21,6 +19,14 @@ impl Route for Blog {
   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
     let style = ctx.assets.add_style("style.css");
 
+    // Access the URL of the stylesheet using the `url()` method.
+    // This is useful when you want to manually add the stylesheet to your template.
+    format!(
+      r#"<link rel="stylesheet" href="{}" />"#,
+      style.url()
+    );
+
+    // In supported templating languages, the return value of `ctx.assets.add_style()` can be used directly in the template.
     html! {
       (style) // Generates <link rel="stylesheet" href="STYLE_URL" />
     }
@@ -28,15 +34,29 @@ impl Route for Blog {
 }
 ```
 
-Alternatively, the `include_style()` method can be used to automatically include the stylesheet in the page, without needing to manually add it to the template. Note that, at this time, pages without a `head` tag won't have the stylesheet included.
+Alternatively, the `include_style()` method can be used to automatically include the stylesheet in the page, without needing to manually add it to the template. This can be useful when a layout or component need to include its own styles.
 
 ```rs
 fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+  layout(&ctx, "Look ma, no link tag!")
+}
+
+fn layout(ctx: &PageContext, content: &str) -> Markup {
   ctx.assets.include_style("style.css");
 
-  layout("Look ma, no link tag!")
+  html! {
+    head {
+      title { "My page" }
+      // No need to manually add the stylesheet here.
+    }
+    body {
+      (PreEscaped(content))
+    }
+  }
 }
 ```
+
+Note that, at this time, pages without a `head` tag won't have the stylesheet included.
 
 ## Tailwind support
 

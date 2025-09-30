@@ -12,12 +12,12 @@ The first argument to the `coronate` function is a `Vec` of all the routes that 
 
 ```rs
 use routes::Index;
-use maudit::{coronate, routes, BuildOptions, BuildOutput};
+use maudit::{coronate, routes, content_sources, BuildOptions, BuildOutput};
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(
       routes![Index],
-      vec![].into(),
+      content_sources![],
       BuildOptions::default()
     )
 }
@@ -40,7 +40,7 @@ impl Route for HelloWorld {
 }
 ```
 
-The `Route` trait requires the implementation of a `render` method that returns any types that can be converted into `RenderResult`. This method is called when the page is built and should return the content that will be displayed. In most cases, you'll be using a templating library to create HTML content.
+The `Route` trait requires the implementation of a `render` method that returns any types that can be converted into `RenderResult`. This method is called when the page is built and should return the content that will be displayed. In most cases, you'll be [using a templating library](/docs/templating/) to create HTML content.
 
 Maudit implements `Into<RenderResult>` for the following types:
 
@@ -117,7 +117,9 @@ Like static routes, dynamic routes must be [registered](#registering-routes) in 
 
 ### Optional parameters
 
-Dynamic routes can also have optional parameters by using the `Option<T>` type in the parameters struct. These parameters will be completely removed from the URL and file path when they are `None`. For instance, in a route with the path `/posts/[category]/[slug]`, if the `category` parameter is `None`, the resulting URL will be `/posts/my-blog-post/`.
+Dynamic routes can also have optional parameters by using the `Option<T>` type in the parameters struct. These parameters will be completely removed from the URL and file path when they are `None`.
+
+For instance, in a route with the path `/posts/[category]/[slug]`, if the `category` parameter is `None`, the resulting URL will be `/posts/my-blog-post/`.
 
 This feature is notably useful when creating paginated routes (ex: `/posts/[page]`), where the first page sometimes does not include a page number in the URL, but subsequent pages do (e.g., `/blog` for the first page and `/blog/1` for the second page).
 

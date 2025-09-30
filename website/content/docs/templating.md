@@ -10,7 +10,7 @@ Through crate features, Maudit includes built-in helper methods and traits imple
 
 ## Maud
 
-Maudit implements `Into<RenderResult>` for the Maud `Markup` type, allowing one to directly return Maud's templates from a page's `render` method.
+Maudit implements `Into<RenderResult>` for the Maud `Markup` type, allowing one to directly return Maud's templates from a route's `render` method.
 
 ```rs
 use maud::{html, Markup};
@@ -48,4 +48,15 @@ impl Route for Index {
 }
 ```
 
-This is made possible by the `maud` feature, which is enabled by default, but can be disabled using `default-features = false` in your `Cargo.toml` for `maudit`.
+To use Maud with Maudit, install Maud into your project by adding it to your `Cargo.toml`, or running `cargo add maud`.
+
+```toml
+[dependencies]
+maud = "0.27"
+```
+
+The `maud` feature is enabled by default. If you have disabled default features, enable it manually:
+
+```toml
+maudit = { version = "0.6", features = ["maud"] }
+```

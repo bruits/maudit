@@ -80,7 +80,7 @@ pub fn docs_layout(
     layout(
         html! {
             // Second header for docs navigation (mobile only)
-            header.bg-our-white.border-b.border-borders.sm:hidden.bg-linear-to-b."from-darker-white" {
+            header.bg-our-white.border-b.border-borders.md:hidden.bg-linear-to-b."from-darker-white" {
                 div.flex.items-center.justify-between {
                     button id="left-sidebar-toggle" .px-4.py-3.flex.items-center.gap-x-2.text-base.font-medium.text-our-black aria-label="Toggle navigation menu" {
                         (PreEscaped(include_str!("../assets/side-menu.svg")))
@@ -107,14 +107,14 @@ pub fn docs_layout(
                 }
             }
 
-            div.container.mx-auto."sm:grid-cols-(--docs-columns)".sm:grid."min-h-[calc(100%-64px)]".px-4.sm:px-0.pt-2.sm:pt-0 {
-                aside.bg-linear-to-l."from-darker-white"."py-8"."h-full".border-r.border-r-borders.hidden.sm:block {
+            div.container.mx-auto."md:grid-cols-(--docs-columns)".md:grid."min-h-[calc(100%-64px)]".px-4.md:px-0.pt-2.md:pt-0 {
+                aside.bg-linear-to-l."from-darker-white"."py-8"."h-full".border-r.border-r-borders.hidden.md:block {
                     (left_sidebar(ctx))
                 }
-                main.w-full.max-w-larger-prose.mx-auto.sm:pt-8.py-4.pb-8.sm:pb-16 {
+                main.w-full.max-w-larger-prose.mx-auto.md:pt-8.py-4.pb-8.md:pb-16 {
                     (main)
                 }
-                aside."py-8".hidden."sm:block" {
+                aside."py-8".hidden."md:block" {
                     (right_sidebar(headings))
                 }
             }
