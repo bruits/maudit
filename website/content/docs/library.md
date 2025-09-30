@@ -103,7 +103,7 @@ And that's it! Now, any asset used in a page will be copied to the output direct
 
 ## Handling content
 
-In the current implementation, trying to use content will result in an empty list of entries. Despite what the syntax might suggest, content sources are not automatically initialized when creating a `ContentSources` instance through the `content_sources![]` macro.
+In the current implementation, trying to use content will result in an empty list of entries. Despite what the syntax might suggest, content sources are not automatically initialized when creating a [`ContentSources`](https://docs.rs/maudit/latest/maudit/content/struct.ContentSources.html) instance through the [`content_sources![]`](https://docs.rs/maudit/latest/maudit/macro.content_sources.html) macro.
 
 If you've copied the previous snippets, you might have noticed that Rust has been complaining about `content_sources` being mutable but never mutated.
 
@@ -162,6 +162,6 @@ RouteType::Dynamic => {
 
 ## Conclusion
 
-And with that, you've succesfully rebuilt Maudit at home! There's a few more things that can be done to improve this implementation, like adding logging, copying static assets (from `options.static_dir`), asset processing, better error handling, parallelization, caching, etc, etc.
+And with that, you've succesfully rebuilt Maudit at home! There's a few more things that can be done to improve this implementation, like adding logging, copying static assets (from [`options.static_dir`](https://docs.rs/maudit/latest/maudit/struct.BuildOptions.html#structfield.static_dir)), asset processing, better error handling, parallelization, caching, etc, etc.
 
 But, this is a fully functional implementation that can be used as a starting point for more advanced use cases... or just as a learning exercise to understand how Maudit works under the hood.

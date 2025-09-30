@@ -1,11 +1,11 @@
-use maud::html;
 use maud::PreEscaped;
-use maudit::content::highlight_code;
+use maud::html;
 use maudit::content::HighlightOptions;
+use maudit::content::highlight_code;
 use maudit::route::prelude::*;
 
-use crate::layout::layout;
 use crate::layout::SeoMeta;
+use crate::layout::layout;
 
 const CODE_EXAMPLE: &str = r#"use maudit::prelude::*;
 
@@ -99,8 +99,8 @@ impl Route for Index {
                                 a.underline href="/docs/philosophy/#maudit-is-a-library-not-a-framework" { "Maudit is a library, not a framework." } " A Maudit site is a normal Rust program that you have full control over. Hook into the build process, customize the output, and use any libraries you want."
                             }
                         }
-                        div {
-                            pre.bg-gray-900.p-4.rounded-lg.overflow-x-auto.sm:text-base.text-sm {
+                        div.intro-code {
+                            pre {
                                 code {
                                     (PreEscaped(code_example))
                                 }

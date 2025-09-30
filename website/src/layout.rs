@@ -80,7 +80,7 @@ pub fn docs_layout(
     layout(
         html! {
             // Second header for docs navigation (mobile only)
-            header.bg-our-white.border-b.border-borders.md:hidden.bg-linear-to-b."from-darker-white" {
+            header.sticky.top-0.z-40.bg-our-white.border-b.border-borders.md:hidden.bg-linear-to-b."from-darker-white" {
                 div.flex.items-center.justify-between {
                     button id="left-sidebar-toggle" .px-4.py-3.flex.items-center.gap-x-2.text-base.font-medium.text-our-black aria-label="Toggle navigation menu" {
                         (PreEscaped(include_str!("../assets/side-menu.svg")))
@@ -94,20 +94,24 @@ pub fn docs_layout(
             }
 
             // Mobile left sidebar overlay
-            div id="mobile-left-sidebar" .fixed.left-0.w-full.bg-our-white.transform."-translate-x-full".transition-all.opacity-0.pointer-events-none.z-50.overflow-y-auto style="top: 116px; bottom: 0;" {
-                div.px-6.py-4 {
-                    (left_sidebar(ctx))
+            div id="mobile-left-sidebar" .fixed."inset-0 bg-black/50".transition-opacity.opacity-0.pointer-events-none.z-50 {
+                div.w-80.max-w-sm.h-full.bg-our-white.overflow-y-auto.transform."-translate-x-full".transition-transform {
+                    div.px-4.py-4 {
+                        (left_sidebar(ctx))
+                    }
                 }
             }
 
             // Mobile right sidebar overlay
-            div id="mobile-right-sidebar" .fixed.right-0.w-full.bg-our-white.transform."translate-x-full".transition-all.opacity-0.pointer-events-none.z-50.overflow-y-auto style="top: 116px; bottom: 0;" {
-                div.px-6.py-4 {
-                    (right_sidebar(headings))
+            div id="mobile-right-sidebar" .fixed."inset-0 bg-black/50".transition-opacity.opacity-0.pointer-events-none.z-50.flex.justify-end {
+                div.w-80.max-w-sm.h-full.bg-our-white.overflow-y-auto.transform."translate-x-full".transition-transform {
+                    div.px-4.py-4 {
+                        (right_sidebar(headings))
+                    }
                 }
             }
 
-            div.container.mx-auto."md:grid-cols-(--docs-columns)".md:grid."min-h-[calc(100%-64px)]".px-4.md:px-0.pt-2.md:pt-0 {
+            div.container.mx-auto."md:grid-cols-(--docs-columns)".md:grid."min-h-[calc(100%-64px)]".px-6.md:px-0.pt-2.md:pt-0 {
                 aside.bg-linear-to-l."from-darker-white"."py-8"."h-full".border-r.border-r-borders.hidden.md:block {
                     (left_sidebar(ctx))
                 }
@@ -149,7 +153,7 @@ pub fn layout(
                 (seo_data.render(&ctx.base_url))
             }
             body {
-                div.bg-our-white {
+                div.relative.bg-our-white {
                     (header(ctx, bottom_border))
                     (main)
                     footer.bg-our-black.text-white {

@@ -136,14 +136,15 @@ a:hover {
     line-height: 1.75;
 }
 
-.prose code {
+.prose code,
+.intro-code code {
     font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo,
         Consolas, "DejaVu Sans Mono", monospace;
     font-size: 0.888889em;
 }
 
 .prose code:not(pre code) {
-    font-weight: 600;
+    font-weight: bold;
 }
 
 .prose code:not(pre code):before {
@@ -157,6 +158,10 @@ a:hover {
 .prose pre {
     margin-left: -1.5rem;
     margin-right: -1.5rem;
+}
+
+.prose pre,
+.intro-code pre {
     background-color: var(--color-darker-black);
     overflow-x: auto;
     padding-top: 1em;
@@ -182,9 +187,8 @@ a:hover {
 }
 
 @media (max-width: 768px) {
-    .prose pre {
+    .prose pre,
+    .intro-code pre {
         border-radius: 0;
-        margin-left: -1rem;
-        margin-right: -1rem;
     }
 }

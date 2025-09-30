@@ -25,7 +25,7 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
 
 ## Static Routes
 
-To create a new page in your Maudit project, create a struct and implement the `Route` trait for it, adding the `#[route]` attribute to the struct definition with the path of the route as an argument. The path can be any Rust expression, as long as its value can be converted to String. (i.e. `.to_string()` will be called on it)
+To create a new page in your Maudit project, create a struct and implement [the `Route` trait](https://docs.rs/maudit/latest/maudit/route/trait.Route.html) for it, adding the `#[route]` attribute to the struct definition with the path of the route as an argument. The path can be any Rust expression, as long as its value can be converted to String. (i.e. `.to_string()` will be called on it)
 
 ```rs
 use maudit::route::prelude::*;
@@ -40,9 +40,9 @@ impl Route for HelloWorld {
 }
 ```
 
-The `Route` trait requires the implementation of a `render` method that returns any types that can be converted into `RenderResult`. This method is called when the page is built and should return the content that will be displayed. In most cases, you'll be [using a templating library](/docs/templating/) to create HTML content.
+The `Route` trait requires the implementation of a [`render` method](https://docs.rs/maudit/latest/maudit/route/trait.Route.html#tymethod.render) that returns any types that can be converted into [`RenderResult`](https://docs.rs/maudit/latest/maudit/route/enum.RenderResult.html). This method is called when the page is built and should return the content that will be displayed. In most cases, you'll be [using a templating library](/docs/templating/) to create HTML content.
 
-Maudit implements `Into<RenderResult>` for the following types:
+Maudit implements [`Into<RenderResult>`](https://docs.rs/maudit/latest/maudit/route/enum.RenderResult.html#trait-implementations) for the following types:
 
 - `String`, `Vec<u8>`, `&str`, `&[u8]`
 - `Result<T, E> where T: Into<RenderResult> and E: std::error::Error` (see [Handling Errors](#handling-errors) for more information)
@@ -56,7 +56,7 @@ Maudit supports creating dynamic routes with parameters. Allowing one to create 
 
 To create a dynamic route, export a struct using the `route` attribute and add parameters by enclosing them in square brackets (ex: `/posts/[slug]`) in the route's path.
 
-In addition to the `render` method, dynamic routes must implement a `pages` method for Route. The `pages` method returns a list of all the possible values for each parameter in the route's path, so that Maudit can generate all the necessary pages.
+In addition to the `render` method, dynamic routes must implement a [`pages` method](https://docs.rs/maudit/latest/maudit/route/trait.Route.html#method.pages) for Route. The `pages` method returns a list of all the possible values for each parameter in the route's path, so that Maudit can generate all the necessary pages.
 
 ```rs
 use maudit::route::prelude::*;
@@ -84,7 +84,7 @@ impl Route<Params> for Post {
 }
 ```
 
-The route parameters are automatically extracted from the URL and made available through the `ctx.params::<T>()` method in the `PageContext` struct, providing type-safe access to the values.
+The route parameters are automatically extracted from the URL and made available through the [`ctx.params::<T>()`](https://docs.rs/maudit/latest/maudit/route/struct.PageContext.html#method.params) method in the [`PageContext`](https://docs.rs/maudit/latest/maudit/route/struct.PageContext.html) struct passed to the render method, providing type-safe access to the values.
 
 ```rs
 use maudit::route::prelude::*;
@@ -111,7 +111,7 @@ impl Route for Post {
 }
 ```
 
-The struct used for the parameters must implement `Into<PageParams>`, which can be done automatically by deriving the `Params` trait. The fields of the struct must implement the `Display` trait, as they will be converted to strings to be used in the final URLs and file paths.
+The struct used for the parameters must implement `Into<PageParams>`, which can be done automatically by deriving the `Params` trait. The fields of the struct must implement the `Display` trait, as they will be converted to strings to be used in the final URLs and file paths. For ergonomy, it is recommended to derive the `Clone` trait as well, or the params will only be accessible by reference through [`ctx.params_ref()`](https://docs.rs/maudit/latest/maudit/route/struct.PageContext.html#method.params_ref).
 
 Like static routes, dynamic routes must be [registered](#registering-routes) in the `coronate` function in order for them to be built.
 

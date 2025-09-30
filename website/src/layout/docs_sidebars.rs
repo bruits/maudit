@@ -89,12 +89,12 @@ pub fn right_sidebar(headings: &[MarkdownHeading]) -> Markup {
     while i < headings.len() {
         let heading = &headings[i];
         let (pad, border) = match heading.level {
-            2 => ("pl-0", ""),                           // h2
-            3 => ("pl-4", "border-l-2 border-borders"),  // h3
-            4 => ("pl-8", "border-l-2 border-borders"),  // h4
-            5 => ("pl-12", "border-l-2 border-borders"), // h5
-            6 => ("pl-16", "border-l-2 border-borders"), // h6
-            _ => ("pl-0", ""),                           // fallback
+            2 => ("pl-0", ""),                                 // h2
+            3 => ("pl-4", "sm:border-l-2 sm:border-borders"),  // h3
+            4 => ("pl-8", "sm:border-l-2 sm:border-borders"),  // h4
+            5 => ("pl-12", "sm:border-l-2 sm:border-borders"), // h5
+            6 => ("pl-16", "sm:border-l-2 sm:border-borders"), // h6
+            _ => ("pl-0", ""),                                 // fallback
         };
         let next_level = if i + 1 < headings.len() {
             headings[i + 1].level
@@ -110,8 +110,8 @@ pub fn right_sidebar(headings: &[MarkdownHeading]) -> Markup {
             seen_h2 = true;
         }
         html_headings.push(html! {
-            li.(pad).(border).(margin_top) {
-                a.block.py-1.px-3.sm:px-0.sm:py-0.text-lg.sm:text-base.transition-colors."hover:bg-gray-50".sm:hover:bg-transparent."hover:text-brand-red" href=(format!("#{}", heading.id)) {
+            li.(border).(margin_top) {
+                a class=(format!("block py-1 px-3 sm:px-0 sm:py-0 text-lg sm:text-base transition-colors hover:bg-gray-50 sm:hover:bg-transparent hover:text-brand-red border-b border-borders sm:border-b-0 {}", pad)) href=(format!("#{}", heading.id)) {
                     (heading.title)
                 }
             }

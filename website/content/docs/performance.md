@@ -23,7 +23,7 @@ This is particularly relevant if you are processing a lot of images, as there is
 
 ### Disabling heavy features during development
 
-When running through `maudit dev`, the `is_dev()` function will return `true`, allowing you to conditionally disable features that are slow to build or run during development.
+When running through `maudit dev` or by using the `MAUDIT_DEV=true` env variable, the [`is_dev()`](https://docs.rs/maudit/latest/maudit/fn.is_dev.html) function will return `true`, allowing you to conditionally disable features that are slow to build or run during development.
 
 ```rs
 use maudit::is_dev;

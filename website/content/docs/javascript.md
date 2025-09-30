@@ -6,7 +6,7 @@ section: "core-concepts"
 
 Maudit supports adding JavaScript and TypeScript files to your site.
 
-To import a script, add it anywhere in your project's directory, and use the `ctx.assets.add_script()` method to add it to a page's assets. Paths are relative to the project's current working directory, not the file where the method is called.
+To import a script, add it anywhere in your project's directory, and use the [`ctx.assets.add_script()`](https://docs.rs/maudit/latest/maudit/assets/struct.RouteAssets.html#method.add_script) method to add it to a page's assets. Paths are relative to the project's current working directory, not the file where the method is called.
 
 ```rs
 use maudit::route::prelude::*;
@@ -34,7 +34,7 @@ impl Route for Index {
 }
 ```
 
-Alternatively, the `include_script()` method can be used to automatically include the script in the page, without needing to manually add it to the template. This can be useful when a layout or component need to include their own scripts.
+Alternatively, the [`include_script()`](https://docs.rs/maudit/latest/maudit/assets/struct.RouteAssets.html#method.include_script) method can be used to automatically include the script in the page, without needing to manually add it to the template. This can be useful when a layout or component need to include their own scripts.
 
 ```rs
 fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {

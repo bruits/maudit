@@ -12,7 +12,7 @@ Additionally, Maudit supports processing (i.e. resizing and converting) images a
 
 ### In pages
 
-To use an image in a page, add it anywhere in your project's directory, and use the `ctx.assets.add_image()` method to add it to a page's assets.
+To use an image in a page, add it anywhere in your project's directory, and use the [`ctx.assets.add_image()`](https://docs.rs/maudit/latest/maudit/assets/struct.RouteAssets.html#method.add_image) method to add it to a page's assets.
 
 ```rs
 use maudit::route::prelude::*;
@@ -48,7 +48,7 @@ Images can be collocated next to your content, or anywhere else in your project 
 
 ## Processing images
 
-Images added to pages can be transformed by using `ctx.assets.add_image_with_options()`.
+Images added to pages can be transformed by using [`ctx.assets.add_image_with_options()`](https://docs.rs/maudit/latest/maudit/assets/struct.RouteAssets.html#method.add_image_with_options), which takes an additional [`ImageOptions`](https://docs.rs/maudit/latest/maudit/assets/struct.ImageOptions.html) struct to specify how the image should be processed.
 
 ```rs
 use maudit::route::prelude::*;
@@ -78,7 +78,9 @@ Processing images in Markdown files using the standard syntax is currently not s
 
 Maudit supports generating low-quality image placeholders (LQIP) for images. This can be useful to improve the perceived performance of your site by showing a blurred preview of an image while the full image is loading.
 
-To generate a placeholder, use the `placeholder()` method on an [Image](https://docs.rs/maudit/latest/maudit/assets/struct.Image.html) instance, for example returned by `ctx.assets.add_image()` or `ctx.assets.add_image_with_options()`.
+To generate a placeholder, use the [`placeholder()`](https://docs.rs/maudit/latest/maudit/assets/struct.Image.html#method.placeholder) method on an [Image](https://docs.rs/maudit/latest/maudit/assets/struct.Image.html) instance, for example returned by `ctx.assets.add_image()` or `ctx.assets.add_image_with_options()`.
+
+It can then be included into the page by using the [`data_uri()`](https://docs.rs/maudit/latest/maudit/assets/struct.ImagePlaceholder.html#method.data_uri) method on the returned [`ImagePlaceholder`](https://docs.rs/maudit/latest/maudit/assets/struct.ImagePlaceholder.html) instance.
 
 ```rs
 use maudit::route::prelude::*;
@@ -96,6 +98,6 @@ impl Route for ImagePage {
 }
 ```
 
-Alternatively, it is possible to get the dominant colors of an image using the `average_rgba()` method. This method will return a tuple of four `u8` values representing the red, green, blue, and alpha channels of the average color of the image.
+Alternatively, it is possible to get the dominant colors of an image using the [`average_rgba()`](https://docs.rs/maudit/latest/maudit/assets/struct.ImagePlaceholder.html#method.average_rgba) method on the placeholder. This method will return a tuple of four `u8` values representing the red, green, blue, and alpha channels of the average color of the image.
 
 The generation of placeholders is powered by the [ThumbHash](https://evanw.github.io/thumbhash/) library.

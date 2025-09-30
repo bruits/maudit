@@ -30,11 +30,18 @@ document.addEventListener("DOMContentLoaded", function () {
 	function toggleLeftSidebar() {
 		leftOpen = !leftOpen;
 
-		leftSidebar.classList.toggle("-translate-x-full", !leftOpen);
-		leftSidebar.classList.toggle("translate-x-0", leftOpen);
+		const leftSidebarContent = leftSidebar.querySelector("div") as HTMLElement;
+
+		// Toggle overlay opacity
 		leftSidebar.classList.toggle("opacity-0", !leftOpen);
 		leftSidebar.classList.toggle("opacity-100", leftOpen);
 		leftSidebar.classList.toggle("pointer-events-none", !leftOpen);
+
+		// Toggle sidebar content transform
+		if (leftSidebarContent) {
+			leftSidebarContent.classList.toggle("-translate-x-full", !leftOpen);
+			leftSidebarContent.classList.toggle("translate-x-0", leftOpen);
+		}
 
 		if (leftOpen) {
 			document.body.style.overflow = "hidden";
@@ -46,11 +53,20 @@ document.addEventListener("DOMContentLoaded", function () {
 	function toggleRightSidebar() {
 		rightOpen = !rightOpen;
 
-		rightSidebar.classList.toggle("translate-x-full", !rightOpen);
-		rightSidebar.classList.toggle("translate-x-0", rightOpen);
+		const rightSidebarContent = rightSidebar.querySelector(
+			"div"
+		) as HTMLElement;
+
+		// Toggle overlay opacity
 		rightSidebar.classList.toggle("opacity-0", !rightOpen);
 		rightSidebar.classList.toggle("opacity-100", rightOpen);
 		rightSidebar.classList.toggle("pointer-events-none", !rightOpen);
+
+		// Toggle sidebar content transform
+		if (rightSidebarContent) {
+			rightSidebarContent.classList.toggle("translate-x-full", !rightOpen);
+			rightSidebarContent.classList.toggle("translate-x-0", rightOpen);
+		}
 
 		if (rightOpen) {
 			document.body.style.overflow = "hidden";
@@ -59,30 +75,25 @@ document.addEventListener("DOMContentLoaded", function () {
 		}
 	}
 
-	// Close sidebars when clicking outside
+	// Close sidebars when clicking on the dark overlay
 	function closeSidebars(event: MouseEvent) {
-		const target = event.target;
-		if (
-			leftOpen &&
-			target &&
-			!leftSidebar.contains(target as Node) &&
-			!leftSidebarToggle.contains(target as Node)
-		) {
+		const target = event.target as HTMLElement;
+
+		// Check if clicking on the dark overlay (the outer div with bg-black)
+		if (leftOpen && target && target.id === "mobile-left-sidebar") {
 			toggleLeftSidebar();
 		}
-		if (
-			rightOpen &&
-			target &&
-			!rightSidebar.contains(target as Node) &&
-			!rightSidebarToggle.contains(target as Node)
-		) {
+		if (rightOpen && target && target.id === "mobile-right-sidebar") {
 			toggleRightSidebar();
 		}
 	}
 
 	leftSidebarToggle.addEventListener("click", toggleLeftSidebar);
 	rightSidebarToggle.addEventListener("click", toggleRightSidebar);
-	document.addEventListener("click", closeSidebars);
+
+	// Add click listeners to the overlay divs
+	leftSidebar.addEventListener("click", closeSidebars);
+	rightSidebar.addEventListener("click", closeSidebars);
 
 	// Close right sidebar when clicking on table of contents links
 	rightSidebar.addEventListener("click", function (event) {
