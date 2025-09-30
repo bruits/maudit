@@ -1,5 +1,12 @@
 # oubli
 
+## 0.1.5
+
+### Patch changes
+
+- Updated dependencies: maudit@0.6.2
+
+
 ## 0.1.4
 
 ### Patch changes

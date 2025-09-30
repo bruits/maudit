@@ -1,5 +1,13 @@
 # maudit
 
+## 0.6.2
+
+### Patch changes
+
+- [0cb1738](https://github.com/bruits/maudit/commit/0cb173885de09e93d157308e809e07df7c57e7af) Updates MSRV to 1.89 — Thanks @Princesseuh!
+- [36da26d](https://github.com/bruits/maudit/commit/36da26dfe5739b6d7077865289dfbfafea8ad60d) Add a new RenderWithAlt trait for rendering images, enforcing the usage of alt when trying to render to a String — Thanks @Princesseuh!
+
+
 ## 0.6.1
 
 ### Patch changes
