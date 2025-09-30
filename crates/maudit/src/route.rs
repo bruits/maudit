@@ -256,7 +256,7 @@ where
 ///
 ///     html! {
 ///       main {
-///         (logo)
+///         (logo.render("Maudit logo, a crudely drawn crown"))
 ///         ul {
 ///           @for entry in last_entries {
 ///             li { (entry.data(ctx).title) }
