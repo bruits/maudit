@@ -5,7 +5,7 @@ section: "getting-started"
 
 In this guide, you'll learn how to create a Maudit website and the general basis of Maudit in a few minutes of reading.
 
-If you prefer to read more detailed explanations, including exploration of various Maudit concepts, please read the [the tutorial]().
+If you prefer to read more detailed explanations, including exploration of various Maudit concepts, please read the [core concepts](/docs/content/).
 
 **This guide assumes that you have Rust installed and are familiar with the terminal.**
 
@@ -72,7 +72,7 @@ use maudit::{coronate, routes, content_sources, BuildOptions, BuildOutput};
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(
-      routes![Index],
+      routes![HelloWorld],
       content_sources![],
       BuildOptions::default()
     )
