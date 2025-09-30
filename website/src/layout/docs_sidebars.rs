@@ -1,7 +1,13 @@
 use maud::{Markup, html};
-use maudit::{content::MarkdownHeading, route::PageContext};
+use maudit::{
+    content::MarkdownHeading,
+    route::{PageContext, RouteExt},
+};
 
-use crate::content::{DocsContent, DocsSection};
+use crate::{
+    content::{DocsContent, DocsSection},
+    routes::{DocsPage, DocsPageParams},
+};
 
 pub fn left_sidebar(ctx: &mut PageContext) -> Markup {
     let content = ctx.content.get_source::<DocsContent>("docs");
@@ -41,8 +47,8 @@ pub fn left_sidebar(ctx: &mut PageContext) -> Markup {
                 h2.text-xl.sm:text-lg.font-bold { (section) }
                 ul {
                     @for entry in entries {
-                        @let url = &format!("/docs/{}", entry.id);
-                        @let is_current_page = url == ctx.current_path;
+                        @let url = DocsPage.url(DocsPageParams { slug: entry.id.clone() });
+                        @let is_current_page = url == *ctx.current_path;
                         li {
                             @let base_classes = "block py-2 sm:py-1 px-4 sm:px-3 text-lg sm:text-base font-medium sm:font-normal transition-colors border-b border-borders sm:border-0";
                             @let conditional_classes = if is_current_page {
@@ -50,7 +56,7 @@ pub fn left_sidebar(ctx: &mut PageContext) -> Markup {
                             } else {
                                 "text-our-black hover:text-brand-red sm:border-l-2 sm:border-l-borders sm:hover:border-l-brand-red"
                             };
-                            a class=(format!("{} {}", base_classes, conditional_classes)) href=(format!("/docs/{}/", entry.id)) {
+                            a class=(format!("{} {}", base_classes, conditional_classes)) href=(url) {
                                 (entry.data(ctx).title)
                             }
                         }

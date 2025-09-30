@@ -55,8 +55,8 @@ fn render_entry(entry: &EntryInner<DocsContent>, ctx: &mut PageContext) -> Marku
 pub struct DocsPage;
 
 #[derive(Params, Clone)]
-struct DocsPageParams {
-    slug: String,
+pub struct DocsPageParams {
+    pub slug: String,
 }
 
 impl Route<DocsPageParams> for DocsPage {
