@@ -15,7 +15,8 @@ A Maudit project is a normal Rust project, so [any performance optimizations tha
 We recommend using the following settings in your `Cargo.toml` to improve subsequent build times during development. This will increase the optimization level of your dependencies without making the compile time of your own crate longer.
 
 ```toml
-
+[profile.dev.package."*"]
+opt-level = 3
 ```
 
 This is particularly relevant if you are processing a lot of images, as there is a large difference in performance between debug and release builds of the crates Maudit uses for image processing.
