@@ -20,6 +20,6 @@ Maudit uses the following color palette:
 
 | Color Name | Hex Code | Usage                                                     |
 | ---------- | -------- | --------------------------------------------------------- |
-| Primary    | #ab3038  | Main brand color                                          |
+| Primary    | #ba1f33  | Main brand color                                          |
 | Background | #fafafa  | Background color for light mode, text color for dark mode |
 | Background | #0d0d0d  | Background color for dark mode, text color for light mode |
