@@ -1,6 +1,6 @@
 mod layout;
 
-use oubli::{Archetype, BuildOptions, BuildOutput, archetypes, forget, routes};
+use oubli::{Archetype, BuildOptions, BuildOutput, archetypes, content_sources, forget, routes};
 
 mod routes {
     mod index;
@@ -13,7 +13,7 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     forget(
         archetypes![("Our blog", blog, Archetype::Blog, "content/blog/*.md"),],
         routes![Index],
-        vec![].into(),
+        content_sources![],
         BuildOptions::default(),
     )
 }

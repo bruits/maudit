@@ -9,11 +9,11 @@ At the core of a Maudit project is the [`coronate`](https://docs.rs/maudit/lates
 In a `main.rs` file, import the `coronate` function and call it to build your project. Here is an example of a simple Maudit project:
 
 ```rs
-use maudit::{coronate, routes, BuildOptions, BuildOutput};
+use maudit::{coronate, routes, BuildOptions, BuildOutput, content_sources};
 use routes::Index;
 
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
-  coronate(routes![Index], vec![].into(), BuildOptions::default())
+  coronate(routes![Index], content_sources![], BuildOptions::default())
 }
 ```
 
@@ -24,13 +24,16 @@ All kinds of routes must be passed to the `coronate` function in order for them 
 The first argument to the `coronate` function is a `Vec` of all the routes that should be built. For the sake of ergonomics, the `routes!` macro can be used to create this list.
 
 ```rs
+use maudit::{coronate, routes, BuildOptions};
 use routes::Index;
 
-coronate(
-  routes![Index],
-  vec![].into(),
-  BuildOptions::default()
-)
+fn main() {
+  coronate(
+    routes![Index],
+    content_sources![],
+    BuildOptions::default()
+  )
+}
 ```
 
 See the [Routing](/docs/routing) documentation for more information on how to define routes.

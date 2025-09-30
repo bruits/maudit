@@ -16,6 +16,7 @@ To use an image in a page, add it anywhere in your project's directory, and use 
 
 ```rs
 use maudit::route::prelude::*;
+use maud::{html};
 
 #[route("/blog")]
 pub struct Blog;
@@ -24,7 +25,11 @@ impl Route for Blog {
   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
     let image = ctx.assets.add_image("logo.png");
 
-    format!("", image.url)
+    let (width, height) = image.dimensions();
+    format!("<img src=\"{}\" alt=\"My logo\" width=\"{}\" height=\"{}\" />", image.url(), width, height);
+
+    // A more convenient way to render an image is to use the `render()` method, which generates an img tag for you and enforces accessibility by requiring an alt text.
+    format!("{}", image.render("The logo of my project, a stylized crown"))
   }
 }
 ```
@@ -68,3 +73,29 @@ impl Route for ImagePage {
 ```
 
 Processing images in Markdown files using the standard syntax is currently not supported, but can be achieved using a custom [shortcode](/docs/content/#shortcodes) or [component](/docs/content/#components).
+
+## Placeholders
+
+Maudit supports generating low-quality image placeholders (LQIP) for images. This can be useful to improve the perceived performance of your site by showing a blurred preview of an image while the full image is loading.
+
+To generate a placeholder, use the `placeholder()` method on an [Image](https://docs.rs/maudit/latest/maudit/assets/struct.Image.html) instance, for example returned by `ctx.assets.add_image()` or `ctx.assets.add_image_with_options()`.
+
+```rs
+use maudit::route::prelude::*;
+
+#[route("/image")]
+pub struct ImagePage;
+
+impl Route for ImagePage {
+  fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+    let image = ctx.assets.add_image("path/to/image.jpg");
+    let placeholder = image.placeholder();
+
+    format!("<img src=\"{}\" alt=\"Image with placeholder\" style=\"background-image: url('{}'); background-size: cover;\" />", image.url(), placeholder.data_uri())
+  }
+}
+```
+
+Alternatively, it is possible to get the dominant colors of an image using the `average_rgba()` method. This method will return a tuple of four `u8` values representing the red, green, blue, and alpha channels of the average color of the image.
+
+The generation of placeholders is powered by the [ThumbHash](https://evanw.github.io/thumbhash/) library.

@@ -737,7 +737,10 @@ pub mod prelude {
         CachedRoute, DynamicRouteContext, FullRoute, Page, PageContext, PageParams, Pages,
         PaginatedContentPage, PaginationPage, RenderResult, Route, RouteExt, paginate,
     };
-    pub use crate::assets::{Asset, Image, ImageFormat, ImageOptions, Script, Style, StyleOptions};
+    pub use crate::assets::{
+        Asset, Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt, Script, Style,
+        StyleOptions,
+    };
     pub use crate::content::{
         ContentContext, ContentEntry, Entry, EntryInner, MarkdownContent, RouteContent,
     };

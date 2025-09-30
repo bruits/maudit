@@ -1,4 +1,4 @@
-use maudit::{AssetsOptions, BuildOptions, BuildOutput, coronate, routes};
+use maudit::{AssetsOptions, BuildOptions, BuildOutput, content_sources, coronate, routes};
 
 mod routes {
     mod dynamic;
@@ -12,7 +12,7 @@ mod routes {
 fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
     coronate(
         routes![routes::Index, routes::DynamicExample, routes::Endpoint],
-        vec![].into(),
+        content_sources![],
         BuildOptions {
             assets: AssetsOptions {
                 tailwind_binary_path: "../../node_modules/.bin/tailwindcss".into(),

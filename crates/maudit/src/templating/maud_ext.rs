@@ -2,7 +2,7 @@ use maud::{Markup, Render, html};
 
 use crate::{
     GENERATOR,
-    assets::{Asset, Image, Script, Style},
+    assets::{Asset, Script, Style},
     route::RenderResult,
 };
 
@@ -18,15 +18,6 @@ impl Render for Script {
     fn render(&self) -> Markup {
         html! {
             script src=(self.url()) type="module" {}
-        }
-    }
-}
-
-impl Render for Image {
-    fn render(&self) -> Markup {
-        let (width, height) = self.dimensions();
-        html! {
-            img src=(self.url()) width=(width) height=(height) loading="lazy" decoding="async";
         }
     }
 }

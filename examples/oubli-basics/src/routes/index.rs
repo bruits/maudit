@@ -14,7 +14,7 @@ impl Route for Index {
             .get_source::<oubli::ArchetypeStoreEntry>("archetype_store");
 
         layout(html! {
-            (logo)
+            (logo.render("Maudit logo, a crudely drawn crown"))
             h1 { "Hello World" }
             @for archetype in &archetype_store.entries {
                 a href=(archetype.id) { (archetype.data(ctx).title) }

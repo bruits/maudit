@@ -25,6 +25,7 @@ impl Route for Index {
             h1 { "Index" }
             img src=(image.url()) {}
             script src=(script.url()) {}
+            (image.render("Maudit logo, a crudely drawn crown"))
             a."text-red-500" href=(link_to_first_dynamic) { "Go to first dynamic page" }
         }
     }

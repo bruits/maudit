@@ -18,10 +18,10 @@ impl Route for Index {
         );
 
         layout(html! {
-            (logo)
+            (logo.render("Maudit logo, a crudely drawn crown"))
             h1 { "Hello World" }
             h2 { "Here's a 200x200 walrus:" }
-            (walrus)
+            (walrus.render("A walrus with tusks"))
         })
     }
 }

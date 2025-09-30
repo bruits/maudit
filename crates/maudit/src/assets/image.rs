@@ -432,3 +432,19 @@ fn thumbhash_to_png(thumbhash_rgba: &(usize, usize, Vec<u8>)) -> Vec<u8> {
 
     bytes
 }
+
+/// Trait to render an image with an alt text.
+pub trait RenderWithAlt {
+    fn render(&self, alt: &str) -> String;
+}
+
+impl RenderWithAlt for Image {
+    fn render(&self, alt: &str) -> String {
+        let (width, height) = self.dimensions();
+
+        format!(
+            r#"<img src="{}" width="{}" height="{}" loading="lazy" decoding="async" alt="{}"/>"#,
+            self.url, width, height, alt
+        )
+    }
+}

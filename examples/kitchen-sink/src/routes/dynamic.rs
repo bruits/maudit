@@ -28,7 +28,7 @@ impl Route<Params> for DynamicExample {
                 title { "Index" }
             }
             h1 { "Hello, world!" }
-            (image)
+            (image.render("Maudit social card, a crudely drawn crown"))
             p { (params.page) }
         }
     }

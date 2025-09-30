@@ -10,7 +10,7 @@ impl Route for Index {
         let logo = ctx.assets.add_image("images/logo.svg");
 
         layout(html! {
-            (logo)
+            (logo.render("Maudit logo, a crudely drawn crown"))
             h1 { "Hello World" }
         })
     }
