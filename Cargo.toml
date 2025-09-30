@@ -1,6 +1,6 @@
 [workspace]
 members = ["crates/*", "benchmarks/*", "examples/*", "website"]
-resolver = "2"
+resolver = "3"
 
 [workspace.dependencies]
 maudit = { path = "crates/maudit", version = "*" }

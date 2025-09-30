@@ -7,6 +7,7 @@ repository = "https://github.com/bruits/maudit"
 version = "0.6.1"
 license = "MIT"
 edition = "2024"
+rust-version = "1.89.0"
 
 [features]
 default = ["maud"]

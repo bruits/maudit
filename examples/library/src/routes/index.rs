@@ -16,7 +16,7 @@ impl Route for Index {
         let logo = ctx.assets.add_image("images/logo.svg");
 
         let markup = html! {
-          (logo)
+          (logo.render("Maudit logo, a crudely drawn crown"))
           ul {
             @for entry in &articles.entries {
               li {

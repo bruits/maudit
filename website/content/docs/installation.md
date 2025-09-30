@@ -6,7 +6,7 @@ section: "getting-started"
 
 ## Prerequisites
 
-- [Rust (1.85 or later)](https://www.rust-lang.org)
+- [Rust (1.89 or later)](https://www.rust-lang.org)
 - A code editor (e.g. Visual Studio Code, RustRover, Helix, etc.)
 - A terminal emulator (e.g. Windows Terminal, Terminal.app, Ghostty, etc.)
 
