@@ -18,7 +18,6 @@ use crate::logging::{FormatElapsedTimeOptions, format_elapsed_time};
 
 fn should_rebuild_for_event(event: &DebouncedEvent) -> bool {
     event.paths.iter().any(|path| {
-        println!("Checking path: {:?}, event: {:?}", path, event.kind);
         should_watch_path(path)
             && match event.kind {
                 // Only rebuild on actual content modifications, not metadata changes
@@ -50,6 +49,7 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
             ("MAUDIT_DEV", "true"),
             ("MAUDIT_QUIET", "true"),
             ("CARGO_TERM_COLOR", "always"),
+            ("RUSTFLAGS", "-Awarnings"),
         ])
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -110,7 +110,7 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
     let (tx, mut rx) = tokio::sync::mpsc::channel::<DebounceEventResult>(100);
 
     let mut debouncer = new_debouncer(
-        std::time::Duration::from_millis(20),
+        std::time::Duration::from_millis(100),
         None,
         move |result: DebounceEventResult| {
             tx.blocking_send(result).unwrap_or(());
@@ -119,28 +119,7 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
 
     debouncer
         .watcher()
-        .watch(&Path::new(cwd).join("src"), RecursiveMode::Recursive)?;
-
-    debouncer
-        .watcher()
-        .watch(&Path::new(cwd).join("content"), RecursiveMode::Recursive)?;
-
-    debouncer
-        .watcher()
-        .unwatch(&Path::new(cwd).join("target"))
-        .ok();
-    debouncer
-        .watcher()
-        .unwatch(&Path::new(cwd).join(".git"))
-        .ok();
-    debouncer
-        .watcher()
-        .unwatch(&Path::new(cwd).join("node_modules"))
-        .ok();
-    debouncer
-        .watcher()
-        .unwatch(&Path::new(cwd).join("dist"))
-        .ok();
+        .watch(Path::new(cwd), RecursiveMode::Recursive)?;
 
     // Handle file events
     tokio::spawn(async move {
@@ -158,10 +137,10 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
                         .collect();
 
                     if !triggering_events.is_empty() {
-                        info!("File events: {} valid changes", triggering_events.len());
+                        debug!("File events: {} valid changes", triggering_events.len());
                         for event in &triggering_events {
                             for path in &event.paths {
-                                info!("  {:?}: {}", event.kind, path.display());
+                                debug!("  {:?}: {}", event.kind, path.display());
                             }
                         }
 
@@ -195,6 +174,7 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
                                 ("MAUDIT_DEV", "true"),
                                 ("MAUDIT_QUIET", "true"),
                                 ("CARGO_TERM_COLOR", "always"),
+                                ("RUSTFLAGS", "-Awarnings"),
                             ])
                             .stdout(std::process::Stdio::inherit())
                             .stderr(std::process::Stdio::piped())
