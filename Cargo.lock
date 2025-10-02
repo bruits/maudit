@@ -2572,6 +2572,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "maudit-example-runtime-to-the-max"
+version = "0.1.0"
+dependencies = [
+ "maudit",
+]
+
+[[package]]
 name = "maudit-macros"
 version = "0.5.0"
 dependencies = [

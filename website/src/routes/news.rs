@@ -1,11 +1,11 @@
-use maud::html;
 use maud::PreEscaped;
+use maud::html;
 use maudit::route::prelude::*;
 use std::collections::BTreeMap;
 
 use crate::content::NewsContent;
-use crate::layout::layout;
 use crate::layout::SeoMeta;
+use crate::layout::layout;
 
 #[route("/news/")]
 pub struct NewsIndex;
@@ -52,7 +52,7 @@ impl Route for NewsIndex {
                                             }
                                         }
                                         @if let Some(description) = &article.data(ctx).description {
-                                            p.text-lg.text-gray-600 { (description) }
+                                            p.text-lg.text-gray-600.italic { (description) }
                                         }
                                     }
                                 }
@@ -122,14 +122,14 @@ impl Route<NewsPageParams> for NewsPage {
 
         layout(
             html! {
-                div.container.mx-auto."py-10"."pb-24"."max-w-[80ch]"."px-8"."sm:px-0" {
+                div.container.mx-auto."py-10"."pb-24"."max-w-[80ch]"."px-6"."sm:px-0" {
                     section.mb-4.border-b."border-[#e9e9e7]".pb-2 {
                         @if let Some(date) = &date {
                             p.text-sm.font-bold { (date) }
                         }
-                        h1."text-6xl"."sm:text-7xl".font-bold { (title) }
+                        h1."text-5xl"."sm:text-6xl".font-bold.mb-3 { (title) }
                         @if let Some(description) = &description {
-                            p.text-xl."sm:text-2xl" { (description) }
+                            p.text-xl."sm:text-2xl".italic { (description) }
                         }
                     }
 

@@ -136,6 +136,17 @@ a:hover {
     line-height: 1.75;
 }
 
+.prose blockquote {
+    border-left: 4px solid var(--color-borders);
+    margin-left: -1.5rem;
+    margin-right: -1.5rem;
+    padding-left: 1rem;
+    color: var(--color-darker-black);
+    font-style: italic;
+    margin-top: 1em;
+    margin-bottom: 1em;
+}
+
 .prose code,
 .intro-code code {
     font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo,
@@ -155,7 +166,8 @@ a:hover {
     content: "`";
 }
 
-.prose pre {
+.prose pre,
+.intro-code pre {
     margin-left: -1.5rem;
     margin-right: -1.5rem;
 }
