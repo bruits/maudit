@@ -13,7 +13,12 @@ path = "src/main.rs"
 chrono = "0.4.39"
 colored = "2.2.0"
 clap = { version = "4.5.23", features = ["derive"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+tokio = { version = "1", features = [
+    "macros",
+    "rt-multi-thread",
+    "signal",
+    "process",
+] }
 axum = { version = "0.8.1", features = ["ws"] }
 futures = "0.3"
 tower-http = { version = "0.6.2", features = ["fs", "trace"] }

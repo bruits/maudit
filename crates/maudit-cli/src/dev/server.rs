@@ -5,16 +5,19 @@ use axum::{
         Request, State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
-    handler::HandlerWithoutStateExt,
-    http::{HeaderValue, StatusCode},
+    http::{HeaderValue, StatusCode, Uri},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::get,
 };
 use quanta::Instant;
 use serde_json::json;
-use tokio::{net::TcpSocket, signal, sync::broadcast};
-use tracing::{Level, debug};
+use tokio::{
+    net::TcpSocket,
+    signal,
+    sync::{RwLock, broadcast},
+};
+use tracing::{Level, debug, warn};
 
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -36,15 +39,42 @@ pub struct WebSocketMessage {
     pub data: String,
 }
 
+#[derive(Clone, Debug)]
+pub enum StatusType {
+    Success,
+    Info,
+    Error,
+}
+
+impl std::fmt::Display for StatusType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StatusType::Success => write!(f, "success"),
+            StatusType::Info => write!(f, "info"),
+            StatusType::Error => write!(f, "error"),
+        }
+    }
+}
+
+// Persistent state for new connections
+#[derive(Clone, Debug)]
+pub struct PersistentStatus {
+    pub status_type: StatusType, // Only Success or Error
+    pub message: String,
+}
+
 #[derive(Clone)]
 struct AppState {
     tx: broadcast::Sender<WebSocketMessage>,
-    current_status: Arc<tokio::sync::RwLock<Option<String>>>,
+    current_status: Arc<RwLock<Option<PersistentStatus>>>,
 }
 
-fn inject_live_reload_script(html_content: &str, socket_addr: SocketAddr, host: bool) -> String {
-    let mut content = html_content.to_string();
-
+fn inject_live_reload_script(
+    uri: &Uri,
+    html_content: &str,
+    socket_addr: SocketAddr,
+    host: bool,
+) -> String {
     let script_content = include_str!(concat!(env!("OUT_DIR"), "/js/client.js")).replace(
         "{SERVER_ADDRESS}",
         &format!(
@@ -58,8 +88,19 @@ fn inject_live_reload_script(html_content: &str, socket_addr: SocketAddr, host: 
         ),
     );
 
-    content.push_str(&format!("<script>{script_content}</script>"));
-    content
+    // Only inject script if content looks like proper HTML
+    if html_content.trim_start().starts_with("<!DOCTYPE")
+        || html_content.trim_start().starts_with("<html")
+    {
+        format!("{}<script>{}</script>", html_content, script_content)
+    } else {
+        warn!(
+            "{} matched an HTML response, but it does not look like proper HTML, skipping live-reload script injection",
+            uri
+        );
+        // Not proper HTML, return content unchanged
+        html_content.to_string()
+    }
 }
 
 pub async fn start_dev_web_server(
@@ -67,7 +108,7 @@ pub async fn start_dev_web_server(
     tx: broadcast::Sender<WebSocketMessage>,
     host: bool,
     initial_error: Option<String>,
-    current_status: Arc<tokio::sync::RwLock<Option<String>>>,
+    current_status: Arc<RwLock<Option<PersistentStatus>>>,
 ) {
     // TODO: The dist dir should be configurable
     let dist_dir = "dist";
@@ -76,14 +117,19 @@ pub async fn start_dev_web_server(
     if let Some(error) = initial_error {
         let _ = tx.send(WebSocketMessage {
             data: json!({
-                "type": "error",
+                "type": StatusType::Error.to_string(),
                 "message": error
             })
             .to_string(),
         });
     }
 
-    async fn handle_404(socket_addr: SocketAddr, host: bool, dist_dir: &str) -> impl IntoResponse {
+    async fn handle_404(
+        uri: Uri,
+        socket_addr: SocketAddr,
+        host: bool,
+        dist_dir: &str,
+    ) -> impl IntoResponse {
         let content = match fs::read_to_string(format!("{}/404.html", dist_dir)).await {
             Ok(custom_content) => custom_content,
             Err(_) => include_str!("./404.html").to_string(),
@@ -92,7 +138,7 @@ pub async fn start_dev_web_server(
         (
             StatusCode::NOT_FOUND,
             [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            inject_live_reload_script(&content, socket_addr, host),
+            inject_live_reload_script(&uri, &content, socket_addr, host),
         )
             .into_response()
     }
@@ -113,8 +159,10 @@ pub async fn start_dev_web_server(
 
     debug!("listening on {}", listener.local_addr().unwrap());
 
-    let service = (move || handle_404(socket_addr, host, dist_dir)).into_service();
-    let serve_dir = ServeDir::new(dist_dir).not_found_service(service);
+    let serve_dir =
+        ServeDir::new(dist_dir).not_found_service(axum::routing::any(move |uri: Uri| async move {
+            handle_404(uri, socket_addr, host, dist_dir).await
+        }));
 
     // TODO: Return a `.well-known/appspecific/com.chrome.devtools.json` for Chrome
 
@@ -156,26 +204,34 @@ pub async fn start_dev_web_server(
 
 pub async fn update_status(
     tx: &broadcast::Sender<WebSocketMessage>,
-    current_status: Arc<tokio::sync::RwLock<Option<String>>>,
-    status_type: &str,
+    current_status: Arc<RwLock<Option<PersistentStatus>>>,
+    status_type: StatusType,
     message: &str,
 ) {
-    let status_message = if status_type == "success" {
-        None // Clear the status on success
-    } else {
-        Some(message.to_string())
+    // Only store persistent states (Success clears errors, Error stores the error)
+    let persistent_status = match status_type {
+        StatusType::Success => None, // Clear any error state
+        StatusType::Error => Some(PersistentStatus {
+            status_type: StatusType::Error,
+            message: message.to_string(),
+        }),
+        // Everything else just keeps the current state
+        _ => {
+            let status = current_status.read().await;
+            status.clone() // Keep existing persistent state
+        }
     };
 
     // Update the stored status
     {
         let mut status = current_status.write().await;
-        *status = status_message;
+        *status = persistent_status;
     }
 
-    // Send the message
+    // Send the message to all connected clients
     let _ = tx.send(WebSocketMessage {
         data: json!({
-            "type": status_type,
+            "type": status_type.to_string(),
             "message": message
         })
         .to_string(),
@@ -201,8 +257,7 @@ async fn add_dev_client_script(
 
         let body = String::from_utf8_lossy(&bytes).into_owned();
 
-        // TODO: Handle HTML documents with no tags, e.g. `"Hello, world"`. Appending a raw script tag will cause it to show up as text.
-        let body_with_script = inject_live_reload_script(&body, socket_addr, host);
+        let body_with_script = inject_live_reload_script(&uri, &body, socket_addr, host);
 
         // Copy the headers from the original response
         let mut res = Response::new(body_with_script.into());
@@ -231,19 +286,19 @@ async fn handle_socket(
     socket: WebSocket,
     who: SocketAddr,
     tx: broadcast::Sender<WebSocketMessage>,
-    current_status: Arc<tokio::sync::RwLock<Option<String>>>,
+    current_status: Arc<RwLock<Option<PersistentStatus>>>,
 ) {
     let (mut sender, mut receiver) = socket.split();
 
-    // Send current status to new connection if there is one
+    // Send current persistent status to new connection if there is one
     {
         let status = current_status.read().await;
-        if let Some(error_message) = status.as_ref() {
+        if let Some(persistent_status) = status.as_ref() {
             let _ = sender
                 .send(Message::Text(
                     json!({
-                        "type": "error",
-                        "message": error_message
+                        "type": persistent_status.status_type.to_string(),
+                        "message": persistent_status.message
                     })
                     .to_string()
                     .into(),
