@@ -4,7 +4,7 @@ mod filterer;
 
 use colored::Colorize;
 use filterer::should_watch_path;
-use notify::{EventKind, RecursiveMode, Watcher, event::ModifyKind};
+use notify::{EventKind, RecursiveMode, WatchFilter, event::ModifyKind};
 use notify_debouncer_full::{DebounceEventResult, DebouncedEvent, new_debouncer};
 use quanta::Instant;
 use server::{WebSocketMessage, update_status};
@@ -117,9 +117,18 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
         },
     )?;
 
-    debouncer
-        .watcher()
-        .watch(Path::new(cwd), RecursiveMode::Recursive)?;
+    debouncer.watch_filtered(
+        Path::new(cwd),
+        RecursiveMode::Recursive,
+        WatchFilter::with_filter(Arc::new(|path| {
+            !path.components().any(|component| {
+                matches!(
+                    component.as_os_str().to_str(),
+                    Some("target" | ".git" | "node_modules" | "dist")
+                )
+            })
+        })),
+    )?;
 
     // Handle file events
     tokio::spawn(async move {

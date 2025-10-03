@@ -19,11 +19,11 @@ futures = "0.3"
 tower-http = { version = "0.6.2", features = ["fs", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "=0.3.19", features = [
-	"env-filter",
-	"chrono",
+    "env-filter",
+    "chrono",
 ] }
-notify = "6.1.1"
-notify-debouncer-full = "0.3.1"
+notify = { version = "8.2.0", git = "https://github.com/bruits/notify" }
+notify-debouncer-full = { version = "0.6.0", git = "https://github.com/bruits/notify" }
 inquire = "0.7.5"
 rand = "0.9.0"
 spinach = "3"
