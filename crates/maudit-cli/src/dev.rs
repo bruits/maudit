@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::process::Command;
 use tokio::sync::{Mutex, broadcast};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::logging::{FormatElapsedTimeOptions, format_elapsed_time};
 
@@ -51,12 +51,13 @@ impl BuildManager {
 
     /// Internal build method that handles both initial and regular builds
     async fn internal_build(&self, is_initial: bool) -> Result<bool, Box<dyn std::error::Error>> {
-        let mut current = self.current.lock().await;
-
-        // Cancel old build (for both initial and regular builds)
-        if let Some(old) = current.take() {
-            old.cancel.cancel();
-        }
+        // Cancel any existing build immediately, without holding the lock
+        {
+            let mut current = self.current.lock().await;
+            if let Some(old) = current.take() {
+                old.cancel.cancel();
+            }
+        } // Release the lock immediately
 
         // Notify that build is starting
         update_status(
@@ -83,10 +84,17 @@ impl BuildManager {
         let mut stderr = child.stderr.take().unwrap();
 
         let cancel = CancellationToken::new();
-        let cancel_child = cancel.clone();
         let websocket_tx = self.websocket_tx.clone();
         let current_status = self.current_status.clone();
         let build_start_time = Instant::now();
+
+        // Store the build handle immediately so it can be cancelled
+        {
+            let mut current = self.current.lock().await;
+            *current = Some(BuildHandle {
+                cancel: cancel.clone(),
+            });
+        } // Release the lock immediately
 
         // Create a channel to get the build result back
         let (result_tx, mut result_rx) = tokio::sync::mpsc::channel::<bool>(1);
@@ -107,8 +115,8 @@ impl BuildManager {
             };
 
             tokio::select! {
-                _ = cancel_child.cancelled() => {
-                    info!(name: "build", "Build cancelled");
+                _ = cancel.cancelled() => {
+                    debug!(name: "build", "Build cancelled");
                     let _ = child.kill().await;
                     update_status(&websocket_tx, current_status, StatusType::Info, "Build cancelled").await;
                     let _ = result_tx.send(false).await; // Build failed due to cancellation
@@ -151,9 +159,6 @@ impl BuildManager {
                 }
             }
         });
-
-        // Store the build handle for all builds (both initial and regular)
-        *current = Some(BuildHandle { cancel });
 
         // Wait for the build result
         let success = result_rx.recv().await.unwrap_or(false);
@@ -246,8 +251,6 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
         while let Some(result) = rx.recv().await {
             match result {
                 Ok(events) => {
-                    // Check if any event should trigger a rebuild
-                    println!("{:?}", events);
                     let should_rebuild = events.iter().any(should_rebuild_for_event);
 
                     if should_rebuild {
@@ -276,16 +279,19 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
                                 }
                             }
                         } else {
-                            // Normal rebuild
+                            // Normal rebuild - spawn in background so file watcher can continue
                             info!(name: "watch", "Files changed, rebuilding...");
-                            match build_manager_watcher.start_build().await {
-                                Ok(_) => {
-                                    // Build completed (success or failure already logged)
+                            let build_manager_clone = build_manager_watcher.clone();
+                            tokio::spawn(async move {
+                                match build_manager_clone.start_build().await {
+                                    Ok(_) => {
+                                        // Build completed (success or failure already logged)
+                                    }
+                                    Err(e) => {
+                                        error!(name: "build", "Failed to start build: {}", e);
+                                    }
                                 }
-                                Err(e) => {
-                                    error!(name: "build", "Failed to start build: {}", e);
-                                }
-                            }
+                            });
                         }
                     }
                 }
