@@ -42,8 +42,10 @@ pub async fn start_preview_web_server(dist_dir: PathBuf, host: bool) {
         IpAddr::from([127, 0, 0, 1])
     };
 
-    let port = find_open_port(&addr, 3000).await;
+    let port = find_open_port(&addr, 1864).await;
     let socket = TcpSocket::new_v4().unwrap();
+    let _ = socket.set_reuseaddr(true);
+    let _ = socket.set_reuseport(true);
 
     let socket_addr = SocketAddr::new(addr, port);
     socket.bind(socket_addr).unwrap();
