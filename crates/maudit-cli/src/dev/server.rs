@@ -95,7 +95,7 @@ fn inject_live_reload_script(
         format!("{}<script>{}</script>", html_content, script_content)
     } else {
         warn!(
-            "{} matched an HTML response, but it does not look like proper HTML, skipping live-reload script injection",
+            "{} matched an HTML response, but it does not look like proper HTML, live-reload won't work. Make sure your HTML has a proper <!DOCTYPE> or <html> tag.",
             uri
         );
         // Not proper HTML, return content unchanged
@@ -151,6 +151,8 @@ pub async fn start_dev_web_server(
     };
     let port = find_open_port(&addr, 1864).await;
     let socket = TcpSocket::new_v4().unwrap();
+    let _ = socket.set_reuseaddr(true);
+    let _ = socket.set_reuseport(true);
 
     let socket_addr = SocketAddr::new(addr, port);
     socket.bind(socket_addr).unwrap();
