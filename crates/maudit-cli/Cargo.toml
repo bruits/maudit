@@ -13,17 +13,22 @@ path = "src/main.rs"
 chrono = "0.4.39"
 colored = "2.2.0"
 clap = { version = "4.5.23", features = ["derive"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+tokio = { version = "1", features = [
+    "macros",
+    "rt-multi-thread",
+    "signal",
+    "process",
+] }
 axum = { version = "0.8.1", features = ["ws"] }
 futures = "0.3"
 tower-http = { version = "0.6.2", features = ["fs", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "=0.3.19", features = [
-	"env-filter",
-	"chrono",
+    "env-filter",
+    "chrono",
 ] }
-notify = "6.1.1"
-notify-debouncer-full = "0.3.1"
+notify = "8.2.0"
+notify-debouncer-full = "0.6.0"
 inquire = "0.7.5"
 rand = "0.9.0"
 spinach = "3"
@@ -35,6 +40,7 @@ flate2 = "1.0.35"
 quanta = "0.12.6"
 serde_json = "1.0"
 tokio-util = "0.7"
+cargo_metadata = "0.23.0"
 
 [build-dependencies]
 rolldown = { package = "brk_rolldown", version = "0.2.3" }
