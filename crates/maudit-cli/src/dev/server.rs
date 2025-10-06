@@ -5,7 +5,7 @@ use axum::{
         Request, State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
-    http::{HeaderValue, StatusCode, Uri},
+    http::{HeaderValue, StatusCode, header::CONTENT_LENGTH},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::get,
@@ -17,7 +17,7 @@ use tokio::{
     signal,
     sync::{RwLock, broadcast},
 };
-use tracing::{Level, debug, warn};
+use tracing::{Level, debug};
 
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -69,12 +69,9 @@ struct AppState {
     current_status: Arc<RwLock<Option<PersistentStatus>>>,
 }
 
-fn inject_live_reload_script(
-    uri: &Uri,
-    html_content: &str,
-    socket_addr: SocketAddr,
-    host: bool,
-) -> String {
+fn inject_live_reload_script(html_content: &str, socket_addr: SocketAddr, host: bool) -> String {
+    let mut content = html_content.to_string();
+
     let script_content = include_str!(concat!(env!("OUT_DIR"), "/js/client.js")).replace(
         "{SERVER_ADDRESS}",
         &format!(
@@ -88,19 +85,8 @@ fn inject_live_reload_script(
         ),
     );
 
-    // Only inject script if content looks like proper HTML
-    if html_content.trim_start().starts_with("<!DOCTYPE")
-        || html_content.trim_start().starts_with("<html")
-    {
-        format!("{}<script>{}</script>", html_content, script_content)
-    } else {
-        warn!(
-            "{} matched an HTML response, but it does not look like proper HTML, live-reload won't work. Make sure your HTML has a proper <!DOCTYPE> or <html> tag.",
-            uri
-        );
-        // Not proper HTML, return content unchanged
-        html_content.to_string()
-    }
+    content.push_str(&format!("\n\n<script>{script_content}</script>"));
+    content
 }
 
 pub async fn start_dev_web_server(
@@ -124,12 +110,7 @@ pub async fn start_dev_web_server(
         });
     }
 
-    async fn handle_404(
-        uri: Uri,
-        socket_addr: SocketAddr,
-        host: bool,
-        dist_dir: &str,
-    ) -> impl IntoResponse {
+    async fn handle_404(socket_addr: SocketAddr, host: bool, dist_dir: &str) -> impl IntoResponse {
         let content = match fs::read_to_string(format!("{}/404.html", dist_dir)).await {
             Ok(custom_content) => custom_content,
             Err(_) => include_str!("./404.html").to_string(),
@@ -138,7 +119,7 @@ pub async fn start_dev_web_server(
         (
             StatusCode::NOT_FOUND,
             [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            inject_live_reload_script(&uri, &content, socket_addr, host),
+            inject_live_reload_script(&content, socket_addr, host),
         )
             .into_response()
     }
@@ -162,8 +143,8 @@ pub async fn start_dev_web_server(
     debug!("listening on {}", listener.local_addr().unwrap());
 
     let serve_dir =
-        ServeDir::new(dist_dir).not_found_service(axum::routing::any(move |uri: Uri| async move {
-            handle_404(uri, socket_addr, host, dist_dir).await
+        ServeDir::new(dist_dir).not_found_service(axum::routing::any(move || async move {
+            handle_404(socket_addr, host, dist_dir).await
         }));
 
     // TODO: Return a `.well-known/appspecific/com.chrome.devtools.json` for Chrome
@@ -254,16 +235,24 @@ async fn add_dev_client_script(
     if res.headers().get(axum::http::header::CONTENT_TYPE)
         == Some(&HeaderValue::from_static("text/html"))
     {
+        let original_headers = res.headers().clone();
         let body = res.into_body();
         let bytes = to_bytes(body, usize::MAX).await.unwrap();
 
         let body = String::from_utf8_lossy(&bytes).into_owned();
 
-        let body_with_script = inject_live_reload_script(&uri, &body, socket_addr, host);
+        let body_with_script = inject_live_reload_script(&body, socket_addr, host);
+        let new_body_length = body_with_script.len();
 
         // Copy the headers from the original response
         let mut res = Response::new(body_with_script.into());
-        *res.headers_mut() = res.headers().clone();
+        *res.headers_mut() = original_headers;
+
+        // Update Content-Length header to match new body size
+        res.headers_mut().insert(
+            CONTENT_LENGTH,
+            HeaderValue::from_str(&new_body_length.to_string()).unwrap(),
+        );
 
         res.extensions_mut().insert(uri);
 
