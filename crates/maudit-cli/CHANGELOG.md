@@ -1,5 +1,11 @@
 # maudit-cli
 
+## 0.6.1 — 2025-10-06
+
+### Patch changes
+
+- [9e3eb1e](https://github.com/bruits/maudit/commit/9e3eb1e15eec80377a38721406aae80f6a148f19) Fixes missing HTTP headers on HTML responses — Thanks @Princesseuh!
+
 ## 0.6.0 — 2025-10-06
 
 ### Minor changes
