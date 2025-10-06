@@ -1,5 +1,12 @@
 # maudit-cli
 
+## 0.6.0 — 2025-10-06
+
+### Minor changes
+
+- [3758ccf](https://github.com/bruits/maudit/commit/3758ccfdcfbc66762d285d9f3bb2f7891b90dfe1) Improved stability of the watching system — Thanks @Princesseuh!
+- [3758ccf](https://github.com/bruits/maudit/commit/3758ccfdcfbc66762d285d9f3bb2f7891b90dfe1) Fixes an issue where installation would fail due to an outdated Rolldown version — Thanks @Princesseuh!
+
 ## 0.5.1
 
 ### Patch changes
