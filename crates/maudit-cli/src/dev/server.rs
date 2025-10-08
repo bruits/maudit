@@ -233,9 +233,9 @@ async fn add_dev_client_script(
 
     res.extensions_mut().insert(uri.clone());
 
-    let content_type = res.headers().get(axum::http::header::CONTENT_TYPE).cloned();
-
-    if content_type == Some(HeaderValue::from_static("text/html")) {
+    if res.headers().get(axum::http::header::CONTENT_TYPE)
+        == Some(&HeaderValue::from_static("text/html"))
+    {
         let original_headers = res.headers().clone();
         let body = res.into_body();
         let bytes = to_bytes(body, usize::MAX).await.unwrap();
