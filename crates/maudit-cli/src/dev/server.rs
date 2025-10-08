@@ -267,10 +267,8 @@ async fn add_cache_headers(req: Request, next: Next) -> Response {
     let uri = req.uri().clone();
     let mut res = next.run(req).await;
 
-    let content_type = res.headers().get(axum::http::header::CONTENT_TYPE).cloned();
-
-    if let Some(content_type) = content_type {
-        let cache_header = cache_header_by_content(&uri, &content_type);
+    if let Some(content_type) = res.headers().get(axum::http::header::CONTENT_TYPE) {
+        let cache_header = cache_header_by_content(&uri, content_type);
         if let Some(cache_header) = cache_header {
             res.headers_mut()
                 .insert(header::CACHE_CONTROL, cache_header);
