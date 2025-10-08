@@ -5,7 +5,7 @@ use axum::{
         Request, State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
-    http::{HeaderValue, StatusCode, header::CONTENT_LENGTH},
+    http::{HeaderValue, StatusCode, Uri, header::CONTENT_LENGTH},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::get,
@@ -152,6 +152,7 @@ pub async fn start_dev_web_server(
     let router = Router::new()
         .route("/ws", get(ws_handler))
         .fallback_service(serve_dir)
+        .layer(middleware::from_fn(add_cache_headers))
         .layer(middleware::from_fn(move |req, next| {
             add_dev_client_script(req, next, socket_addr, host)
         }))
@@ -232,9 +233,9 @@ async fn add_dev_client_script(
 
     res.extensions_mut().insert(uri.clone());
 
-    if res.headers().get(axum::http::header::CONTENT_TYPE)
-        == Some(&HeaderValue::from_static("text/html"))
-    {
+    let content_type = res.headers().get(axum::http::header::CONTENT_TYPE).cloned();
+
+    if content_type == Some(HeaderValue::from_static("text/html")) {
         let original_headers = res.headers().clone();
         let body = res.into_body();
         let bytes = to_bytes(body, usize::MAX).await.unwrap();
@@ -260,6 +261,41 @@ async fn add_dev_client_script(
     }
 
     res
+}
+
+async fn add_cache_headers(req: Request, next: Next) -> Response {
+    let uri = req.uri().clone();
+    let mut res = next.run(req).await;
+
+    let content_type = res.headers().get(axum::http::header::CONTENT_TYPE).cloned();
+
+    if let Some(content_type) = content_type {
+        let cache_header = cache_header_by_content(&uri, &content_type);
+        if let Some(cache_header) = cache_header {
+            res.headers_mut()
+                .insert(header::CACHE_CONTROL, cache_header);
+        }
+    }
+
+    res
+}
+
+fn cache_header_by_content(uri: &Uri, content_type: &HeaderValue) -> Option<HeaderValue> {
+    if content_type == HeaderValue::from_static("text/html") {
+        // No cache for HTML files
+        Some(HeaderValue::from_static(
+            "no-cache, no-store, must-revalidate",
+        ))
+    }
+    // If something comes from the assets path, it's fingerprinted and can be cached for a long time
+    else if uri.path().starts_with("/_maudit/") {
+        Some(HeaderValue::from_static(
+            "public, max-age=31536000, immutable",
+        ))
+    } else {
+        // Don't try to cache anything else, the browser will decide based on the last-modified header
+        None
+    }
 }
 
 async fn ws_handler(
