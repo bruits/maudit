@@ -287,7 +287,8 @@ fn cache_header_by_content(uri: &Uri, content_type: &HeaderValue) -> Option<Head
             "no-cache, no-store, must-revalidate",
         ))
     }
-    // If something comes from the assets path, it's fingerprinted and can be cached for a long time
+    // If something comes from the assets path, assume that it's fingerprinted and can be cached for a long time
+    // TODO: Same as dist, shouldn't be hardcoded
     else if uri.path().starts_with("/_maudit/") {
         Some(HeaderValue::from_static(
             "public, max-age=31536000, immutable",
