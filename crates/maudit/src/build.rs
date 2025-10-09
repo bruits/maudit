@@ -11,7 +11,7 @@ use std::{
 use crate::{
     BuildOptions, BuildOutput,
     assets::{
-        self, RouteAssets, TailwindPlugin,
+        self, RouteAssets, TailwindPlugin, TailwindProcessor,
         image_cache::{IMAGE_CACHE_DIR, ImageCache},
     },
     build::images::process_image,
@@ -116,6 +116,8 @@ pub async fn build(
     let mut build_pages_images: FxHashSet<assets::Image> = FxHashSet::default();
     let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
     let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
+    let mut has_tailwind_assets = false;
+    let mut tailwind_processor: Option<Arc<TailwindProcessor>> = None;
 
     let mut page_count = 0;
 
@@ -148,6 +150,20 @@ pub async fn build(
                 write_route_file(&result, &file_path)?;
 
                 info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
+
+                if page_assets.has_tailwind_assets() && !has_tailwind_assets {
+                    has_tailwind_assets = true;
+                    // Start Tailwind process immediately when first detected
+                    let processor = Arc::new(TailwindProcessor::new(
+                        options.assets.tailwind_binary_path.clone(),
+                    ));
+                    if let Err(e) = processor.start() {
+                        warn!(target: "build", "Failed to start background Tailwind process: {}. Will fall back to CLI mode.", e);
+                    } else {
+                        info!(target: "build", "Started background Tailwind process");
+                        tailwind_processor = Some(processor);
+                    }
+                }
 
                 build_pages_images.extend(page_assets.images);
                 build_pages_scripts.extend(page_assets.scripts);
@@ -205,6 +221,20 @@ pub async fn build(
                     page_count += 1;
                 }
 
+                if page_assets.has_tailwind_assets() && !has_tailwind_assets {
+                    has_tailwind_assets = true;
+                    // Start Tailwind process immediately when first detected
+                    let processor = Arc::new(TailwindProcessor::new(
+                        options.assets.tailwind_binary_path.clone(),
+                    ));
+                    if let Err(e) = processor.start() {
+                        warn!(target: "build", "Failed to start background Tailwind process: {}. Will fall back to CLI mode.", e);
+                    } else {
+                        info!(target: "build", "Started background Tailwind process");
+                        tailwind_processor = Some(processor);
+                    }
+                }
+
                 build_pages_images.extend(page_assets.images);
                 build_pages_scripts.extend(page_assets.scripts);
                 build_pages_styles.extend(page_assets.styles);
@@ -259,6 +289,33 @@ pub async fn build(
             module_types_hashmap.insert("woff".to_string(), ModuleType::Asset);
             module_types_hashmap.insert("woff2".to_string(), ModuleType::Asset);
 
+            // Use already started Tailwind processor or None
+
+            let tailwind_entries = build_pages_styles
+                .iter()
+                .filter_map(|style| {
+                    if style.tailwind {
+                        Some(style.path().clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<PathBuf>>();
+
+            let tailwind_plugin = if let Some(processor) = tailwind_processor {
+                Arc::new(TailwindPlugin::with_processor(
+                    options.assets.tailwind_binary_path.clone(),
+                    tailwind_entries,
+                    processor,
+                ))
+            } else {
+                Arc::new(TailwindPlugin {
+                    tailwind_path: options.assets.tailwind_binary_path.clone(),
+                    tailwind_entries,
+                    processor: None,
+                })
+            };
+
             let mut bundler = Bundler::with_plugins(
                 BundlerOptions {
                     input: Some(bundler_inputs),
@@ -272,19 +329,7 @@ pub async fn build(
                     module_types: Some(module_types_hashmap),
                     ..Default::default()
                 },
-                vec![Arc::new(TailwindPlugin {
-                    tailwind_path: options.assets.tailwind_binary_path.clone(),
-                    tailwind_entries: build_pages_styles
-                        .iter()
-                        .filter_map(|style| {
-                            if style.tailwind {
-                                Some(style.path().clone())
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<PathBuf>>(),
-                })],
+                vec![tailwind_plugin],
             )?;
 
             let _result = bundler.write().await?;
