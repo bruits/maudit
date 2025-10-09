@@ -302,18 +302,11 @@ pub async fn build(
                 })
                 .collect::<Vec<PathBuf>>();
 
-            let tailwind_plugin = if let Some(processor) = tailwind_processor {
-                Arc::new(TailwindPlugin::with_processor(
-                    options.assets.tailwind_binary_path.clone(),
-                    tailwind_entries,
-                    processor,
-                ))
+            let plugins = if let Some(processor) = tailwind_processor {
+                vec![Arc::new(TailwindPlugin::new(tailwind_entries, processor))
+                    as Arc<dyn rolldown::plugin::Pluginable>]
             } else {
-                Arc::new(TailwindPlugin {
-                    tailwind_path: options.assets.tailwind_binary_path.clone(),
-                    tailwind_entries,
-                    processor: None,
-                })
+                vec![]
             };
 
             let mut bundler = Bundler::with_plugins(
@@ -329,7 +322,7 @@ pub async fn build(
                     module_types: Some(module_types_hashmap),
                     ..Default::default()
                 },
-                vec![tailwind_plugin],
+                plugins,
             )?;
 
             let _result = bundler.write().await?;

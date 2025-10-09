@@ -39,33 +39,7 @@ impl TailwindProcessor {
     /// Spawn a new warm process
     fn spawn_warm_process(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut warm_guard = self.warm_process.lock().unwrap();
-
-        info!(
-            "Creating warm Tailwind command with binary: {}",
-            self.tailwind_path.display()
-        );
-        let mut command = Command::new(&self.tailwind_path);
-        command
-            .args(["--input", "-", "--output", "-"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-
-        // Add development/production flags
-        if !crate::is_dev() {
-            info!("Adding --minify flag for production");
-            command.arg("--minify");
-        }
-
-        info!("Spawning warm Tailwind process...");
-        let child = command
-            .spawn()
-            .map_err(|e| format!("Failed to start warm Tailwind process: {}", e))?;
-
-        info!(
-            "Warm Tailwind process spawned successfully with PID: {:?}",
-            child.id()
-        );
+        let child = self.spawn_warm_process_internal()?;
         *warm_guard = Some(child);
         Ok(())
     }
@@ -90,8 +64,8 @@ impl TailwindProcessor {
             info!("Using pre-warmed Tailwind process");
             process
         } else {
-            info!("No warm process available, spawning fresh one");
-            self.spawn_fresh_process()?
+            info!("No warm process available, spawning new one");
+            self.spawn_warm_process_internal()?
         };
 
         info!("Getting stdin handle...");
@@ -123,10 +97,12 @@ impl TailwindProcessor {
         Ok(result.trim().to_string())
     }
 
-    /// Spawn a fresh process immediately
-    fn spawn_fresh_process(&self) -> Result<Child, Box<dyn std::error::Error + Send + Sync>> {
+    /// Spawn a new process immediately
+    fn spawn_warm_process_internal(
+        &self,
+    ) -> Result<Child, Box<dyn std::error::Error + Send + Sync>> {
         info!(
-            "Creating fresh Tailwind command with binary: {}",
+            "Creating Tailwind command with binary: {}",
             self.tailwind_path.display()
         );
         let mut command = Command::new(&self.tailwind_path);
@@ -141,13 +117,13 @@ impl TailwindProcessor {
             command.arg("--minify");
         }
 
-        info!("Spawning fresh Tailwind process...");
+        info!("Spawning Tailwind process...");
         let child = command
             .spawn()
-            .map_err(|e| format!("Failed to start fresh Tailwind process: {}", e))?;
+            .map_err(|e| format!("Failed to start Tailwind process: {}", e))?;
 
         info!(
-            "Fresh Tailwind process spawned successfully with PID: {:?}",
+            "Tailwind process spawned successfully with PID: {:?}",
             child.id()
         );
         Ok(child)
@@ -175,25 +151,19 @@ impl Drop for TailwindProcessor {
     }
 }
 
-/// Rolldown plugin to process select CSS files with the Tailwind CSS CLI.
+/// Rolldown plugin to process select CSS files with the Tailwind CSS processor.
 #[derive(Debug)]
 pub struct TailwindPlugin {
-    pub tailwind_path: PathBuf,
     pub tailwind_entries: Vec<PathBuf>,
-    pub processor: Option<Arc<TailwindProcessor>>,
+    pub processor: Arc<TailwindProcessor>,
 }
 
 impl TailwindPlugin {
     /// Create a new TailwindPlugin with a background processor
-    pub fn with_processor(
-        tailwind_path: PathBuf,
-        tailwind_entries: Vec<PathBuf>,
-        processor: Arc<TailwindProcessor>,
-    ) -> Self {
+    pub fn new(tailwind_entries: Vec<PathBuf>, processor: Arc<TailwindProcessor>) -> Self {
         Self {
-            tailwind_path,
             tailwind_entries,
-            processor: Some(processor),
+            processor,
         }
     }
 }
@@ -223,54 +193,15 @@ impl Plugin for TailwindPlugin {
         {
             let start_tailwind = Instant::now();
 
-            let output = if let Some(processor) = &self.processor {
-                info!("Using background Tailwind processor for {}", args.id);
-                // Use background processor
-                let input_css = std::fs::read_to_string(args.id)
-                    .unwrap_or_else(|e| panic!("Failed to read input file: {}", e));
+            info!("Using Tailwind processor for {}", args.id);
+            let input_css = std::fs::read_to_string(args.id)
+                .unwrap_or_else(|e| panic!("Failed to read input file: {}", e));
 
-                info!("Read {} bytes from input file", input_css.len());
-                processor
-                    .process_css(&input_css)
-                    .unwrap_or_else(|e| panic!("Background Tailwind processor failed: {}", e))
-            } else {
-                // Use CLI mode
-                let mut command = Command::new(&self.tailwind_path);
-                command.args(["--input", args.id]);
-
-                // Add minify in production, source maps in development
-                if !crate::is_dev() {
-                    command.arg("--minify");
-                }
-                if crate::is_dev() {
-                    command.arg("--map");
-                }
-
-                let tailwind_output = command.output()
-                    .unwrap_or_else(|e| {
-                        let args_str = if crate::is_dev() {
-                            format!("['--input', '{}', '--map']", args.id)
-                        } else {
-                            format!("['--input', '{}', '--minify']", args.id)
-                        };
-                        panic!(
-                            "Failed to execute Tailwind CSS command, is it installed and is the path to its binary correct?\nCommand: '{}', Args: {}. Error: {}",
-                            self.tailwind_path.display(),
-                            args_str,
-                            e
-                        )
-                    });
-
-                if !tailwind_output.status.success() {
-                    let stderr = String::from_utf8_lossy(&tailwind_output.stderr);
-                    panic!(
-                        "Tailwind CSS process failed with status {}: {}",
-                        tailwind_output.status, stderr
-                    );
-                }
-
-                String::from_utf8_lossy(&tailwind_output.stdout).to_string()
-            };
+            info!("Read {} bytes from input file", input_css.len());
+            let output = self
+                .processor
+                .process_css(&input_css)
+                .unwrap_or_else(|e| panic!("Tailwind processor failed: {}", e));
 
             info!("Tailwind took {:?}", start_tailwind.elapsed());
 
