@@ -13,7 +13,7 @@ mod tailwind;
 pub use image::{Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt};
 pub use script::Script;
 pub use style::{Style, StyleOptions};
-pub use tailwind::TailwindPlugin;
+pub use tailwind::{TailwindPlugin, TailwindProcessor};
 
 use crate::{AssetHashingStrategy, BuildOptions};
 
@@ -60,6 +60,10 @@ impl RouteAssets {
             .map(|asset| asset as &dyn Asset)
             .chain(self.scripts.iter().map(|asset| asset as &dyn Asset))
             .chain(self.styles.iter().map(|asset| asset as &dyn Asset))
+    }
+
+    pub fn has_tailwind_assets(&self) -> bool {
+        self.styles.iter().any(|s| s.tailwind)
     }
 
     /// Get all styles that are marked as included
