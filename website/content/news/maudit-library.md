@@ -17,11 +17,11 @@ Maudit instead provides an alternative model: **You call Maudit, it does not cal
 
 ## The Mantle is Thine
 
-Pages in Maudit projects are normal Rust structs, you can import them in other files, provide them properties, implement methods on them etc. To get the HTML of a single page in SSG frameworks is sometimes impossible, but in Maudit, you can import the page and call [`.build()`](https://docs.rs/maudit/latest/maudit/route/trait.FullRoute.html#method.build), it straight up just works!
+Pages in Maudit projects are just normal Rust structs. You can import them, give them properties, and implement methods. In other SSGs, getting the HTML of a single page is sometimes impossible, but in Maudit, you can just import the page and call its [`.build()`](https://docs.rs/maudit/latest/maudit/route/trait.FullRoute.html#method.build) method. It works!
 
-This philosophy applies to all of Maudit, for instance to render remote Markdown using Maudit's Markdown pipeline (providing syntax highlighting, components, shortcodes, etc), you import [`render_markdown`](https://docs.rs/maudit/latest/maudit/content/markdown/fn.render_markdown.html) and pass it some content and options. The code on the homepage is highlighted using [`highlight_code`](https://docs.rs/maudit/latest/maudit/content/fn.highlight_code.html), which is the exact same function that `render_markdown` will use for highlighting as well, and so on.
+This applies to all of Maudit. To render remote Markdown using Maudit's pipeline (with syntax highlighting, components, shortcodes, etc.), import [`render_markdown`](https://docs.rs/maudit/latest/maudit/content/markdown/fn.render_markdown.html) and pass your content and options. The code on the home page uses [`highlight_code`](https://docs.rs/maudit/latest/maudit/content/fn.highlight_code.html), the same function that `render_markdown` uses.
 
-It is intended for it to be possible to build your own static website generators based on all these APIs, [we even have on a guide on how to do it!](https://maudit.org/docs/library/), or if you're 99% of people, the [`coronate()`](https://docs.rs/maudit/latest/maudit/fn.coronate.html) function (the ["entrypoint"](https://maudit.org/docs/entrypoint/)) act as both the reference implementation of how to build pages, bundle assets, process images etc and also as the function the average Maudit project would call.
+You can even build your own Maudit at home using these APIs, we have [a guide for that](https://maudit.org/docs/library/)! For most users, the [`coronate()`](https://docs.rs/maudit/latest/maudit/fn.coronate.html) function (the ["entrypoint"](https://maudit.org/docs/entrypoint/)) serves both as the standard way to build pages, bundle assets, and process images and the reference implementation for someone to learn from.
 
 ## For What Quest We Stand Here
 
@@ -31,12 +31,12 @@ In Maudit, it is totally possible to use [content sources](https://maudit.org/do
 
 ## Tis but a Scratch
 
-Of course, this comes with some trade-offs. Being a library probably means it’s never going to feel as easygoing as something like Eleventy or Astro. You probably won’t be able to just toss a few Markdown files into a folder and call it a day. (One day, though, perhaps)
+Of course, this comes with some trade-offs. As a library, it's hard to provide the experience of "Just drop a few Markdown files in a folder and you're done!". You do need to know some Rust to get started, and you do need to set up your project a bit more manually than with other SSGs at times.
 
-That said, we think that’s okay. We’ll do our best to make Maudit as friendly as we can, and the docs as clear and welcoming as possible. But if you end up needing something simpler to get going with, that’s fine too. No hard feelings.
+That said, we think that's okay. We'll do our best to make Maudit as friendly as we can, and the docs as clear and welcoming as possible. But if you end up needing something simpler to get going with, that'd be totally understandable.
 
 ---
 
-We’re very excited to see what people build with Maudit! Hopefully, the flexibility of Maudit empowers and motivate you to create websites that fits your exact and precise needs.
+We're very excited to see what people build with Maudit! Hopefully, the flexibility of Maudit empowers and motivate you to create websites that fits your exact and precise needs.
 
 If you have any questions, feedback, or just want to say hi, feel free to [join our Discord](https://maudit.org/discord) or [open an issue or discussion on GitHub](https://github.com/bruits/maudit)!
