@@ -71,4 +71,4 @@ imnested/index: I'm nested!
 
 This is my CMS at home, don't judge me. More seriously, you could imagine loading pages from an actual CMS, a database, a `.json` file etc. And thus, combined with runtime templating, be able to add an infinite amount of pages without ever recompiling.
 
-Maudit is a library, not a framework. Make it work for you!
+The posibilities are infinite here, perhaps your website will never need recompilation again, who knows.

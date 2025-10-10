@@ -1,3 +1,4 @@
+use chrono::Datelike;
 use maud::PreEscaped;
 use maud::html;
 use maudit::route::prelude::*;
@@ -18,20 +19,20 @@ impl Route for NewsIndex {
         let mut articles_by_year: BTreeMap<String, Vec<_>> = BTreeMap::new();
 
         for article in &content.entries {
-            if let Some(date) = &article.data(ctx).date {
-                // Extract year from date (format: 2025-08-16)
-                let year = date.split('-').next().unwrap_or("Unknown").to_string();
-                articles_by_year
-                    .entry(year)
-                    .or_insert_with(Vec::new)
-                    .push(article);
-            } else {
-                // articles without dates
-                articles_by_year
-                    .entry("Unknown".to_string())
-                    .or_insert_with(Vec::new)
-                    .push(article);
-            }
+            let year = article.data(ctx).date.year().to_string();
+            articles_by_year
+                .entry(year)
+                .or_insert_with(Vec::new)
+                .push(article);
+        }
+
+        // Sort articles within each year by date (newest first)
+        for articles in articles_by_year.values_mut() {
+            articles.sort_by(|a, b| {
+                let date_a = &a.data(ctx).date;
+                let date_b = &b.data(ctx).date;
+                date_b.cmp(date_a) // Reverse order for newest first
+            });
         }
 
         layout(
@@ -43,9 +44,7 @@ impl Route for NewsIndex {
                             ul.space-y-8 {
                                 @for article in articles {
                                     li.border-b.border-gray-200.pb-4 {
-                                        @if let Some(date) = &article.data(ctx).date {
-                                            p.text-sm.font-bold { (date) }
-                                        }
+                                        p.text-sm.font-bold { (article.data(ctx).date) }
                                         h3.text-5xl {
                                             a."hover:text-brand-red" href=(article.id) {
                                                 (article.data(ctx).title)
@@ -124,9 +123,7 @@ impl Route<NewsPageParams> for NewsPage {
             html! {
                 div.container.mx-auto."py-10"."pb-24"."max-w-[80ch]"."px-6"."sm:px-0" {
                     section.mb-4.border-b."border-[#e9e9e7]".pb-2 {
-                        @if let Some(date) = &date {
-                            p.text-sm.font-bold { (date) }
-                        }
+                        p.text-sm.font-bold { (date) }
                         h1."text-5xl"."sm:text-6xl".font-bold.mb-3 { (title) }
                         @if let Some(description) = &description {
                             p.text-xl."sm:text-2xl".italic { (description) }

@@ -149,8 +149,9 @@ a:hover {
 
 .prose code,
 .intro-code code {
-    font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo,
-        Consolas, "DejaVu Sans Mono", monospace;
+    font-family:
+        ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas,
+        "DejaVu Sans Mono", monospace;
     font-size: 0.888889em;
 }
 
@@ -203,4 +204,10 @@ a:hover {
     .intro-code pre {
         border-radius: 0;
     }
+}
+
+.prose hr {
+    border-color: var(--color-borders);
+    margin-top: 2em;
+    margin-bottom: 2em;
 }
