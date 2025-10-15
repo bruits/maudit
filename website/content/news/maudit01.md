@@ -11,7 +11,7 @@ Behold, the dawn of a new era in static site generation! The latest incarnation 
 
 ...
 
-_More seriously_, this is the first release of **Maudit** (/mo.di/), a static site generator written in Rust.
+_More seriously_, this is the first release of **Maudit** (/mo.di/), a Rust library to generate static sites.
 
 <div class="text-center italic">Want to just get started using Maudit? Check out our <a href="/docs/quick-start/">Quick Start guide</a></div>
 
@@ -40,9 +40,9 @@ impl Route for Index {
 }
 ```
 
-That said, we hope to avoid as much boilerplate as possible, as such fancy macros are involved at times. But, we're not much into magic either, so expanding those macros should still yield code that is easy to understand.
+Being a library means that a Maudit project may have a little more boilerplate than you'd see in a framework, but it also means that you can use all the tools and libraries of the Rust ecosystem, and that you are in full control of your project.
 
-Our goal is to strike a balance between convenience and clarity. It shouldn't feel like there's a lot of impossible to understand weird code happening behind the scenes.
+We try nonetheless to make the experience as smooth as possible and reduce boilerplate where we can. For instance, the `#[route]` attribute macro makes defining routes fairly concise.
 
 ## Reasonably fast
 
