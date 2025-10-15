@@ -30,4 +30,3 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         with:
           create-github-release: true
-          upload-binary: true

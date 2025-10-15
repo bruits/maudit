@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use maud::{PreEscaped, Render};
 use maudit::content::{
     ContentSources, MarkdownOptions, glob_markdown, glob_markdown_with_options, markdown_entry,
@@ -36,7 +37,7 @@ pub struct DocsContent {
 pub struct NewsContent {
     pub title: String,
     pub description: Option<String>,
-    pub date: Option<String>,
+    pub date: NaiveDate,
     pub author: Option<String>,
 }
 

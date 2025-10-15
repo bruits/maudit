@@ -4,7 +4,7 @@ description: "Learn how to render content using your favorite templating engine.
 section: "core-concepts"
 ---
 
-In general, if a library can return a String, you can use it to generate pages with Maudit.
+In general, if a library can return a `String` or a `Vec<u8>`, you can use it to generate pages with Maudit.
 
 Through crate features, Maudit includes built-in helper methods and traits implementation for popular templating libraries.
 
@@ -28,7 +28,7 @@ impl Route for Index {
 }
 ```
 
-Maudit implements the `Render` trait for assets, such as scripts, styles, and images, allowing one to use them directly in Maud templates.
+Maudit implements the `Render` trait for scripts and styles, allowing one to use them directly in Maud templates.
 
 ```rs
 use maud::{html, Markup};
@@ -39,10 +39,10 @@ pub struct Index;
 
 impl Route for Index {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-        let logo = ctx.add_image("./logo.png");
+        let style = ctx.add_style("style.css");
 
         html! {
-            (logo) // Will generate <img src="IMAGE_PATH" width="IMAGE_WIDTH" height="IMAGE_HEIGHT" loading="lazy" decoding="async" />
+            (style) // Will render to a <link> tag for the CSS file
         }
     }
 }
@@ -55,7 +55,7 @@ To use Maud with Maudit, install Maud into your project by adding it to your `Ca
 maud = "0.27"
 ```
 
-The `maud` feature is enabled by default. If you have disabled default features, enable it manually:
+The `maud` feature is enabled by default. If you have disabled default features, you can enable it manually:
 
 ```toml
 maudit = { version = "0.6", features = ["maud"] }

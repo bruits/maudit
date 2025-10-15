@@ -14,14 +14,20 @@ Supporting certain features in your less used output mode might add technical co
 
 **Maudit is about making static websites**. It has no higher goals than that. It won't try to become a server-side rendering framework, a hybrid framework, or anything else. This focus allows us to make the best static website generator we can.
 
+**From the blog:** [The still scrolls of the web, unchanging and steadfast, at last!](/news/for-static-websites/)
+
 ## Your website changes less often than its content
 
 Many parts of Maudit projects are written in Rust, a compiled language, thus requiring recompilation for changes. This overhead is justified by the assumption that structural changes are less frequent than content updates. For example, in a blog, new articles are more common than layout changes.
 
 Without delving into the complexities of incremental builds, this architecture allows Maudit projects to build very quickly, even for large websites, thanks to the raw performance of a compiled language.
 
+**From the blog:** [Maudit is faster than most other static website generators, but](/news/maudit-compile-time/)
+
 ## Maudit is a library, not a framework
 
 Every feature in Maudit was designed to be able to be used outside of Maudit. You can access and load all of your content outside of Maudit. Maudit pages are normal Rust structs and can be handled outside of Maudit, and so on.
 
 In the simplest terms, you call Maudit, it does not call you.
+
+**From the blog:** [The court's library, not its king](/news/maudit-library/)

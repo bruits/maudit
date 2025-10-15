@@ -20,7 +20,9 @@ And most importantly: **Not every change require recompilation.** Updating your 
 
 ## Workarounds
 
-You can also push this further, if your layouts do change often and you don't want to recompile your project on every change, use a runtime templating language like [minijinja](https://github.com/mitsuhiko/minijinja) or [Tera](https://keats.github.io/tera/docs/).
+If your layouts do change often and you don't want to recompile your project on every change, using a runtime templating language like [minijinja](https://github.com/mitsuhiko/minijinja) or [Tera](https://keats.github.io/tera/docs/) is a great solution. You can load your templates at runtime, and thus change them without recompiling.
+
+### Even further beyond
 
 You can push it even further! [Routes paths are not static, they can be fully dynamic](https://maudit.org/docs/routing/#:~:text=The%20path%20can%20be%20any%20Rust%20expression) as such, you could load your routes fully at runtime.
 
@@ -71,4 +73,4 @@ imnested/index: I'm nested!
 
 This is my CMS at home, don't judge me. More seriously, you could imagine loading pages from an actual CMS, a database, a `.json` file etc. And thus, combined with runtime templating, be able to add an infinite amount of pages without ever recompiling.
 
-Maudit is a library, not a framework. Make it work for you!
+The posibilities are infinite here, perhaps your website will never need recompilation again, who knows.

@@ -2611,6 +2611,7 @@ dependencies = [
 name = "maudit-website"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "maud",
  "maudit",
  "serde",
