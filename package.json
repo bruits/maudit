@@ -6,7 +6,8 @@
 	"dependencies": {
 		"@tailwindcss/cli": "^4.0.0",
 		"tailwindcss": "^4.0.0",
-		"thumbhash": "^0.1.1"
+		"thumbhash": "^0.1.1",
+		"maudit-node-sidecar": "workspace:*"
 	},
 	"devDependencies": {
 		"netlify-plugin-debug-cache": "^1.0.4",

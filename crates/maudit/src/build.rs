@@ -153,16 +153,11 @@ pub async fn build(
 
                 if page_assets.has_tailwind_assets() && !has_tailwind_assets {
                     has_tailwind_assets = true;
-                    // Start Tailwind process immediately when first detected
                     let processor = Arc::new(TailwindProcessor::new(
                         options.assets.tailwind_binary_path.clone(),
-                    ));
-                    if let Err(e) = processor.start() {
-                        warn!(target: "build", "Failed to start background Tailwind process: {}. Will fall back to CLI mode.", e);
-                    } else {
-                        info!(target: "build", "Started background Tailwind process");
-                        tailwind_processor = Some(processor);
-                    }
+                    )?);
+
+                    tailwind_processor = Some(processor);
                 }
 
                 build_pages_images.extend(page_assets.images);
@@ -223,16 +218,11 @@ pub async fn build(
 
                 if page_assets.has_tailwind_assets() && !has_tailwind_assets {
                     has_tailwind_assets = true;
-                    // Start Tailwind process immediately when first detected
                     let processor = Arc::new(TailwindProcessor::new(
                         options.assets.tailwind_binary_path.clone(),
-                    ));
-                    if let Err(e) = processor.start() {
-                        warn!(target: "build", "Failed to start background Tailwind process: {}. Will fall back to CLI mode.", e);
-                    } else {
-                        info!(target: "build", "Started background Tailwind process");
-                        tailwind_processor = Some(processor);
-                    }
+                    )?);
+
+                    tailwind_processor = Some(processor);
                 }
 
                 build_pages_images.extend(page_assets.images);
