@@ -7,7 +7,6 @@ use std::{
 };
 
 use log::info;
-use oxc_sourcemap::SourceMap;
 use rolldown::{
     ModuleType,
     plugin::{HookUsage, Plugin},
@@ -118,13 +117,15 @@ impl TailwindProcessor {
         }
 
         info!("Spawning Tailwind process...");
+        let spawn_start = Instant::now();
         let child = command
             .spawn()
             .map_err(|e| format!("Failed to start Tailwind process: {}", e))?;
 
         info!(
-            "Tailwind process spawned successfully with PID: {:?}",
-            child.id()
+            "Tailwind process spawned successfully with PID: {:?} (took {:?})",
+            child.id(),
+            spawn_start.elapsed()
         );
         Ok(child)
     }
@@ -205,24 +206,8 @@ impl Plugin for TailwindPlugin {
 
             info!("Tailwind took {:?}", start_tailwind.elapsed());
 
-            let (code, map) = if let Some((code, map)) = output.split_once("/*# sourceMappingURL") {
-                (code.to_string(), Some(map.to_string()))
-            } else {
-                (output, None)
-            };
-
-            if let Some(map) = map {
-                let source_map = SourceMap::from_json_string(&map).ok();
-
-                return Ok(Some(rolldown::plugin::HookTransformOutput {
-                    code: Some(code),
-                    map: source_map,
-                    ..Default::default()
-                }));
-            }
-
             return Ok(Some(rolldown::plugin::HookTransformOutput {
-                code: Some(code),
+                code: Some(output),
                 ..Default::default()
             }));
         }
