@@ -1,7 +1,12 @@
-use std::{path::PathBuf, process::Command, time::Instant};
+use std::{
+    fs::read,
+    io::Write,
+    path::PathBuf,
+    process::{Command, Stdio},
+    time::Instant,
+};
 
 use log::info;
-use oxc_sourcemap::SourceMap;
 use rolldown::{
     ModuleType,
     plugin::{HookUsage, Plugin},
@@ -37,64 +42,60 @@ impl Plugin for TailwindPlugin {
             .iter()
             .any(|entry| entry.canonicalize().unwrap().to_string_lossy() == args.id)
         {
+            let content = read(args.id).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to read Tailwind CSS input file '{}': {}",
+                    &args.id, e
+                )
+            });
+
             let start_tailwind = Instant::now();
             let mut command = Command::new(&self.tailwind_path);
-            command.args(["--input", args.id]);
+            command.args(["--input", "-", "--output", "-"]);
 
             // Add minify in production, source maps in development
             if !crate::is_dev() {
                 command.arg("--minify");
             }
-            if crate::is_dev() {
-                command.arg("--map");
+
+            let tailwind_command = command
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+
+            let mut child = tailwind_command
+                .spawn()
+                .expect("Failed to spawn Tailwind CSS process");
+
+            {
+                let stdin = child
+                    .stdin
+                    .as_mut()
+                    .expect("Failed to open stdin for Tailwind CSS");
+                stdin
+                    .write_all(&content)
+                    .expect("Failed to write to Tailwind CSS stdin");
             }
 
-            let tailwind_output = command.output()
-                    .unwrap_or_else(|e| {
-                        // TODO: Return a proper error instead of panicking
-                        let args_str = if crate::is_dev() {
-                            format!("['--input', '{}', '--map']", args.id)
-                        } else {
-                            format!("['--input', '{}', '--minify']", args.id)
-                        };
-                        panic!(
-                            "Failed to execute Tailwind CSS command, is it installed and is the path to its binary correct?\nCommand: '{}', Args: {}. Error: {}",
-                            &self.tailwind_path.display(),
-                            args_str,
-                            e
-                        )
-            });
+            let output = child
+                .wait_with_output()
+                .expect("Failed to read Tailwind CSS process output");
 
-            if !tailwind_output.status.success() {
-                let stderr = String::from_utf8_lossy(&tailwind_output.stderr);
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
                 let error_message = format!(
                     "Tailwind CSS process failed with status {}: {}",
-                    tailwind_output.status, stderr
+                    output.status, stderr
                 );
                 panic!("{}", error_message);
             }
 
             info!("Tailwind took {:?}", start_tailwind.elapsed());
 
-            let output = String::from_utf8_lossy(&tailwind_output.stdout);
-            let (code, map) = if let Some((code, map)) = output.split_once("/*# sourceMappingURL") {
-                (code.to_string(), Some(map.to_string()))
-            } else {
-                (output.to_string(), None)
-            };
-
-            if let Some(map) = map {
-                let source_map = SourceMap::from_json_string(&map).ok();
-
-                return Ok(Some(rolldown::plugin::HookTransformOutput {
-                    code: Some(code),
-                    map: source_map,
-                    ..Default::default()
-                }));
-            }
+            let output = String::from_utf8_lossy(&output.stdout);
 
             return Ok(Some(rolldown::plugin::HookTransformOutput {
-                code: Some(code),
+                code: Some(output.into_owned()),
                 ..Default::default()
             }));
         }
