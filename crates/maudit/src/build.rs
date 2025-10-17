@@ -11,7 +11,7 @@ use std::{
 use crate::{
     BuildOptions, BuildOutput,
     assets::{
-        self, RouteAssets, TailwindPlugin, TailwindProcessor,
+        self, NodeSidecar, RouteAssets, TailwindPlugin,
         image_cache::{IMAGE_CACHE_DIR, ImageCache},
     },
     build::images::process_image,
@@ -52,6 +52,19 @@ pub async fn build(
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
     let build_start = Instant::now();
     let mut build_metadata = BuildOutput::new(build_start);
+
+    // Start sidecar in the background (don't wait, don't block)
+    let sidecar_result: Result<Arc<NodeSidecar>, String> =
+        NodeSidecar::new(options.node_sidecar_path.clone())
+            .map(Arc::new)
+            .map_err(|e| e.to_string());
+
+    let sidecar_error = if let Err(e) = &sidecar_result {
+        warn!(target: "build", "Failed to start Node sidecar (will error later if needed): {}", e);
+        Some(e.clone())
+    } else {
+        None
+    };
 
     // Create a directory for the output
     trace!(target: "build", "Setting up required directories...");
@@ -117,7 +130,6 @@ pub async fn build(
     let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
     let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
     let mut has_tailwind_assets = false;
-    let mut tailwind_processor: Option<Arc<TailwindProcessor>> = None;
 
     let mut page_count = 0;
 
@@ -151,13 +163,8 @@ pub async fn build(
 
                 info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
-                if page_assets.has_tailwind_assets() && !has_tailwind_assets {
+                if page_assets.has_tailwind_assets() {
                     has_tailwind_assets = true;
-                    let processor = Arc::new(TailwindProcessor::new(
-                        options.assets.tailwind_binary_path.clone(),
-                    )?);
-
-                    tailwind_processor = Some(processor);
                 }
 
                 build_pages_images.extend(page_assets.images);
@@ -216,13 +223,8 @@ pub async fn build(
                     page_count += 1;
                 }
 
-                if page_assets.has_tailwind_assets() && !has_tailwind_assets {
+                if page_assets.has_tailwind_assets() {
                     has_tailwind_assets = true;
-                    let processor = Arc::new(TailwindProcessor::new(
-                        options.assets.tailwind_binary_path.clone(),
-                    )?);
-
-                    tailwind_processor = Some(processor);
                 }
 
                 build_pages_images.extend(page_assets.images);
@@ -233,6 +235,15 @@ pub async fn build(
     }
 
     info!(target: "pages", "{}", format!("generated {} pages in {}", page_count,  format_elapsed_time(pages_start.elapsed(), &section_format_options)).bold());
+
+    // Check if we need Tailwind but sidecar failed to start
+    if has_tailwind_assets && sidecar_error.is_some() {
+        return Err(format!(
+            "Tailwind assets detected but Node sidecar failed to start: {}",
+            sidecar_error.unwrap()
+        )
+        .into());
+    }
 
     if (!build_pages_images.is_empty())
         || !build_pages_styles.is_empty()
@@ -292,9 +303,13 @@ pub async fn build(
                 })
                 .collect::<Vec<PathBuf>>();
 
-            let plugins = if let Some(processor) = tailwind_processor {
-                vec![Arc::new(TailwindPlugin::new(tailwind_entries, processor))
-                    as Arc<dyn rolldown::plugin::Pluginable>]
+            let plugins = if has_tailwind_assets {
+                // Unwrap is safe here because we checked for errors earlier
+                let sidecar = sidecar_result.as_ref().unwrap();
+                vec![
+                    Arc::new(TailwindPlugin::new(tailwind_entries, Arc::clone(sidecar)))
+                        as Arc<dyn rolldown::plugin::Pluginable>,
+                ]
             } else {
                 vec![]
             };

@@ -1,5 +1,3 @@
-#! /usr/bin/env node
-
 import * as readline from "node:readline";
 import {
 	handleTailwindMessage,
