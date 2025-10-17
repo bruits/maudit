@@ -7,15 +7,13 @@ use xxhash_rust::xxh3::xxh3_64;
 
 mod image;
 pub mod image_cache;
-mod node_sidecar;
 mod script;
 mod style;
 mod tailwind;
 pub use image::{Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt};
-pub use node_sidecar::NodeSidecar;
 pub use script::Script;
 pub use style::{Style, StyleOptions};
-pub use tailwind::TailwindPlugin;
+pub use tailwind::{TailwindPlugin, TailwindProcessor};
 
 use crate::{AssetHashingStrategy, BuildOptions};
 

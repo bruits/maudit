@@ -7,6 +7,3 @@ project.tar
 
 flamegraph.svg
 profile.json.gz
-
-maudit-sidecar
-maudit-sidecar.exe

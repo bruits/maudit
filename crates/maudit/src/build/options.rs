@@ -55,9 +55,6 @@ pub struct BuildOptions {
     /// At the speed Maudit operates at, not cleaning the output directory may offer a significant performance improvement at the cost of potentially serving stale content.
     pub clean_output_dir: bool,
 
-    /// Path to the Maudit sidecar binary. If not set, will use `./node_modules/.bin/maudit-node`.
-    pub node_sidecar_path: PathBuf,
-
     pub assets: AssetsOptions,
 }
 
@@ -75,6 +72,11 @@ impl BuildOptions {
 
 #[derive(Clone)]
 pub struct AssetsOptions {
+    /// Path to [the TailwindCSS CLI binary](https://tailwindcss.com/docs/installation/tailwind-cli). By default `tailwindcss`, which assumes you've installed it globally (for example, through Homebrew) and that it is in your `PATH`.
+    ///
+    /// This is commonly set to `./node_modules/.bin/tailwindcss` or similar, in order to use a locally installed version.
+    pub tailwind_binary_path: PathBuf,
+
     /// Directory inside the output directory to place built assets in.
     /// Defaults to `_maudit`.
     ///
@@ -98,6 +100,7 @@ pub enum AssetHashingStrategy {
 impl Default for AssetsOptions {
     fn default() -> Self {
         Self {
+            tailwind_binary_path: "tailwindcss".into(),
             assets_dir: "_maudit".into(),
             hashing_strategy: if is_dev() {
                 AssetHashingStrategy::FastImprecise
@@ -131,7 +134,6 @@ impl Default for BuildOptions {
             output_dir: "dist".into(),
             static_dir: "static".into(),
             clean_output_dir: true,
-            node_sidecar_path: "./node_modules/.bin/maudit-node".into(),
             assets: AssetsOptions::default(),
         }
     }
