@@ -346,6 +346,11 @@ fn calculate_hash(path: &Path, options: Option<&HashConfig>) -> String {
             }
             HashAssetType::Style(opts) => {
                 buf.push(opts.tailwind as u8);
+
+                if opts.tailwind {
+                    // If Tailwind is enabled for that style, we can't calculate the hash purely from the file content, as the final output will depend on the Tailwind configuration and the content of the entire project. So we'll add a random thing to the hash to ensure always a new hash. The way to fix this would be to calculate the hash based on the final output CSS after Tailwind processing, but that'd require holding a lot of pages in memory, transforming after we're done with bundling all assets, etc. Which: Does not feel good. Until a better solution, the hash changing on each build when Tailwind is involved will have to do.
+                    buf.extend_from_slice(&Instant::now().elapsed().as_nanos().to_le_bytes());
+                }
             }
             HashAssetType::Script => { /* No extra options for scripts yet */ }
         }
@@ -641,6 +646,30 @@ mod tests {
         assert_ne!(
             hash1, hash2,
             "Different content should produce different hashes"
+        );
+    }
+
+    #[test]
+    fn test_tailwind_hash_changes_every_time() {
+        let temp_dir = setup_temp_dir();
+        let style_path = temp_dir.join("tailwind_style.css");
+        std::fs::write(&style_path, "body { background: blue; }").unwrap();
+
+        let mut page_assets = RouteAssets::new(&RouteAssetsOptions::default());
+
+        // Add the same tailwind style multiple times with small delays
+        let style1 =
+            page_assets.add_style_with_options(&style_path, StyleOptions { tailwind: true });
+
+        // Small delay to ensure different timestamp
+        std::thread::sleep(std::time::Duration::from_millis(1));
+
+        let style2 =
+            page_assets.add_style_with_options(&style_path, StyleOptions { tailwind: true });
+
+        assert_ne!(
+            style1.hash, style2.hash,
+            "Tailwind styles should produce different hashes due to time-based component"
         );
     }
 }
