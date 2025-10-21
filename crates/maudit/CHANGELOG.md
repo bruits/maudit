@@ -1,5 +1,12 @@
 # maudit
 
+## 0.6.3 — 2025-10-21
+
+### Patch changes
+
+- [371c3e3](https://github.com/bruits/maudit/commit/371c3e39202d5d28c156376ee38aceacbd1d10d3) Makes it so styles using Tailwind always have a different hash between builds in order to avoid stale content — Thanks @Princesseuh!
+- [d69679a](https://github.com/bruits/maudit/commit/d69679aec307a7650ae203357e808cb62d5eff4e) Return a newtype around a String when using `Image.render()` so that images can be used directly in supported templating languages — Thanks @Princesseuh!
+
 ## 0.6.2
 
 ### Patch changes
