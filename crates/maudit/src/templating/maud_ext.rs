@@ -1,8 +1,8 @@
-use maud::{Markup, Render, html};
+use maud::{Markup, PreEscaped, Render, html};
 
 use crate::{
     GENERATOR,
-    assets::{Asset, Script, Style},
+    assets::{Asset, RenderedImage, Script, Style},
     route::RenderResult,
 };
 
@@ -19,6 +19,12 @@ impl Render for Script {
         html! {
             script src=(self.url()) type="module" {}
         }
+    }
+}
+
+impl Render for RenderedImage {
+    fn render(&self) -> Markup {
+        PreEscaped(self.to_string())
     }
 }
 

@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::hash::Hash;
 use std::{path::PathBuf, sync::OnceLock, time::Instant};
 
@@ -128,6 +129,7 @@ impl Image {
         get_placeholder(&self.path)
     }
 
+    // Get the dimensions of an image. Note that at this time, unsupported file formats such as SVGs will return (0, 0).
     pub fn dimensions(&self) -> (u32, u32) {
         image_dimensions(&self.path).unwrap_or((0, 0))
     }
@@ -435,16 +437,50 @@ fn thumbhash_to_png(thumbhash_rgba: &(usize, usize, Vec<u8>)) -> Vec<u8> {
 
 /// Trait to render an image with an alt text.
 pub trait RenderWithAlt {
-    fn render(&self, alt: &str) -> String;
+    /// Render the image as an HTML `<img>` tag with the given alt text.
+    fn render(&self, alt: &str) -> RenderedImage;
+}
+
+/// Newtype around a String representing a rendered image HTML tag.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenderedImage(String);
+
+impl From<String> for RenderedImage {
+    fn from(value: String) -> Self {
+        RenderedImage(value)
+    }
+}
+
+impl Display for RenderedImage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 impl RenderWithAlt for Image {
-    fn render(&self, alt: &str) -> String {
+    fn render(&self, alt: &str) -> RenderedImage {
         let (width, height) = self.dimensions();
 
+        // HACK: Only include width and height attributes if they are greater than 0
+        // This is to workaround the fact that some unsupported image formats by `image` will return (0, 0)
+        let width_attr = if width > 0 {
+            format!(r#" width="{width}""#)
+        } else {
+            String::new()
+        };
+
+        let height_attr = if height > 0 {
+            format!(r#" height="{height}""#)
+        } else {
+            String::new()
+        };
+
         format!(
-            r#"<img src="{}" width="{}" height="{}" loading="lazy" decoding="async" alt="{}"/>"#,
-            self.url, width, height, alt
-        )
+            r#"<img src="{src}"{width_attr}{height_attr} loading="lazy" decoding="async" alt="{alt}"/>"#,
+            src = self.url,
+            width_attr = width_attr,
+            height_attr = height_attr,
+            alt = alt
+        ).into()
     }
 }
