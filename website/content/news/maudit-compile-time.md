@@ -16,7 +16,7 @@ Yes, **but**, there are a few things to consider:
 - The slow completely cold compile and download are rare (much like you don't run `npm install` before every build)
 - Incremental warm builds are not that slow (< 3s~), and do not necessarily get slower as your website gets larger. The same blog with 5000 and 5 articles compile in the same amount of time (unless they're 5000 different pages and layouts, in which case, well)
 
-And most importantly: **Not every change require recompilation.** Updating your Markdown content, updating frontend JavaScript or CSS, updating some images assets all don't require recompilation and are most definitely more common changes than changing your project's logic.
+And most importantly: **Not every change requires recompilation.** Updating your Markdown content, updating frontend JavaScript or CSS, updating some images assets all don't require recompilation and are most definitely more common changes than changing your project's logic.
 
 ## Workarounds
 
