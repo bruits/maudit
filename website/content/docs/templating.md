@@ -28,7 +28,7 @@ impl Route for Index {
 }
 ```
 
-Maudit implements the `Render` trait for scripts and styles, allowing one to use them directly in Maud templates.
+Maudit implements the `Render` trait for images, scripts and styles, allowing one to use them directly in Maud templates.
 
 ```rs
 use maud::{html, Markup};
@@ -40,9 +40,11 @@ pub struct Index;
 impl Route for Index {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let style = ctx.add_style("style.css");
+        let image = ctx.add_image("logo.png");
 
         html! {
             (style) // Will render to a <link> tag for the CSS file
+            (image.render("The logo of my product")) // Will render to an <img> tag for the image
         }
     }
 }
@@ -55,8 +57,8 @@ To use Maud with Maudit, install Maud into your project by adding it to your `Ca
 maud = "0.27"
 ```
 
-The `maud` feature is enabled by default. If you have disabled default features, you can enable it manually:
+The `maud` feature is enabled by default. If you have disabled default features, you can enable it manually by editing your `Cargo.toml`:
 
 ```toml
-maudit = { version = "0.6", features = ["maud"] }
+maudit = { version = "...", features = ["maud"] }
 ```

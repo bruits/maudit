@@ -10,7 +10,7 @@ pub mod image_cache;
 mod script;
 mod style;
 mod tailwind;
-pub use image::{Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt};
+pub use image::{Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt, RenderedImage};
 pub use script::Script;
 pub use style::{Style, StyleOptions};
 pub use tailwind::TailwindPlugin;
