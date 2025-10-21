@@ -1,5 +1,11 @@
 # maudit-cli
 
+## 0.6.2 — 2025-10-21
+
+### Patch changes
+
+- [6922bb3](https://github.com/bruits/maudit/commit/6922bb34bd42f1c1f1aa854f6ac77171b2c19ad0) Fixes fingerprinted assets reloading unnecessarily in development by introducing immutable cache headers on them — Thanks @Princesseuh!
+
 ## 0.6.1 — 2025-10-06
 
 ### Patch changes
