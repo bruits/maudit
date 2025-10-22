@@ -58,14 +58,13 @@ pub fn build_website(
                 }
             }
             RouteType::Dynamic => {
-                // The `get_pages` method returns all the possible pages for this route, along with their parameters and properties.
-                // It is very common for dynamic pages to be based on content, for instance a blog post page that has one route per blog post.
-                // As such, we create a mini PageContext that includes the content sources, so that the route can use them to generate its pages.
-
-                // Every page of a route may share a reference to the same RouteAssets instance, as it can help with caching.
+                // Every page of a dynamic route may share a reference to the same RouteAssets instance, as it can help with caching.
                 // However, it is not stricly necessary, and you may want to instead create a new instance of RouteAssets especially if you were to parallelize the building of pages.
                 let mut page_assets = RouteAssets::new(&route_assets_options);
 
+                // The `get_pages` method returns all the possible pages for this route, along with their parameters and properties.
+                // It is very common for dynamic pages to be based on content, for instance a blog post page that has one route per blog post.
+                // As such, we create essentially a mini `PageContext` through `DynamicRouteContext` that includes the content sources, so that the page can use them to generate its routes.
                 let mut dynamic_ctx = DynamicRouteContext {
                     content: &content_sources,
                     assets: &mut page_assets,
