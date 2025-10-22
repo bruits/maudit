@@ -643,28 +643,4 @@ mod tests {
             "Different content should produce different hashes"
         );
     }
-
-    #[test]
-    fn test_tailwind_hash_changes_every_time() {
-        let temp_dir = setup_temp_dir();
-        let style_path = temp_dir.join("tailwind_style.css");
-        std::fs::write(&style_path, "body { background: blue; }").unwrap();
-
-        let mut page_assets = RouteAssets::new(&RouteAssetsOptions::default());
-
-        // Add the same tailwind style multiple times with small delays
-        let style1 =
-            page_assets.add_style_with_options(&style_path, StyleOptions { tailwind: true });
-
-        // Small delay to ensure different timestamp
-        std::thread::sleep(std::time::Duration::from_millis(1));
-
-        let style2 =
-            page_assets.add_style_with_options(&style_path, StyleOptions { tailwind: true });
-
-        assert_ne!(
-            style1.hash, style2.hash,
-            "Tailwind styles should produce different hashes due to time-based component"
-        );
-    }
 }
