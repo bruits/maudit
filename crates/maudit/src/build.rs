@@ -15,7 +15,7 @@ use crate::{
         image_cache::{IMAGE_CACHE_DIR, ImageCache},
     },
     build::images::process_image,
-    content::{ContentSources, RouteContent},
+    content::ContentSources,
     is_dev,
     logging::print_title,
     route::{
@@ -130,14 +130,13 @@ pub async fn build(
             RouteType::Static => {
                 let route_start = Instant::now();
 
-                let content = RouteContent::new(content_sources);
                 let mut page_assets = RouteAssets::new(&route_assets_options);
 
                 let params = PageParams::default();
                 let url = cached_route.url(&params);
 
                 let result = route.build(&mut PageContext::from_static_route(
-                    &content,
+                    content_sources,
                     &mut page_assets,
                     &url,
                     &options.base_url,
@@ -162,11 +161,10 @@ pub async fn build(
                 page_count += 1;
             }
             RouteType::Dynamic => {
-                let content = RouteContent::new(content_sources);
                 let mut page_assets = RouteAssets::new(&route_assets_options);
 
                 let pages = route.get_pages(&mut DynamicRouteContext {
-                    content: &content,
+                    content: content_sources,
                     assets: &mut page_assets,
                 });
 
@@ -184,7 +182,7 @@ pub async fn build(
 
                     let content = route.build(&mut PageContext::from_dynamic_route(
                         &page,
-                        &content,
+                        content_sources,
                         &mut page_assets,
                         &url,
                         &options.base_url,

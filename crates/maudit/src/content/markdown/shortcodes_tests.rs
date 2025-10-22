@@ -57,20 +57,16 @@ mod tests {
     where
         F: for<'a> FnOnce(&mut PageContext<'a>) -> R,
     {
-        use crate::{
-            assets::RouteAssets,
-            content::{ContentSources, RouteContent},
-        };
+        use crate::{assets::RouteAssets, content::ContentSources};
 
         let content_sources = ContentSources::new(vec![]);
-        let content = RouteContent::new(&content_sources);
         let mut page_assets = RouteAssets::new(&RouteAssetsOptions {
             assets_dir: "assets".into(),
             ..Default::default()
         });
 
         let mut ctx = PageContext {
-            content: &content,
+            content: &content_sources,
             assets: &mut page_assets,
             current_path: &"/test".to_string(),
             params: &(),
