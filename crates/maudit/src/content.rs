@@ -84,123 +84,6 @@ pub use highlight::{HighlightOptions, highlight_code};
 /// ```
 pub use maudit_macros::markdown_entry;
 
-/// Main struct to access all content sources.
-///
-/// Can only access content sources that have been defined in [`coronate()`](crate::coronate).
-///
-/// # Example
-/// In `main.rs`:
-/// ```rust
-/// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
-/// use maudit::content::{markdown_entry, glob_markdown};
-///
-/// #[markdown_entry]
-/// pub struct ArticleContent {
-///   pub title: String,
-///   pub description: String,
-/// }
-///
-/// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
-///   coronate(
-///     routes![],
-///     content_sources![
-///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
-///     ],
-///     BuildOptions::default(),
-///   )
-/// }
-/// ```
-///
-/// In a page:
-/// ```rust
-/// use maudit::route::prelude::*;
-/// # use maudit::content::markdown_entry;
-/// #
-/// # #[markdown_entry]
-/// # pub struct ArticleContent {
-/// #    pub title: String,
-/// #    pub description: String,
-/// # }
-///
-/// #[route("/articles/[article]")]
-/// pub struct Article;
-///
-/// #[derive(Params, Clone)]
-/// pub struct ArticleParams {
-///     pub article: String,
-/// }
-///
-/// impl Route<ArticleParams> for Article {
-///    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-///      let params = ctx.params::<ArticleParams>();
-///      let articles = ctx.content.get_source::<ArticleContent>("articles");
-///      let article = articles.get_entry(&params.article);
-///      article.render(ctx)
-///   }
-///
-///   fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<ArticleParams> {
-///     let articles = ctx.content.get_source::<ArticleContent>("articles");
-///
-///     articles.into_pages(|entry| Page::from_params(ArticleParams {
-///        article: entry.id.clone(),
-///     }))
-///   }
-/// }
-/// ```
-pub struct RouteContent<'a> {
-    sources: &'a [Box<dyn ContentSourceInternal>],
-}
-
-impl RouteContent<'_> {
-    pub fn new(sources: &'_ ContentSources) -> RouteContent<'_> {
-        RouteContent {
-            sources: sources.sources(),
-        }
-    }
-
-    pub fn get_untyped_source(&self, name: &str) -> &ContentSource<Untyped> {
-        self.sources
-            .iter()
-            .find_map(
-                |source| match source.as_any().downcast_ref::<ContentSource<Untyped>>() {
-                    Some(source) if source.name == name => Some(source),
-                    _ => None,
-                },
-            )
-            .unwrap_or_else(|| panic!("Content source with name '{}' not found", name))
-    }
-
-    pub fn get_untyped_source_safe(&self, name: &str) -> Option<&ContentSource<Untyped>> {
-        self.sources.iter().find_map(|source| {
-            match source.as_any().downcast_ref::<ContentSource<Untyped>>() {
-                Some(source) if source.name == name => Some(source),
-                _ => None,
-            }
-        })
-    }
-
-    pub fn get_source<T: 'static>(&self, name: &str) -> &ContentSource<T> {
-        self.sources
-            .iter()
-            .find_map(
-                |source| match source.as_any().downcast_ref::<ContentSource<T>>() {
-                    Some(source) if source.name == name => Some(source),
-                    _ => None,
-                },
-            )
-            .unwrap_or_else(|| panic!("Content source with name '{}' not found", name))
-    }
-
-    pub fn get_source_safe<T: 'static>(&self, name: &str) -> Option<&ContentSource<T>> {
-        self.sources.iter().find_map(|source| {
-            match source.as_any().downcast_ref::<ContentSource<T>>() {
-                Some(source) if source.name == name => Some(source),
-                _ => None,
-            }
-        })
-    }
-}
-
 /// A single entry of a [`ContentSource`].
 ///
 /// ## Example
@@ -283,12 +166,12 @@ impl<T> ContentEntry<T> for Entry<T> {}
 
 /// Trait for contexts that can provide access to content
 pub trait ContentContext {
-    fn content(&self) -> &RouteContent<'_>;
+    fn content(&self) -> &ContentSources;
     fn assets(&mut self) -> &mut RouteAssets;
 }
 
 impl ContentContext for PageContext<'_> {
-    fn content(&self) -> &RouteContent<'_> {
+    fn content(&self) -> &ContentSources {
         self.content
     }
 
@@ -298,7 +181,7 @@ impl ContentContext for PageContext<'_> {
 }
 
 impl ContentContext for DynamicRouteContext<'_> {
-    fn content(&self) -> &RouteContent<'_> {
+    fn content(&self) -> &ContentSources {
         self.content
     }
 
@@ -331,15 +214,34 @@ impl<T> EntryInner<T> {
 /// Represents an untyped content source.
 pub type Untyped = FxHashMap<String, String>;
 
-/// Represents a collection of content sources.
+/// Main struct to access all content sources.
 ///
-/// Mostly seen as the return type of [`content_sources!`](crate::content_sources).
+/// # Example
+/// In `main.rs`:
+/// ```rust
+/// use maudit::{coronate, content_sources, routes, BuildOptions, BuildOutput};
+/// use maudit::content::{markdown_entry, glob_markdown};
 ///
-/// ## Example
+/// #[markdown_entry]
+/// pub struct ArticleContent {
+///   pub title: String,
+///   pub description: String,
+/// }
+///
+/// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
+///   coronate(
+///     routes![],
+///     content_sources![
+///       "articles" => glob_markdown::<ArticleContent>("content/articles/*.md")
+///     ],
+///     BuildOptions::default(),
+///   )
+/// }
+/// ```
+///
+/// In a page:
 /// ```rust
 /// use maudit::route::prelude::*;
-/// use maudit::content::{glob_markdown, ContentSources};
-/// use maudit::content_sources;
 /// # use maudit::content::markdown_entry;
 /// #
 /// # #[markdown_entry]
@@ -348,9 +250,31 @@ pub type Untyped = FxHashMap<String, String>;
 /// #    pub description: String,
 /// # }
 ///
-/// pub fn content_sources() -> ContentSources {
-///   content_sources!["docs" => glob_markdown::<ArticleContent>("content/docs/*.md")]
+/// #[route("/articles/[article]")]
+/// pub struct Article;
+///
+/// #[derive(Params, Clone)]
+/// pub struct ArticleParams {
+///     pub article: String,
 /// }
+///
+/// impl Route<ArticleParams> for Article {
+///    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+///      let params = ctx.params::<ArticleParams>();
+///      let articles = ctx.content.get_source::<ArticleContent>("articles");
+///      let article = articles.get_entry(&params.article);
+///      article.render(ctx)
+///   }
+///
+///   fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<ArticleParams> {
+///     let articles = ctx.content.get_source::<ArticleContent>("articles");
+///
+///     articles.into_pages(|entry| Page::from_params(ArticleParams {
+///        article: entry.id.clone(),
+///     }))
+///   }
+/// }
+/// ```
 pub struct ContentSources(pub Vec<Box<dyn ContentSourceInternal>>);
 
 impl From<Vec<Box<dyn ContentSourceInternal>>> for ContentSources {
@@ -376,6 +300,35 @@ impl ContentSources {
         for source in &mut self.0 {
             source.init();
         }
+    }
+
+    pub fn get_untyped_source(&self, name: &str) -> &ContentSource<Untyped> {
+        self.get_source::<Untyped>(name)
+    }
+
+    pub fn get_untyped_source_safe(&self, name: &str) -> Option<&ContentSource<Untyped>> {
+        self.get_source_safe::<Untyped>(name)
+    }
+
+    pub fn get_source<T: 'static>(&self, name: &str) -> &ContentSource<T> {
+        self.0
+            .iter()
+            .find_map(
+                |source| match source.as_any().downcast_ref::<ContentSource<T>>() {
+                    Some(source) if source.name == name => Some(source),
+                    _ => None,
+                },
+            )
+            .unwrap_or_else(|| panic!("Content source with name '{}' not found", name))
+    }
+
+    pub fn get_source_safe<T: 'static>(&self, name: &str) -> Option<&ContentSource<T>> {
+        self.0.iter().find_map(
+            |source| match source.as_any().downcast_ref::<ContentSource<T>>() {
+                Some(source) if source.name == name => Some(source),
+                _ => None,
+            },
+        )
     }
 }
 

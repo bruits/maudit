@@ -2,7 +2,7 @@
 //!
 //! Every route must implement the [`Route`] trait. Then, pages can be passed to [`coronate()`](crate::coronate), through the [`routes!`](crate::routes) macro, to be built.
 use crate::assets::{Asset, RouteAssets};
-use crate::content::{Entry, RouteContent};
+use crate::content::{ContentSources, Entry};
 use crate::errors::BuildError;
 use crate::routing::{
     extract_params_from_raw_route, get_route_type_from_route_params, guess_if_route_is_endpoint,
@@ -269,7 +269,7 @@ where
 pub struct PageContext<'a> {
     pub params: &'a dyn Any,
     pub props: &'a dyn Any,
-    pub content: &'a RouteContent<'a>,
+    pub content: &'a ContentSources,
     pub assets: &'a mut RouteAssets,
     /// The current path being rendered, e.g. `/articles/my-article`.
     pub current_path: &'a String,
@@ -279,7 +279,7 @@ pub struct PageContext<'a> {
 
 impl<'a> PageContext<'a> {
     pub fn from_static_route(
-        content: &'a RouteContent,
+        content: &'a ContentSources,
         assets: &'a mut RouteAssets,
         current_path: &'a String,
         base_url: &'a Option<String>,
@@ -296,7 +296,7 @@ impl<'a> PageContext<'a> {
 
     pub fn from_dynamic_route(
         dynamic_page: &'a PagesResult,
-        content: &'a RouteContent,
+        content: &'a ContentSources,
         assets: &'a mut RouteAssets,
         current_path: &'a String,
         base_url: &'a Option<String>,
@@ -384,7 +384,7 @@ impl<'a> PageContext<'a> {
 /// }
 /// ```
 pub struct DynamicRouteContext<'a> {
-    pub content: &'a RouteContent<'a>,
+    pub content: &'a ContentSources,
     pub assets: &'a mut RouteAssets,
 }
 
@@ -741,9 +741,7 @@ pub mod prelude {
         Asset, Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt, Script, Style,
         StyleOptions,
     };
-    pub use crate::content::{
-        ContentContext, ContentEntry, Entry, EntryInner, MarkdownContent, RouteContent,
-    };
+    pub use crate::content::{ContentContext, ContentEntry, Entry, EntryInner, MarkdownContent};
     pub use maudit_macros::{Params, route};
 }
 
