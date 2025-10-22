@@ -7,7 +7,7 @@ use maudit::route::prelude::*;
 use crate::layout::SeoMeta;
 use crate::layout::layout;
 
-const CODE_EXAMPLE: &str = r#"use maudit::prelude::*;
+const CODE_EXAMPLE: &str = r#"use maudit::route::prelude::*;
 
 #[route("/")]
 pub struct Home;
