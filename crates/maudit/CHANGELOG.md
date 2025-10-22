@@ -1,5 +1,11 @@
 # maudit
 
+## 0.6.4 — 2025-10-22
+
+### Patch changes
+
+- [5e9fc15](https://github.com/bruits/maudit/commit/5e9fc15fc1fa7a8f20f3ad261904235debf6d3db) Revert Tailwind hashing change, need a different solution. In the meantime, it is possible for stale content to appear with Tailwind in select conditions. — Thanks @Princesseuh!
+
 ## 0.6.3 — 2025-10-21
 
 ### Patch changes
