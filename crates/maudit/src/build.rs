@@ -10,10 +10,7 @@ use std::{
 
 use crate::{
     BuildOptions, BuildOutput,
-    assets::{
-        self, RouteAssets, TailwindPlugin,
-        image_cache::{IMAGE_CACHE_DIR, ImageCache},
-    },
+    assets::{self, RouteAssets, TailwindPlugin, image_cache::ImageCache},
     build::images::process_image,
     content::ContentSources,
     is_dev,
@@ -296,7 +293,9 @@ pub async fn build(
     if !build_pages_images.is_empty() {
         print_title("processing images");
 
-        let _ = fs::create_dir_all(IMAGE_CACHE_DIR);
+        // Initialize the image cache with the configured directory
+        ImageCache::init_with_cache_dir(&options.assets.image_cache_dir);
+        let _ = fs::create_dir_all(ImageCache::get_cache_dir());
 
         let start_time = Instant::now();
         build_pages_images.par_iter().for_each(|image| {
