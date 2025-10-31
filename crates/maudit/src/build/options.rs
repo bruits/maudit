@@ -67,7 +67,6 @@ impl BuildOptions {
             assets_dir: self.assets.assets_dir.clone(),
             output_assets_dir: self.output_dir.join(&self.assets.assets_dir),
             hashing_strategy: self.assets.hashing_strategy,
-            image_cache: None,
         }
     }
 }

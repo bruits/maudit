@@ -34,7 +34,6 @@ pub struct RouteAssetsOptions {
     pub assets_dir: PathBuf,
     pub output_assets_dir: PathBuf,
     pub hashing_strategy: AssetHashingStrategy,
-    pub image_cache: Option<Arc<Mutex<ImageCache>>>,
 }
 
 impl Default for RouteAssetsOptions {
@@ -46,16 +45,18 @@ impl Default for RouteAssetsOptions {
             assets_dir: default_build_options.assets.assets_dir,
             output_assets_dir: page_assets_options.assets_dir,
             hashing_strategy: page_assets_options.hashing_strategy,
-            image_cache: None,
         }
     }
 }
 
 impl RouteAssets {
-    pub fn new(assets_options: &RouteAssetsOptions) -> Self {
+    pub fn new(
+        assets_options: &RouteAssetsOptions,
+        image_cache: Option<Arc<Mutex<ImageCache>>>,
+    ) -> Self {
         Self {
             options: assets_options.clone(),
-            image_cache: assets_options.image_cache.clone(),
+            image_cache,
             ..Default::default()
         }
     }
@@ -629,7 +630,7 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let style_path = temp_dir.join("style.css");
 
-        let mut page_assets = RouteAssets::new(&RouteAssetsOptions::default());
+        let mut page_assets = RouteAssets::new(&RouteAssetsOptions::default(), None);
 
         // Test that different tailwind options produce different hashes
         let style_default = page_assets.add_style(&style_path);
@@ -654,7 +655,7 @@ mod tests {
         std::fs::write(&style1_path, content).unwrap();
         std::fs::write(&style2_path, content).unwrap();
 
-        let mut page_assets = RouteAssets::new(&RouteAssetsOptions::default());
+        let mut page_assets = RouteAssets::new(&RouteAssetsOptions::default(), None);
 
         let style1 = page_assets.add_style(&style1_path);
         let style2 = page_assets.add_style(&style2_path);
@@ -671,7 +672,7 @@ mod tests {
         let style_path = temp_dir.join("dynamic_style.css");
 
         let assets_options = RouteAssetsOptions::default();
-        let mut page_assets = RouteAssets::new(&assets_options);
+        let mut page_assets = RouteAssets::new(&assets_options, None);
 
         // Write first content and get hash
         std::fs::write(&style_path, "body { background: red; }").unwrap();

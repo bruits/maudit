@@ -60,10 +60,13 @@ mod tests {
         use crate::{assets::RouteAssets, content::ContentSources};
 
         let content_sources = ContentSources::new(vec![]);
-        let mut page_assets = RouteAssets::new(&RouteAssetsOptions {
-            assets_dir: "assets".into(),
-            ..Default::default()
-        });
+        let mut page_assets = RouteAssets::new(
+            &RouteAssetsOptions {
+                assets_dir: "assets".into(),
+                ..Default::default()
+            },
+            None,
+        );
 
         let mut ctx = PageContext {
             content: &content_sources,

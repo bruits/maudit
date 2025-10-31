@@ -77,8 +77,7 @@ pub async fn build(
     let _ = fs::create_dir_all(image_cache.lock().unwrap().get_cache_dir());
 
     // Create route_assets_options with the image cache
-    let mut route_assets_options = options.route_assets_options();
-    route_assets_options.image_cache = Some(image_cache.clone());
+    let route_assets_options = options.route_assets_options();
 
     info!(target: "build", "Output directory: {}", options.output_dir.display());
 
@@ -138,14 +137,15 @@ pub async fn build(
             RouteType::Static => {
                 let route_start = Instant::now();
 
-                let mut page_assets = RouteAssets::new(&route_assets_options);
+                let mut route_assets =
+                    RouteAssets::new(&route_assets_options, Some(image_cache.clone()));
 
                 let params = PageParams::default();
                 let url = cached_route.url(&params);
 
                 let result = route.build(&mut PageContext::from_static_route(
                     content_sources,
-                    &mut page_assets,
+                    &mut route_assets,
                     &url,
                     &options.base_url,
                 ))?;
@@ -156,9 +156,9 @@ pub async fn build(
 
                 info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
-                build_pages_images.extend(page_assets.images);
-                build_pages_scripts.extend(page_assets.scripts);
-                build_pages_styles.extend(page_assets.styles);
+                build_pages_images.extend(route_assets.images);
+                build_pages_scripts.extend(route_assets.scripts);
+                build_pages_styles.extend(route_assets.styles);
 
                 build_metadata.add_page(
                     route.route_raw().to_string(),
@@ -169,7 +169,8 @@ pub async fn build(
                 page_count += 1;
             }
             RouteType::Dynamic => {
-                let mut page_assets = RouteAssets::new(&route_assets_options);
+                let mut page_assets =
+                    RouteAssets::new(&route_assets_options, Some(image_cache.clone()));
 
                 let pages = route.get_pages(&mut DynamicRouteContext {
                     content: content_sources,
