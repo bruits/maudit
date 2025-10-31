@@ -26,7 +26,7 @@ pub fn build_website(
         match route.route_type() {
             RouteType::Static => {
                 // Our page does not include content or assets, but we'll set those up for future use.
-                let mut page_assets = RouteAssets::new(&route_assets_options);
+                let mut page_assets = RouteAssets::new(&route_assets_options, None);
 
                 // Static and dynamic routes share the same interface for building, but static routes do not require any parameters.
                 // As such, we can just pass an empty set of parameters (the default for PageParams).
@@ -60,7 +60,7 @@ pub fn build_website(
             RouteType::Dynamic => {
                 // Every page of a dynamic route may share a reference to the same RouteAssets instance, as it can help with caching.
                 // However, it is not stricly necessary, and you may want to instead create a new instance of RouteAssets especially if you were to parallelize the building of pages.
-                let mut page_assets = RouteAssets::new(&route_assets_options);
+                let mut page_assets = RouteAssets::new(&route_assets_options, None);
 
                 // The `get_pages` method returns all the possible pages for this route, along with their parameters and properties.
                 // It is very common for dynamic pages to be based on content, for instance a blog post page that has one route per blog post.

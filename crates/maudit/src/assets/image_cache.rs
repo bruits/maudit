@@ -1,15 +1,13 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::{Mutex, OnceLock},
 };
 
 use base64::Engine;
 use log::debug;
 use rustc_hash::FxHashMap;
 
-// TODO: Make this configurable
-pub const IMAGE_CACHE_DIR: &str = "target/maudit_cache/images";
+pub const DEFAULT_IMAGE_CACHE_DIR: &str = "target/maudit_cache/images";
 pub const MANIFEST_VERSION: u32 = 1;
 
 #[derive(Debug, Clone)]
@@ -31,17 +29,26 @@ struct CacheManifest {
     transformed: FxHashMap<PathBuf, TransformedImageCacheEntry>,
 }
 
+#[derive(Debug)]
 pub struct ImageCache {
     manifest: CacheManifest,
     cache_dir: PathBuf,
     manifest_path: PathBuf,
 }
 
-static CACHE: OnceLock<Mutex<ImageCache>> = OnceLock::new();
+impl Default for ImageCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl ImageCache {
-    fn new() -> Self {
-        let cache_dir = PathBuf::from(IMAGE_CACHE_DIR);
+    pub fn new() -> Self {
+        Self::with_cache_dir(DEFAULT_IMAGE_CACHE_DIR)
+    }
+
+    pub fn with_cache_dir<P: AsRef<Path>>(cache_dir_path: P) -> Self {
+        let cache_dir = cache_dir_path.as_ref().to_path_buf();
         let manifest_path = cache_dir.join("manifest");
 
         // Create cache directory if it doesn't exist
@@ -141,11 +148,7 @@ impl ImageCache {
         Some(manifest)
     }
 
-    fn get() -> &'static Mutex<ImageCache> {
-        CACHE.get_or_init(|| Mutex::new(ImageCache::new()))
-    }
-
-    fn save_manifest(&self) {
+    pub fn save_manifest(&self) {
         let mut content = String::new();
         content.push_str("# Maudit Image Cache Manifest\n");
         content.push_str(&format!("version = {}\n\n", MANIFEST_VERSION));
@@ -172,32 +175,27 @@ impl ImageCache {
     }
 
     /// Get cached placeholder or None if not found
-    pub fn get_placeholder(src_path: &Path) -> Option<PlaceholderCacheEntry> {
-        let cache = Self::get().lock().ok()?;
-        let entry = cache.manifest.placeholders.get(src_path)?;
+    pub fn get_placeholder(&self, src_path: &Path) -> Option<PlaceholderCacheEntry> {
+        let entry = self.manifest.placeholders.get(src_path)?;
 
         debug!("Placeholder cache hit for {}", src_path.display());
         Some(entry.clone())
     }
 
     /// Cache a placeholder
-    pub fn cache_placeholder(src_path: &Path, thumbhash: Vec<u8>) {
-        if let Ok(mut cache) = Self::get().lock() {
-            let entry = PlaceholderCacheEntry { thumbhash };
+    pub fn cache_placeholder(&mut self, src_path: &Path, thumbhash: Vec<u8>) {
+        let entry = PlaceholderCacheEntry { thumbhash };
 
-            cache
-                .manifest
-                .placeholders
-                .insert(src_path.to_path_buf(), entry);
-            cache.save_manifest();
-            debug!("Cached placeholder for {}", src_path.display());
-        }
+        self.manifest
+            .placeholders
+            .insert(src_path.to_path_buf(), entry);
+        self.save_manifest();
+        debug!("Cached placeholder for {}", src_path.display());
     }
 
     /// Get cached transformed image path or None if not found
-    pub fn get_transformed_image(final_filename: &Path) -> Option<PathBuf> {
-        let cache = Self::get().lock().ok()?;
-        let entry = cache.manifest.transformed.get(final_filename)?;
+    pub fn get_transformed_image(&self, final_filename: &Path) -> Option<PathBuf> {
+        let entry = self.manifest.transformed.get(final_filename)?;
 
         // Check if cached file still exists
         if !entry.cached_path.exists() {
@@ -217,32 +215,82 @@ impl ImageCache {
     }
 
     /// Cache a transformed image
-    pub fn cache_transformed_image(final_filename: &Path, cached_path: PathBuf) {
-        if let Ok(mut cache) = Self::get().lock() {
-            let entry = TransformedImageCacheEntry {
-                cached_path: cached_path.clone(),
-            };
+    pub fn cache_transformed_image(&mut self, final_filename: &Path, cached_path: PathBuf) {
+        let entry = TransformedImageCacheEntry {
+            cached_path: cached_path.clone(),
+        };
 
-            cache
-                .manifest
-                .transformed
-                .insert(final_filename.to_path_buf(), entry);
-            cache.save_manifest();
-            debug!(
-                "Cached transformed image {} -> {}",
-                final_filename.display(),
-                cached_path.display()
-            );
-        }
+        self.manifest
+            .transformed
+            .insert(final_filename.to_path_buf(), entry);
+        self.save_manifest();
+        debug!(
+            "Cached transformed image {} -> {}",
+            final_filename.display(),
+            cached_path.display()
+        );
+    }
+
+    /// Get the cache directory path
+    pub fn get_cache_dir(&self) -> &PathBuf {
+        &self.cache_dir
     }
 
     /// Generate a cache path for a transformed image
-    pub fn generate_cache_path(final_filename: &Path) -> PathBuf {
-        if let Ok(cache) = Self::get().lock() {
-            cache.cache_dir.join(final_filename)
-        } else {
-            // Fallback path if cache is unavailable
-            PathBuf::from(IMAGE_CACHE_DIR).join(final_filename)
-        }
+    pub fn generate_cache_path(&self, final_filename: &Path) -> PathBuf {
+        self.cache_dir.join(final_filename)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn test_configurable_cache_dir() {
+        let custom_cache_dir = env::temp_dir().join("test_maudit_cache");
+
+        // Create cache with custom directory
+        let cache = ImageCache::with_cache_dir(&custom_cache_dir);
+
+        // Verify the cache directory is set correctly
+        assert_eq!(cache.get_cache_dir(), &custom_cache_dir);
+
+        // Test generate_cache_path uses the custom directory
+        let test_filename = Path::new("test_image.jpg");
+        let cache_path = cache.generate_cache_path(test_filename);
+        assert_eq!(cache_path, custom_cache_dir.join(test_filename));
+    }
+
+    #[test]
+    fn test_default_cache_dir() {
+        // Test that the default cache directory is used when no custom dir is set
+        let expected_default = PathBuf::from(DEFAULT_IMAGE_CACHE_DIR);
+
+        // Create a new cache instance (will use default)
+        let cache = ImageCache::new();
+        assert_eq!(cache.cache_dir, expected_default);
+    }
+
+    #[test]
+    fn test_build_options_integration() {
+        use crate::build::options::{AssetsOptions, BuildOptions};
+
+        // Test that BuildOptions can configure the cache directory
+        let custom_cache = PathBuf::from("/tmp/custom_maudit_cache");
+        let build_options = BuildOptions {
+            assets: AssetsOptions {
+                image_cache_dir: custom_cache.clone(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        // Create cache with build options
+        let cache = ImageCache::with_cache_dir(&build_options.assets.image_cache_dir);
+
+        // Verify it uses the configured directory
+        assert_eq!(cache.get_cache_dir(), &custom_cache);
     }
 }

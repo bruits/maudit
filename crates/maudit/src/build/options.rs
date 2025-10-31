@@ -35,6 +35,7 @@ use crate::{assets::RouteAssetsOptions, is_dev};
 ///       assets: AssetsOptions {
 ///         assets_dir: "_assets".into(),
 ///         tailwind_binary_path: "./node_modules/.bin/tailwindcss".into(),
+///         image_cache_dir: ".cache/maudit/images".into(),
 ///         ..Default::default()
 ///       },
 ///       ..Default::default()
@@ -83,6 +84,12 @@ pub struct AssetsOptions {
     /// Note that this value is not automatically joined with the `output_dir` in `BuildOptions`. Use [`BuildOptions::route_assets_options()`] to get a `RouteAssetsOptions` with the correct final path.
     pub assets_dir: PathBuf,
 
+    /// Directory to use for image cache storage.
+    /// Defaults to `target/maudit_cache/images`.
+    ///
+    /// This cache is used to store processed images and their placeholders to speed up subsequent builds.
+    pub image_cache_dir: PathBuf,
+
     /// Strategy to use when hashing assets for fingerprinting.
     ///
     /// Defaults to [`AssetHashingStrategy::Precise`] in production builds, and [`AssetHashingStrategy::FastImprecise`] in development builds. Note that this means that the cache isn't shared between dev and prod builds by default, if you have a lot of assets you may want to set this to the same value in both environments.
@@ -102,6 +109,7 @@ impl Default for AssetsOptions {
         Self {
             tailwind_binary_path: "tailwindcss".into(),
             assets_dir: "_maudit".into(),
+            image_cache_dir: "target/maudit_cache/images".into(),
             hashing_strategy: if is_dev() {
                 AssetHashingStrategy::FastImprecise
             } else {
