@@ -1,13 +1,17 @@
 use std::fmt::Display;
 use std::hash::Hash;
-use std::{path::PathBuf, sync::OnceLock, time::Instant};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex, OnceLock},
+    time::Instant,
+};
 
 use base64::Engine;
 use image::{GenericImageView, image_dimensions};
 use log::debug;
 use thumbhash::{rgba_to_thumb_hash, thumb_hash_to_average_rgba, thumb_hash_to_rgba};
 
-use super::image_cache::ImageCache;
+use crate::assets::image_cache::ImageCache;
 use crate::assets::{RouteAssetsOptions, make_filename, make_final_path, make_final_url};
 use crate::is_dev;
 
@@ -78,7 +82,7 @@ pub struct ImageOptions {
 ///     }
 /// }
 /// ```
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Image {
     pub path: PathBuf,
     pub(crate) hash: String,
@@ -87,7 +91,34 @@ pub struct Image {
     pub(crate) filename: PathBuf,
     pub(crate) url: String,
     pub(crate) build_path: PathBuf,
+    pub(crate) cache: Option<Arc<Mutex<ImageCache>>>,
 }
+
+impl Hash for Image {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.path.hash(state);
+        self.hash.hash(state);
+        self.options.hash(state);
+        self.filename.hash(state);
+        self.url.hash(state);
+        self.build_path.hash(state);
+        // Intentionally exclude cache from hash
+    }
+}
+
+impl PartialEq for Image {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path
+            && self.hash == other.hash
+            && self.options == other.options
+            && self.filename == other.filename
+            && self.url == other.url
+            && self.build_path == other.build_path
+        // Intentionally exclude cache from equality
+    }
+}
+
+impl Eq for Image {}
 
 impl Image {
     pub fn new(
@@ -95,6 +126,7 @@ impl Image {
         image_options: Option<ImageOptions>,
         hash: String,
         route_assets_options: &RouteAssetsOptions,
+        cache: Option<Arc<Mutex<ImageCache>>>,
     ) -> Self {
         let filename = make_filename(
             &path,
@@ -119,6 +151,7 @@ impl Image {
             filename,
             url,
             build_path,
+            cache,
         }
     }
 
@@ -126,7 +159,7 @@ impl Image {
     ///
     /// This uses the [ThumbHash](https://evanw.github.io/thumbhash/) algorithm to generate a very small placeholder image.
     pub fn placeholder(&self) -> ImagePlaceholder {
-        get_placeholder(&self.path)
+        get_placeholder(&self.path, self.cache.as_ref())
     }
 
     // Get the dimensions of an image. Note that at this time, unsupported file formats such as SVGs will return (0, 0).
@@ -166,6 +199,15 @@ impl Default for ImagePlaceholder {
 }
 
 impl ImagePlaceholder {
+    pub fn new(thumbhash: Vec<u8>, thumbhash_base64: String) -> Self {
+        Self {
+            thumbhash,
+            thumbhash_base64,
+            average_rgba_cache: OnceLock::new(),
+            data_uri_cache: OnceLock::new(),
+        }
+    }
+
     pub fn average_rgba(&self) -> Option<(u8, u8, u8, u8)> {
         *self.average_rgba_cache.get_or_init(|| {
             let start = Instant::now();
@@ -220,17 +262,15 @@ impl ImagePlaceholder {
     }
 }
 
-fn get_placeholder(path: &PathBuf) -> ImagePlaceholder {
-    // Check cache first
-    if let Some(cached) = ImageCache::get_placeholder(path) {
+fn get_placeholder(path: &PathBuf, cache: Option<&Arc<Mutex<ImageCache>>>) -> ImagePlaceholder {
+    // Check cache first if provided
+    if let Some(cache) = cache
+        && let Ok(cache_guard) = cache.lock()
+        && let Some(cached) = cache_guard.get_placeholder(path)
+    {
         debug!("Using cached placeholder for {}", path.display());
         let thumbhash_base64 = base64::engine::general_purpose::STANDARD.encode(&cached.thumbhash);
-        return ImagePlaceholder {
-            thumbhash: cached.thumbhash,
-            thumbhash_base64,
-            average_rgba_cache: OnceLock::new(),
-            data_uri_cache: OnceLock::new(),
-        };
+        return ImagePlaceholder::new(cached.thumbhash, thumbhash_base64);
     }
 
     let total_start = Instant::now();
@@ -289,15 +329,14 @@ fn get_placeholder(path: &PathBuf) -> ImagePlaceholder {
         path.display()
     );
 
-    // Cache the result
-    ImageCache::cache_placeholder(path, thumb_hash.clone());
-
-    ImagePlaceholder {
-        thumbhash: thumb_hash,
-        thumbhash_base64,
-        average_rgba_cache: OnceLock::new(),
-        data_uri_cache: OnceLock::new(),
+    // Cache the result if cache is provided
+    if let Some(cache) = cache
+        && let Ok(mut cache_guard) = cache.lock()
+    {
+        cache_guard.cache_placeholder(path, thumb_hash.clone());
     }
+
+    ImagePlaceholder::new(thumb_hash, thumbhash_base64)
 }
 
 /// Port of https://github.com/evanw/thumbhash/blob/a652ce6ed691242f459f468f0a8756cda3b90a82/js/thumbhash.js#L234

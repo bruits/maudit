@@ -15,7 +15,9 @@ pub use script::Script;
 pub use style::{Style, StyleOptions};
 pub use tailwind::TailwindPlugin;
 
+use crate::assets::image_cache::ImageCache;
 use crate::{AssetHashingStrategy, BuildOptions};
+use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 pub struct RouteAssets {
@@ -24,6 +26,7 @@ pub struct RouteAssets {
     pub styles: FxHashSet<Style>,
 
     pub(crate) options: RouteAssetsOptions,
+    pub(crate) image_cache: Option<Arc<Mutex<ImageCache>>>,
 }
 
 #[derive(Clone)]
@@ -31,6 +34,7 @@ pub struct RouteAssetsOptions {
     pub assets_dir: PathBuf,
     pub output_assets_dir: PathBuf,
     pub hashing_strategy: AssetHashingStrategy,
+    pub image_cache: Option<Arc<Mutex<ImageCache>>>,
 }
 
 impl Default for RouteAssetsOptions {
@@ -42,6 +46,7 @@ impl Default for RouteAssetsOptions {
             assets_dir: default_build_options.assets.assets_dir,
             output_assets_dir: page_assets_options.assets_dir,
             hashing_strategy: page_assets_options.hashing_strategy,
+            image_cache: None,
         }
     }
 }
@@ -50,7 +55,41 @@ impl RouteAssets {
     pub fn new(assets_options: &RouteAssetsOptions) -> Self {
         Self {
             options: assets_options.clone(),
+            image_cache: assets_options.image_cache.clone(),
             ..Default::default()
+        }
+    }
+
+    /// Get a placeholder for an image using the cache if available
+    pub fn get_image_placeholder(
+        &self,
+        image_path: &Path,
+    ) -> Option<crate::assets::image::ImagePlaceholder> {
+        if let Some(cache) = &self.image_cache
+            && let Ok(cache) = cache.lock()
+        {
+            use base64::Engine;
+            use log::debug;
+
+            if let Some(cached) = cache.get_placeholder(image_path) {
+                debug!("Using cached placeholder for {}", image_path.display());
+                let thumbhash_base64 =
+                    base64::engine::general_purpose::STANDARD.encode(&cached.thumbhash);
+                return Some(crate::assets::image::ImagePlaceholder::new(
+                    cached.thumbhash,
+                    thumbhash_base64,
+                ));
+            }
+        }
+        None
+    }
+
+    /// Cache a placeholder for an image
+    pub fn cache_image_placeholder(&self, image_path: &Path, thumbhash: Vec<u8>) {
+        if let Some(cache) = &self.image_cache
+            && let Ok(mut cache) = cache.lock()
+        {
+            cache.cache_placeholder(image_path, thumbhash);
         }
     }
 
@@ -97,7 +136,13 @@ impl RouteAssets {
             }),
         );
 
-        let image = Image::new(image_path, image_options, hash, &self.options);
+        let image = Image::new(
+            image_path,
+            image_options,
+            hash,
+            &self.options,
+            self.image_cache.clone(),
+        );
 
         self.images.insert(image.clone());
 

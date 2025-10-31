@@ -24,6 +24,7 @@ use colored::{ColoredString, Colorize};
 use log::{debug, info, trace, warn};
 use rolldown::{Bundler, BundlerOptions, InputItem, ModuleType};
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::sync::Mutex;
 
 use crate::assets::Asset;
 use crate::logging::{FormatElapsedTimeOptions, format_elapsed_time};
@@ -69,7 +70,15 @@ pub async fn build(
         None
     };
 
-    let route_assets_options = options.route_assets_options();
+    // Create the image cache early so it can be shared across routes
+    let image_cache = Arc::new(Mutex::new(ImageCache::with_cache_dir(
+        &options.assets.image_cache_dir,
+    )));
+    let _ = fs::create_dir_all(image_cache.lock().unwrap().get_cache_dir());
+
+    // Create route_assets_options with the image cache
+    let mut route_assets_options = options.route_assets_options();
+    route_assets_options.image_cache = Some(image_cache.clone());
 
     info!(target: "build", "Output directory: {}", options.output_dir.display());
 
@@ -110,6 +119,8 @@ pub async fn build(
         ..Default::default()
     };
 
+    // This is okay, build_pages_images Hash function does not use mutable data
+    #[allow(clippy::mutable_key_type)]
     let mut build_pages_images: FxHashSet<assets::Image> = FxHashSet::default();
     let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
     let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
@@ -293,10 +304,6 @@ pub async fn build(
     if !build_pages_images.is_empty() {
         print_title("processing images");
 
-        // Initialize the image cache with the configured directory
-        ImageCache::init_with_cache_dir(&options.assets.image_cache_dir);
-        let _ = fs::create_dir_all(ImageCache::get_cache_dir());
-
         let start_time = Instant::now();
         build_pages_images.par_iter().for_each(|image| {
             let start_process = Instant::now();
@@ -306,7 +313,12 @@ pub async fn build(
                 let final_filename = image.filename();
 
                 // Check cache for transformed images
-                if let Some(cached_path) = ImageCache::get_transformed_image(final_filename) {
+                let cached_path = {
+                    let cache = image_cache.lock().unwrap();
+                    cache.get_transformed_image(final_filename)
+                };
+
+                if let Some(cached_path) = cached_path {
                     // Copy from cache instead of processing
                     if fs::copy(&cached_path, dest_path).is_ok() {
                         info!(target: "assets", "{} -> {} (from cache) {}", image.path().to_string_lossy(), dest_path.to_string_lossy().dimmed(), format_elapsed_time(start_process.elapsed(), &route_format_options).dimmed());
@@ -315,7 +327,10 @@ pub async fn build(
                 }
 
                 // Generate cache path for transformed image
-                let cache_path = ImageCache::generate_cache_path(final_filename);
+                let cache_path = {
+                    let cache = image_cache.lock().unwrap();
+                    cache.generate_cache_path(final_filename)
+                };
 
                 // Process image directly to cache
                 process_image(image, &cache_path, image_options);
@@ -323,7 +338,8 @@ pub async fn build(
                 // Copy from cache to destination
                 if fs::copy(&cache_path, dest_path).is_ok() {
                     // Cache the processed image path
-                    ImageCache::cache_transformed_image(final_filename, cache_path);
+                    let mut cache = image_cache.lock().unwrap();
+                    cache.cache_transformed_image(final_filename, cache_path);
                 } else {
                     debug!("Failed to copy from cache {} to dest {}", cache_path.display(), dest_path.display());
                 }
