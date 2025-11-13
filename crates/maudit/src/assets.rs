@@ -17,7 +17,6 @@ pub use tailwind::TailwindPlugin;
 
 use crate::assets::image_cache::ImageCache;
 use crate::{AssetHashingStrategy, BuildOptions};
-use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 pub struct RouteAssets {
@@ -26,7 +25,7 @@ pub struct RouteAssets {
     pub styles: FxHashSet<Style>,
 
     pub(crate) options: RouteAssetsOptions,
-    pub(crate) image_cache: Option<Arc<Mutex<ImageCache>>>,
+    pub(crate) image_cache: Option<ImageCache>,
 }
 
 #[derive(Clone)]
@@ -50,10 +49,7 @@ impl Default for RouteAssetsOptions {
 }
 
 impl RouteAssets {
-    pub fn new(
-        assets_options: &RouteAssetsOptions,
-        image_cache: Option<Arc<Mutex<ImageCache>>>,
-    ) -> Self {
+    pub fn new(assets_options: &RouteAssetsOptions, image_cache: Option<ImageCache>) -> Self {
         Self {
             options: assets_options.clone(),
             image_cache,
@@ -66,9 +62,7 @@ impl RouteAssets {
         &self,
         image_path: &Path,
     ) -> Option<crate::assets::image::ImagePlaceholder> {
-        if let Some(cache) = &self.image_cache
-            && let Ok(cache) = cache.lock()
-        {
+        if let Some(cache) = &self.image_cache {
             use base64::Engine;
             use log::debug;
 
@@ -87,9 +81,7 @@ impl RouteAssets {
 
     /// Cache a placeholder for an image
     pub fn cache_image_placeholder(&self, image_path: &Path, thumbhash: Vec<u8>) {
-        if let Some(cache) = &self.image_cache
-            && let Ok(mut cache) = cache.lock()
-        {
+        if let Some(cache) = &self.image_cache {
             cache.cache_placeholder(image_path, thumbhash);
         }
     }

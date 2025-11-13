@@ -24,7 +24,6 @@ use colored::{ColoredString, Colorize};
 use log::{debug, info, trace, warn};
 use rolldown::{Bundler, BundlerOptions, InputItem, ModuleType};
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::sync::Mutex;
 
 use crate::assets::Asset;
 use crate::logging::{FormatElapsedTimeOptions, format_elapsed_time};
@@ -71,10 +70,8 @@ pub async fn build(
     };
 
     // Create the image cache early so it can be shared across routes
-    let image_cache = Arc::new(Mutex::new(ImageCache::with_cache_dir(
-        &options.assets.image_cache_dir,
-    )));
-    let _ = fs::create_dir_all(image_cache.lock().unwrap().get_cache_dir());
+    let image_cache = ImageCache::with_cache_dir(&options.assets.image_cache_dir);
+    let _ = fs::create_dir_all(image_cache.get_cache_dir());
 
     // Create route_assets_options with the image cache
     let route_assets_options = options.route_assets_options();
@@ -314,10 +311,7 @@ pub async fn build(
                 let final_filename = image.filename();
 
                 // Check cache for transformed images
-                let cached_path = {
-                    let cache = image_cache.lock().unwrap();
-                    cache.get_transformed_image(final_filename)
-                };
+                let cached_path = image_cache.get_transformed_image(final_filename);
 
                 if let Some(cached_path) = cached_path {
                     // Copy from cache instead of processing
@@ -328,10 +322,7 @@ pub async fn build(
                 }
 
                 // Generate cache path for transformed image
-                let cache_path = {
-                    let cache = image_cache.lock().unwrap();
-                    cache.generate_cache_path(final_filename)
-                };
+                let cache_path = image_cache.generate_cache_path(final_filename);
 
                 // Process image directly to cache
                 process_image(image, &cache_path, image_options);
@@ -339,8 +330,7 @@ pub async fn build(
                 // Copy from cache to destination
                 if fs::copy(&cache_path, dest_path).is_ok() {
                     // Cache the processed image path
-                    let mut cache = image_cache.lock().unwrap();
-                    cache.cache_transformed_image(final_filename, cache_path);
+                    image_cache.cache_transformed_image(final_filename, cache_path);
                 } else {
                     debug!("Failed to copy from cache {} to dest {}", cache_path.display(), dest_path.display());
                 }

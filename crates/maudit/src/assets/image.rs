@@ -1,10 +1,6 @@
 use std::fmt::Display;
 use std::hash::Hash;
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex, OnceLock},
-    time::Instant,
-};
+use std::{path::PathBuf, sync::OnceLock, time::Instant};
 
 use base64::Engine;
 use image::{GenericImageView, image_dimensions};
@@ -91,7 +87,7 @@ pub struct Image {
     pub(crate) filename: PathBuf,
     pub(crate) url: String,
     pub(crate) build_path: PathBuf,
-    pub(crate) cache: Option<Arc<Mutex<ImageCache>>>,
+    pub(crate) cache: Option<ImageCache>,
 }
 
 impl Hash for Image {
@@ -126,7 +122,7 @@ impl Image {
         image_options: Option<ImageOptions>,
         hash: String,
         route_assets_options: &RouteAssetsOptions,
-        cache: Option<Arc<Mutex<ImageCache>>>,
+        cache: Option<ImageCache>,
     ) -> Self {
         let filename = make_filename(
             &path,
@@ -262,11 +258,10 @@ impl ImagePlaceholder {
     }
 }
 
-fn get_placeholder(path: &PathBuf, cache: Option<&Arc<Mutex<ImageCache>>>) -> ImagePlaceholder {
+fn get_placeholder(path: &PathBuf, cache: Option<&ImageCache>) -> ImagePlaceholder {
     // Check cache first if provided
     if let Some(cache) = cache
-        && let Ok(cache_guard) = cache.lock()
-        && let Some(cached) = cache_guard.get_placeholder(path)
+        && let Some(cached) = cache.get_placeholder(path)
     {
         debug!("Using cached placeholder for {}", path.display());
         let thumbhash_base64 = base64::engine::general_purpose::STANDARD.encode(&cached.thumbhash);
@@ -330,10 +325,8 @@ fn get_placeholder(path: &PathBuf, cache: Option<&Arc<Mutex<ImageCache>>>) -> Im
     );
 
     // Cache the result if cache is provided
-    if let Some(cache) = cache
-        && let Ok(mut cache_guard) = cache.lock()
-    {
-        cache_guard.cache_placeholder(path, thumb_hash.clone());
+    if let Some(cache) = cache {
+        cache.cache_placeholder(path, thumb_hash.clone());
     }
 
     ImagePlaceholder::new(thumb_hash, thumbhash_base64)

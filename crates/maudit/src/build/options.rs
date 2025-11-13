@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 use crate::{assets::RouteAssetsOptions, is_dev};
 
@@ -109,7 +109,11 @@ impl Default for AssetsOptions {
         Self {
             tailwind_binary_path: "tailwindcss".into(),
             assets_dir: "_maudit".into(),
-            image_cache_dir: "target/maudit_cache/images".into(),
+            image_cache_dir: {
+                let target_dir =
+                    env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string());
+                PathBuf::from(target_dir).join("maudit_cache/images")
+            },
             hashing_strategy: if is_dev() {
                 AssetHashingStrategy::FastImprecise
             } else {

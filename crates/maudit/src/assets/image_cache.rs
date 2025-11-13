@@ -1,6 +1,7 @@
 use std::{
     fs,
     path::{Path, PathBuf},
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use base64::Engine;
@@ -30,11 +31,14 @@ struct CacheManifest {
 }
 
 #[derive(Debug)]
-pub struct ImageCache {
+struct ImageCacheInner {
     manifest: CacheManifest,
     cache_dir: PathBuf,
     manifest_path: PathBuf,
 }
+
+#[derive(Debug, Clone)]
+pub struct ImageCache(Arc<Mutex<ImageCacheInner>>);
 
 impl Default for ImageCache {
     fn default() -> Self {
@@ -42,7 +46,7 @@ impl Default for ImageCache {
     }
 }
 
-impl ImageCache {
+impl ImageCacheInner {
     pub fn new() -> Self {
         Self::with_cache_dir(DEFAULT_IMAGE_CACHE_DIR)
     }
@@ -242,6 +246,65 @@ impl ImageCache {
     }
 }
 
+impl ImageCache {
+    pub fn new() -> Self {
+        Self(Arc::new(Mutex::new(ImageCacheInner::new())))
+    }
+
+    pub fn with_cache_dir<P: AsRef<Path>>(cache_dir_path: P) -> Self {
+        Self(Arc::new(Mutex::new(ImageCacheInner::with_cache_dir(
+            cache_dir_path,
+        ))))
+    }
+
+    fn lock_inner(&'_ self) -> MutexGuard<'_, ImageCacheInner> {
+        match self.0.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                debug!("ImageCache mutex was poisoned, recovering");
+                // This should be fine for our use case because the data won't be corrupted
+                poisoned.into_inner()
+            }
+        }
+    }
+
+    /// Get cached placeholder or None if not found
+    pub fn get_placeholder(&self, src_path: &Path) -> Option<PlaceholderCacheEntry> {
+        self.lock_inner().get_placeholder(src_path)
+    }
+
+    /// Cache a placeholder
+    pub fn cache_placeholder(&self, src_path: &Path, thumbhash: Vec<u8>) {
+        self.lock_inner().cache_placeholder(src_path, thumbhash)
+    }
+
+    /// Get cached transformed image path or None if not found
+    pub fn get_transformed_image(&self, final_filename: &Path) -> Option<PathBuf> {
+        self.lock_inner().get_transformed_image(final_filename)
+    }
+
+    /// Cache a transformed image
+    pub fn cache_transformed_image(&self, final_filename: &Path, cached_path: PathBuf) {
+        self.lock_inner()
+            .cache_transformed_image(final_filename, cached_path)
+    }
+
+    /// Get the cache directory path
+    pub fn get_cache_dir(&self) -> PathBuf {
+        self.lock_inner().get_cache_dir().clone()
+    }
+
+    /// Generate a cache path for a transformed image
+    pub fn generate_cache_path(&self, final_filename: &Path) -> PathBuf {
+        self.lock_inner().generate_cache_path(final_filename)
+    }
+
+    /// Save the manifest to disk
+    pub fn save_manifest(&self) {
+        self.lock_inner().save_manifest()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -255,7 +318,7 @@ mod tests {
         let cache = ImageCache::with_cache_dir(&custom_cache_dir);
 
         // Verify the cache directory is set correctly
-        assert_eq!(cache.get_cache_dir(), &custom_cache_dir);
+        assert_eq!(cache.get_cache_dir(), custom_cache_dir);
 
         // Test generate_cache_path uses the custom directory
         let test_filename = Path::new("test_image.jpg");
@@ -270,7 +333,7 @@ mod tests {
 
         // Create a new cache instance (will use default)
         let cache = ImageCache::new();
-        assert_eq!(cache.cache_dir, expected_default);
+        assert_eq!(cache.get_cache_dir(), expected_default);
     }
 
     #[test]
@@ -291,6 +354,26 @@ mod tests {
         let cache = ImageCache::with_cache_dir(&build_options.assets.image_cache_dir);
 
         // Verify it uses the configured directory
-        assert_eq!(cache.get_cache_dir(), &custom_cache);
+        assert_eq!(cache.get_cache_dir(), custom_cache);
+    }
+
+    #[test]
+    fn test_thread_safety() {
+        use std::thread;
+
+        let cache = ImageCache::new();
+        let cache_clone = cache.clone();
+
+        // Test that the cache can be shared across threads
+        let handle = thread::spawn(move || {
+            cache_clone.cache_placeholder(Path::new("test.jpg"), vec![1, 2, 3, 4]);
+        });
+
+        handle.join().unwrap();
+
+        // Verify the placeholder was cached
+        let entry = cache.get_placeholder(Path::new("test.jpg"));
+        assert!(entry.is_some());
+        assert_eq!(entry.unwrap().thumbhash, vec![1, 2, 3, 4]);
     }
 }
