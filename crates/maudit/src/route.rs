@@ -567,6 +567,11 @@ fn build_url_with_params(
         );
     }
 
+    // Ensure leading slash
+    if !result.starts_with('/') {
+        result.insert(0, '/');
+    }
+
     result.replace("//", "/")
 }
 
@@ -599,8 +604,15 @@ fn build_file_path_with_params(
     let mut path = PathBuf::from(output_dir);
     path.extend(route.split('/').filter(|s| !s.is_empty()));
 
+    // Determine file name and extension
+    // If it's a endpoint, we trust that the user provided the full file name (e.g. "sitemap.xml" or "data.json")
+    // Otherwise, it depends on the trailing slash, if the user provided one, they want name/index.html, otherwise name.html
     if !is_endpoint {
-        path.push("index.html");
+        if route.ends_with("/") {
+            path.push("index.html");
+        } else {
+            path.set_extension("html");
+        }
     }
 
     path
@@ -859,7 +871,7 @@ mod tests {
         let route_params = PageParams(params);
 
         let output_dir = Path::new("/dist");
-        let expected = Path::new("/dist/articles/hello-world/index.html");
+        let expected = Path::new("/dist/articles/hello-world.html");
 
         assert_eq!(page.file_path(&route_params, output_dir), expected);
     }
@@ -876,7 +888,7 @@ mod tests {
         let route_params = PageParams(params);
 
         let output_dir = Path::new("/dist");
-        let expected = Path::new("/dist/articles/tags/rust/2/index.html");
+        let expected = Path::new("/dist/articles/tags/rust/2.html");
 
         assert_eq!(page.file_path(&route_params, output_dir), expected);
     }
@@ -1023,7 +1035,7 @@ mod tests {
         let route_params = PageParams(params);
 
         let output_dir = Path::new("/dist");
-        let expected = Path::new("/dist/articles/hello-world/2/index.html");
+        let expected = Path::new("/dist/articles/hello-world/2.html");
 
         assert_eq!(page.file_path(&route_params, output_dir), expected);
     }
