@@ -1,11 +1,11 @@
 [package]
 name = "oubli"
 description = "Library for generating documentation websites with Maudit."
-version = "0.1.7"
+version = "0.1.8"
 license = "MIT"
 edition = "2024"
 
 [dependencies]
-maudit = { path = "../maudit", version = "0.6.4" }
+maudit = { path = "../maudit", version = "0.6.5" }
 maud = { workspace = true }
 serde = { workspace = true }
