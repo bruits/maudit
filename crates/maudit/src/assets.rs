@@ -15,6 +15,7 @@ pub use script::Script;
 pub use style::{Style, StyleOptions};
 pub use tailwind::TailwindPlugin;
 
+use crate::assets::image_cache::ImageCache;
 use crate::{AssetHashingStrategy, BuildOptions};
 
 #[derive(Default)]
@@ -24,6 +25,7 @@ pub struct RouteAssets {
     pub styles: FxHashSet<Style>,
 
     pub(crate) options: RouteAssetsOptions,
+    pub(crate) image_cache: Option<ImageCache>,
 }
 
 #[derive(Clone)]
@@ -47,10 +49,40 @@ impl Default for RouteAssetsOptions {
 }
 
 impl RouteAssets {
-    pub fn new(assets_options: &RouteAssetsOptions) -> Self {
+    pub fn new(assets_options: &RouteAssetsOptions, image_cache: Option<ImageCache>) -> Self {
         Self {
             options: assets_options.clone(),
+            image_cache,
             ..Default::default()
+        }
+    }
+
+    /// Get a placeholder for an image using the cache if available
+    pub fn get_image_placeholder(
+        &self,
+        image_path: &Path,
+    ) -> Option<crate::assets::image::ImagePlaceholder> {
+        if let Some(cache) = &self.image_cache {
+            use base64::Engine;
+            use log::debug;
+
+            if let Some(cached) = cache.get_placeholder(image_path) {
+                debug!("Using cached placeholder for {}", image_path.display());
+                let thumbhash_base64 =
+                    base64::engine::general_purpose::STANDARD.encode(&cached.thumbhash);
+                return Some(crate::assets::image::ImagePlaceholder::new(
+                    cached.thumbhash,
+                    thumbhash_base64,
+                ));
+            }
+        }
+        None
+    }
+
+    /// Cache a placeholder for an image
+    pub fn cache_image_placeholder(&self, image_path: &Path, thumbhash: Vec<u8>) {
+        if let Some(cache) = &self.image_cache {
+            cache.cache_placeholder(image_path, thumbhash);
         }
     }
 
@@ -97,7 +129,13 @@ impl RouteAssets {
             }),
         );
 
-        let image = Image::new(image_path, image_options, hash, &self.options);
+        let image = Image::new(
+            image_path,
+            image_options,
+            hash,
+            &self.options,
+            self.image_cache.clone(),
+        );
 
         self.images.insert(image.clone());
 
@@ -584,7 +622,7 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let style_path = temp_dir.join("style.css");
 
-        let mut page_assets = RouteAssets::new(&RouteAssetsOptions::default());
+        let mut page_assets = RouteAssets::new(&RouteAssetsOptions::default(), None);
 
         // Test that different tailwind options produce different hashes
         let style_default = page_assets.add_style(&style_path);
@@ -609,7 +647,7 @@ mod tests {
         std::fs::write(&style1_path, content).unwrap();
         std::fs::write(&style2_path, content).unwrap();
 
-        let mut page_assets = RouteAssets::new(&RouteAssetsOptions::default());
+        let mut page_assets = RouteAssets::new(&RouteAssetsOptions::default(), None);
 
         let style1 = page_assets.add_style(&style1_path);
         let style2 = page_assets.add_style(&style2_path);
@@ -626,7 +664,7 @@ mod tests {
         let style_path = temp_dir.join("dynamic_style.css");
 
         let assets_options = RouteAssetsOptions::default();
-        let mut page_assets = RouteAssets::new(&assets_options);
+        let mut page_assets = RouteAssets::new(&assets_options, None);
 
         // Write first content and get hash
         std::fs::write(&style_path, "body { background: red; }").unwrap();

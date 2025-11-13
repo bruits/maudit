@@ -226,7 +226,7 @@ pub fn start_new_project(dry_run: &bool) {
     info!(name: "SKIP_FORMAT", "👑 {} {}! Next steps:", "Project created".bold(), "successfully".green().to_string().bold());
     println!();
 
-    let enter_directory = if project_path != PathBuf::from(".") {
+    let enter_directory = if project_path.to_string_lossy() != "." {
         format!(
             "1. Run {} to enter your project's directory.\n2. ",
             format!("cd {}", project_path.display())
