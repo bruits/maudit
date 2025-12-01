@@ -111,14 +111,14 @@ pub fn docs_layout(
                 }
             }
 
-            div.container.mx-auto."md:grid-cols-(--docs-columns)".md:grid."min-h-[calc(100%-64px)]".px-6.md:px-0.pt-2.md:pt-0 {
-                aside.bg-linear-to-l."from-darker-white"."py-8"."h-full".border-r.border-r-borders.hidden.md:block {
+            div.container.mx-auto."md:grid-cols-(--docs-tablet-columns)"."lg:grid-cols-(--docs-columns)".md:grid."min-h-[calc(100%-64px)]".px-6.md:px-0.pt-2.md:pt-0 {
+                aside.bg-linear-to-l."from-darker-white"."py-8"."h-full".border-r.border-r-borders.hidden.md:block."md:pr-4"."lg:px-0" {
                     (left_sidebar(ctx))
                 }
-                main.w-full.max-w-larger-prose.mx-auto.md:pt-8.py-4.pb-8.md:pb-16 {
+                main.w-full.max-w-larger-prose.mx-auto.md:pt-8.py-4.pb-8.md:pb-16.md:px-6.lg:px-0 {
                     (main)
                 }
-                aside."py-8".hidden."md:block" {
+                aside."py-8".hidden."lg:block" {
                     (right_sidebar(headings))
                 }
             }
