@@ -475,7 +475,7 @@ pub trait InternalRoute {
 
     fn url(&self, params: &PageParams) -> String {
         let params_def = extract_params_from_raw_route(&self.route_raw());
-        build_url_with_params(&self.route_raw(), &params_def, params)
+        build_url_with_params(&self.route_raw(), &params_def, params, self.is_endpoint())
     }
 
     fn file_path(&self, params: &PageParams, output_dir: &Path) -> PathBuf {
@@ -545,6 +545,7 @@ fn build_url_with_params(
     route_template: &str,
     params_def: &[ParameterDef],
     params: &PageParams,
+    is_endpoint: bool,
 ) -> String {
     if params_def.is_empty() {
         return route_template.to_string();
@@ -567,7 +568,22 @@ fn build_url_with_params(
         );
     }
 
-    result.replace("//", "/")
+    // Collapse consecutive slashes
+    let parts: Vec<&str> = result.split('/').filter(|s| !s.is_empty()).collect();
+    result = parts.join("/");
+
+    // Ensure leading slash
+    if !result.starts_with('/') {
+        result.insert(0, '/');
+    }
+
+    // Ensure trailing slash for non-endpoints
+    // TODO: Remove this if we implement per-route trailing slash behavior, see build_file_path_with_params comment
+    if !is_endpoint && !result.ends_with('/') {
+        result.push('/');
+    }
+
+    result
 }
 
 fn build_file_path_with_params(
@@ -601,6 +617,14 @@ fn build_file_path_with_params(
 
     if !is_endpoint {
         path.push("index.html");
+
+        // TODO: Trailing slash behavior should be respected per route, so for instance if the user define `/blog` (no trailing slash) it should generate `/blog.html` instead of `/blog/index.html`.
+        // However, right now we don't support pretty URLs, a lot of servers don't support it either and so it's better to have a consistent behavior of always generating `index.html` files.
+        // if route.ends_with("/") {
+        //     path.push("index.html");
+        // } else {
+        //     path.set_extension("html");
+        // }
     }
 
     path
@@ -644,7 +668,12 @@ impl<'a> InternalRoute for CachedRoute<'a> {
     }
 
     fn url(&self, params: &PageParams) -> String {
-        build_url_with_params(&self.route_raw(), self.get_cached_params(), params)
+        build_url_with_params(
+            &self.route_raw(),
+            self.get_cached_params(),
+            params,
+            self.is_endpoint(),
+        )
     }
 
     fn file_path(&self, params: &PageParams, output_dir: &Path) -> PathBuf {
@@ -772,7 +801,7 @@ mod tests {
         params.insert("slug".to_string(), Some("hello-world".to_string()));
         let route_params = PageParams(params);
 
-        assert_eq!(page.url(&route_params), "/articles/hello-world");
+        assert_eq!(page.url(&route_params), "/articles/hello-world/");
     }
 
     #[test]
@@ -786,7 +815,7 @@ mod tests {
         params.insert("page".to_string(), Some("2".to_string()));
         let route_params = PageParams(params);
 
-        assert_eq!(page.url(&route_params), "/articles/tags/rust/2");
+        assert_eq!(page.url(&route_params), "/articles/tags/rust/2/");
     }
 
     #[test]
@@ -807,7 +836,7 @@ mod tests {
 
         assert_eq!(
             page.url(&route_params),
-            "/articles/tags/development-experience/1"
+            "/articles/tags/development-experience/1/"
         );
     }
 
@@ -832,7 +861,7 @@ mod tests {
         params.insert("lang".to_string(), Some("en".to_string()));
         let route_params = PageParams(params);
 
-        assert_eq!(page.url(&route_params), "/en/about");
+        assert_eq!(page.url(&route_params), "/en/about/");
     }
 
     #[test]
@@ -845,7 +874,7 @@ mod tests {
         params.insert("id".to_string(), Some("123".to_string()));
         let route_params = PageParams(params);
 
-        assert_eq!(page.url(&route_params), "/api/users/123");
+        assert_eq!(page.url(&route_params), "/api/users/123/");
     }
 
     #[test]
@@ -979,7 +1008,7 @@ mod tests {
         params.insert("page".to_string(), Some("2".to_string()));
         let route_params = PageParams(params);
 
-        assert_eq!(page.url(&route_params), "/articles/hello-world/2");
+        assert_eq!(page.url(&route_params), "/articles/hello-world/2/");
     }
 
     #[test]
@@ -1057,6 +1086,57 @@ mod tests {
 
         let output_dir = Path::new("/dist");
         let expected = Path::new("/dist/api/data.json");
+
+        assert_eq!(page.file_path(&route_params, output_dir), expected);
+    }
+
+    #[test]
+    fn test_url_collapse_consecutive_slashes() {
+        let page = TestPage {
+            route: "/articles/[category]/[slug]".to_string(),
+        };
+
+        let mut params = FxHashMap::default();
+        // Empty category should result in consecutive slashes that get collapsed
+        params.insert("category".to_string(), None);
+        params.insert("slug".to_string(), Some("hello-world".to_string()));
+        let route_params = PageParams(params);
+
+        // Should collapse // to /
+        assert_eq!(page.url(&route_params), "/articles/hello-world/");
+    }
+
+    #[test]
+    fn test_url_collapse_multiple_consecutive_slashes() {
+        let page = TestPage {
+            route: "/articles/[cat1]/[cat2]/[cat3]/[slug]".to_string(),
+        };
+
+        let mut params = FxHashMap::default();
+        // Multiple empty parameters should result in many slashes that get collapsed
+        params.insert("cat1".to_string(), None);
+        params.insert("cat2".to_string(), None);
+        params.insert("cat3".to_string(), None);
+        params.insert("slug".to_string(), Some("hello-world".to_string()));
+        let route_params = PageParams(params);
+
+        // Should collapse //// to /
+        assert_eq!(page.url(&route_params), "/articles/hello-world/");
+    }
+
+    #[test]
+    fn test_file_path_collapse_consecutive_slashes() {
+        let page = TestPage {
+            route: "/articles/[category]/[slug]".to_string(),
+        };
+
+        let mut params = FxHashMap::default();
+        params.insert("category".to_string(), None);
+        params.insert("slug".to_string(), Some("hello-world".to_string()));
+        let route_params = PageParams(params);
+
+        let output_dir = Path::new("/dist");
+        let expected = Path::new("/dist/articles/hello-world/index.html");
 
         assert_eq!(page.file_path(&route_params, output_dir), expected);
     }
