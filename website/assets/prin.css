@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+@font-face {
+    font-family: "Charter";
+    src:
+        local("Charter"),
+        url("./fonts/charter_regular.woff2") format("woff2");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
 @theme {
     --color-our-white: #fafafa;
     --color-our-black: #262421;
@@ -13,6 +23,7 @@
     --max-width-larger-prose: 75ch;
 
     --docs-columns: 0.17fr 0.72fr 0.15fr;
+    --docs-tablet-columns: 25% 75%;
 }
 
 html,
@@ -169,12 +180,6 @@ a:hover {
 
 .prose pre,
 .intro-code pre {
-    margin-left: -1.5rem;
-    margin-right: -1.5rem;
-}
-
-.prose pre,
-.intro-code pre {
     background-color: var(--color-darker-black);
     overflow-x: auto;
     padding-top: 1em;
@@ -185,6 +190,16 @@ a:hover {
     margin-bottom: 2em;
     padding-inline-start: 1.5em;
     font-size: 0.888889em;
+    margin-left: -1.5rem;
+    margin-right: -1.5rem;
+}
+
+@media (min-width: 769px) and (max-width: 1280px) {
+    .prose pre,
+    .intro-code pre {
+        margin-left: 0;
+        margin-right: 0;
+    }
 }
 
 .prose ul {

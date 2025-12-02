@@ -10,10 +10,7 @@ use std::{
 
 use crate::{
     BuildOptions, BuildOutput,
-    assets::{
-        self, RouteAssets, TailwindPlugin,
-        image_cache::{IMAGE_CACHE_DIR, ImageCache},
-    },
+    assets::{self, RouteAssets, TailwindPlugin, image_cache::ImageCache},
     build::images::process_image,
     content::ContentSources,
     is_dev,
@@ -72,6 +69,11 @@ pub async fn build(
         None
     };
 
+    // Create the image cache early so it can be shared across routes
+    let image_cache = ImageCache::with_cache_dir(&options.assets.image_cache_dir);
+    let _ = fs::create_dir_all(image_cache.get_cache_dir());
+
+    // Create route_assets_options with the image cache
     let route_assets_options = options.route_assets_options();
 
     info!(target: "build", "Output directory: {}", options.output_dir.display());
@@ -113,6 +115,8 @@ pub async fn build(
         ..Default::default()
     };
 
+    // This is okay, build_pages_images Hash function does not use mutable data
+    #[allow(clippy::mutable_key_type)]
     let mut build_pages_images: FxHashSet<assets::Image> = FxHashSet::default();
     let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
     let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
@@ -130,14 +134,15 @@ pub async fn build(
             RouteType::Static => {
                 let route_start = Instant::now();
 
-                let mut page_assets = RouteAssets::new(&route_assets_options);
+                let mut route_assets =
+                    RouteAssets::new(&route_assets_options, Some(image_cache.clone()));
 
                 let params = PageParams::default();
                 let url = cached_route.url(&params);
 
                 let result = route.build(&mut PageContext::from_static_route(
                     content_sources,
-                    &mut page_assets,
+                    &mut route_assets,
                     &url,
                     &options.base_url,
                 ))?;
@@ -148,9 +153,9 @@ pub async fn build(
 
                 info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
-                build_pages_images.extend(page_assets.images);
-                build_pages_scripts.extend(page_assets.scripts);
-                build_pages_styles.extend(page_assets.styles);
+                build_pages_images.extend(route_assets.images);
+                build_pages_scripts.extend(route_assets.scripts);
+                build_pages_styles.extend(route_assets.styles);
 
                 build_metadata.add_page(
                     route.route_raw().to_string(),
@@ -161,7 +166,8 @@ pub async fn build(
                 page_count += 1;
             }
             RouteType::Dynamic => {
-                let mut page_assets = RouteAssets::new(&route_assets_options);
+                let mut page_assets =
+                    RouteAssets::new(&route_assets_options, Some(image_cache.clone()));
 
                 let pages = route.get_pages(&mut DynamicRouteContext {
                     content: content_sources,
@@ -296,8 +302,6 @@ pub async fn build(
     if !build_pages_images.is_empty() {
         print_title("processing images");
 
-        let _ = fs::create_dir_all(IMAGE_CACHE_DIR);
-
         let start_time = Instant::now();
         build_pages_images.par_iter().for_each(|image| {
             let start_process = Instant::now();
@@ -307,7 +311,9 @@ pub async fn build(
                 let final_filename = image.filename();
 
                 // Check cache for transformed images
-                if let Some(cached_path) = ImageCache::get_transformed_image(final_filename) {
+                let cached_path = image_cache.get_transformed_image(final_filename);
+
+                if let Some(cached_path) = cached_path {
                     // Copy from cache instead of processing
                     if fs::copy(&cached_path, dest_path).is_ok() {
                         info!(target: "assets", "{} -> {} (from cache) {}", image.path().to_string_lossy(), dest_path.to_string_lossy().dimmed(), format_elapsed_time(start_process.elapsed(), &route_format_options).dimmed());
@@ -316,7 +322,7 @@ pub async fn build(
                 }
 
                 // Generate cache path for transformed image
-                let cache_path = ImageCache::generate_cache_path(final_filename);
+                let cache_path = image_cache.generate_cache_path(final_filename);
 
                 // Process image directly to cache
                 process_image(image, &cache_path, image_options);
@@ -324,7 +330,7 @@ pub async fn build(
                 // Copy from cache to destination
                 if fs::copy(&cache_path, dest_path).is_ok() {
                     // Cache the processed image path
-                    ImageCache::cache_transformed_image(final_filename, cache_path);
+                    image_cache.cache_transformed_image(final_filename, cache_path);
                 } else {
                     debug!("Failed to copy from cache {} to dest {}", cache_path.display(), dest_path.display());
                 }

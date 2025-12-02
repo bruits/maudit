@@ -1,5 +1,11 @@
 # maudit
 
+## 0.6.5 — 2025-11-13
+
+### Patch changes
+
+- [1abd7ef](https://github.com/bruits/maudit/commit/1abd7ef239515a823c71a4be4dae858de0a44119) Adds support for customizing the location of the image cache — Thanks @Princesseuh!
+
 ## 0.6.4 — 2025-10-22
 
 ### Patch changes
