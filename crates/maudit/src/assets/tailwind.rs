@@ -1,4 +1,4 @@
-use std::{path::PathBuf, process::Command, time::Instant};
+use std::{io::Error, path::PathBuf, process::Command, time::Instant};
 
 use log::info;
 use oxc_sourcemap::SourceMap;
@@ -49,21 +49,7 @@ impl Plugin for TailwindPlugin {
                 command.arg("--map");
             }
 
-            let tailwind_output = command.output()
-                    .unwrap_or_else(|e| {
-                        // TODO: Return a proper error instead of panicking
-                        let args_str = if crate::is_dev() {
-                            format!("['--input', '{}', '--map']", args.id)
-                        } else {
-                            format!("['--input', '{}', '--minify']", args.id)
-                        };
-                        panic!(
-                            "Failed to execute Tailwind CSS command, is it installed and is the path to its binary correct?\nCommand: '{}', Args: {}. Error: {}",
-                            &self.tailwind_path.display(),
-                            args_str,
-                            e
-                        )
-            });
+            let tailwind_output = command.output()?;
 
             if !tailwind_output.status.success() {
                 let stderr = String::from_utf8_lossy(&tailwind_output.stderr);
@@ -71,7 +57,8 @@ impl Plugin for TailwindPlugin {
                     "Tailwind CSS process failed with status {}: {}",
                     tailwind_output.status, stderr
                 );
-                panic!("{}", error_message);
+
+                return Err(Error::other(error_message).into());
             }
 
             info!("Tailwind took {:?}", start_tailwind.elapsed());
