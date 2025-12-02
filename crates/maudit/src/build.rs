@@ -22,6 +22,7 @@ use crate::{
 };
 use colored::{ColoredString, Colorize};
 use log::{debug, info, trace, warn};
+use pathdiff::diff_paths;
 use rolldown::{Bundler, BundlerOptions, InputItem, ModuleType};
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -344,7 +345,10 @@ pub async fn build(
                     )
                 });
             }
-            info!(target: "assets", "{} -> {} {}", image.path().to_string_lossy(), dest_path.to_string_lossy().dimmed(), format_elapsed_time(start_process.elapsed(), &route_format_options).dimmed());
+            // Make path relative to cwd for logging
+            let image_cwd_relative = diff_paths(image.path(), env::current_dir().unwrap())
+                .unwrap_or_else(|| image.path().to_path_buf());
+            info!(target: "assets", "{} -> {} {}", image_cwd_relative.to_string_lossy(), dest_path.to_string_lossy().dimmed(), format_elapsed_time(start_process.elapsed(), &route_format_options).dimmed());
         });
 
         info!(target: "assets", "{}", format!("Images processed in {}", format_elapsed_time(start_time.elapsed(), &section_format_options)).bold());

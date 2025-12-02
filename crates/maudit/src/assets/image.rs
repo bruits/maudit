@@ -72,9 +72,9 @@ pub struct ImageOptions {
 ///
 /// impl Route for ExampleRoute {
 ///     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-///        let image = ctx.assets.add_image("path/to/image.png");
+///        let image = ctx.assets.add_image("path/to/image.png")?;
 ///
-///        format!("<img src=\"{}\" alt=\"Example Image\" />", image.url())
+///        Ok(format!("<img src=\"{}\" alt=\"Example Image\" />", image.url()))
 ///     }
 /// }
 /// ```

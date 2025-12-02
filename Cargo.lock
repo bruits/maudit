@@ -2470,6 +2470,7 @@ dependencies = [
  "maudit-macros",
  "oxc_sourcemap",
  "oxipng",
+ "pathdiff",
  "pulldown-cmark",
  "rayon",
  "rustc-hash",
