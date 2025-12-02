@@ -1,5 +1,14 @@
 # maudit
 
+## 0.6.6 — 2025-12-02
+
+### Patch changes
+
+- [1ce6701](https://github.com/bruits/maudit/commit/1ce6701f059a1a0ac6e62b4f0eadae2cfa26b4fe) Fixes Tailwind errors from stalling the build infinitely instead of erroring out — Thanks @Princesseuh!
+- [696f653](https://github.com/bruits/maudit/commit/696f653a5f87d3271149b10d5022b49b56257653) Fixes logging of assets during build sometimes showing inconsistent paths — Thanks @Princesseuh!
+- [696f653](https://github.com/bruits/maudit/commit/696f653a5f87d3271149b10d5022b49b56257653) Assets-related methods now all return Result, returning errors whenever files cannot be read or some other IO issue occurs. This makes it slightly more cumbersome to use, of course, however it makes it much easier to handle errors and return better error messages whenever something goes wrong. — Thanks @Princesseuh!
+- [492953d](https://github.com/bruits/maudit/commit/492953d638939f86f3c933a9ed0febe4950f348a) Normalize the urls returned by `url()` to always properly reflect what the final path would look like — Thanks @Princesseuh!
+
 ## 0.6.5 — 2025-11-13
 
 ### Patch changes
