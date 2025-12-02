@@ -578,6 +578,7 @@ fn build_url_with_params(
     }
 
     // Ensure trailing slash for non-endpoints
+    // TODO: Remove this if we implement per-route trailing slash behavior, see build_file_path_with_params comment
     if !is_endpoint && !result.ends_with('/') {
         result.push('/');
     }
