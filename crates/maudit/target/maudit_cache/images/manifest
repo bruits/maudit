@@ -1,7 +1,0 @@
-# Maudit Image Cache Manifest
-version = 1
-
-[placeholders]
-test.jpg=AQIDBA==
-
-[transformed]

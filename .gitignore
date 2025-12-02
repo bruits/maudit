@@ -1,6 +1,7 @@
-/target
+target
 dist
 node_modules
+.cache
 
 .DS_Store
 project.tar
