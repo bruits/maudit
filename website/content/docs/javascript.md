@@ -6,7 +6,9 @@ section: "core-concepts"
 
 Maudit supports adding JavaScript and TypeScript files to your site.
 
-To import a script, add it anywhere in your project's directory, and use the [`ctx.assets.add_script()`](https://docs.rs/maudit/latest/maudit/assets/struct.RouteAssets.html#method.add_script) method to add it to a page's assets. Paths are relative to the project's current working directory, not the file where the method is called.
+To import a script, add it anywhere in your project's directory, and use the [`ctx.assets.add_script()`](https://docs.rs/maudit/latest/maudit/assets/struct.RouteAssets.html#method.add_script) method to add it to a page's assets. 
+
+This function will return an error if the image file does not exist, or cannot be read for any reason. If you'd rather not deal with errors, you can use the `add_script_unchecked()` method, which will instead panic on failure.
 
 ```rs
 use maudit::route::prelude::*;
@@ -17,7 +19,7 @@ pub struct Index;
 
 impl Route for Index {
   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-    let script = ctx.assets.add_script("script.js");
+    let script = ctx.assets.add_script("script.js")?;
 
     // Access the URL of the script using the `url()` method.
     // This is useful when you want to manually add the script to your template.
@@ -27,9 +29,9 @@ impl Route for Index {
     );
 
     // In supported templating languages, the return value of `ctx.assets.add_script()` can be used directly in the template.
-    html! {
+    Ok(html! {
       (script) // Generates <script src="SCRIPT_URL" type="module"></script>
-    }
+    })
   }
 }
 ```
@@ -41,10 +43,10 @@ fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
   layout(&ctx, "Look ma, no explicit script tag!")
 }
 
-fn layout(ctx: &PageContext, content: &str) -> Markup {
-  ctx.assets.include_script("script.js");
+fn layout(ctx: &PageContext, content: &str) -> impl Into<RenderResult> {
+  ctx.assets.include_script("script.js")?;
 
-  html! {
+  Ok(html! {
     head {
       title { "My page" }
       // No need to manually add the script here.
@@ -52,11 +54,24 @@ fn layout(ctx: &PageContext, content: &str) -> Markup {
     body {
       (PreEscaped(content))
     }
-  }
+  })
 }
 ```
 
 When using `include_script()`, the script will be included inside the `head` tag with the `type="module"` attribute. [Note that this attribute implicitely means that your script will be deferred](https://v8.dev/features/modules#defer) after the page has loaded. Note that, at this time, pages without a `head` tag won't have the script included.
+
+In both cases, paths are relative to the project's current working directory, not the file where the method is called. It is possible to resolve relatively to the current file using Rust's [`file!()`](https://doc.rust-lang.org/std/macro.file.html) macro, if needed:
+
+```rs
+let script = ctx.assets.add_script(
+  std::path::Path::new(file!())
+    .parent()
+    .unwrap()
+    .join("script.js")
+    .to_str()
+    .unwrap(),
+)?;
+```
 
 ## Transformation & Bundling
 

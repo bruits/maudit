@@ -1,10 +1,7 @@
-use maud::{Markup, PreEscaped, html};
-use maudit::route::PageContext;
+use maud::{PreEscaped, html};
+use maudit::route::{PageContext, RenderResult};
 
-pub fn layout(
-    ctx: &mut PageContext,
-    content: String,
-) -> Result<Markup, Box<dyn std::error::Error>> {
+pub fn layout(ctx: &mut PageContext, content: String) -> impl Into<RenderResult> {
     ctx.assets.include_style("src/style.css")?;
 
     Ok(html! {

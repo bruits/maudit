@@ -17,7 +17,7 @@ pub struct Index;
 
 impl Route for Blog {
   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-    let style = ctx.assets.add_style("style.css");
+    let style = ctx.assets.add_style("style.css")?;
 
     // Access the URL of the stylesheet using the `url()` method.
     // This is useful when you want to manually add the stylesheet to your template.
@@ -27,9 +27,9 @@ impl Route for Blog {
     );
 
     // In supported templating languages, the return value of `ctx.assets.add_style()` can be used directly in the template.
-    html! {
+    Ok(html! {
       (style) // Generates <link rel="stylesheet" href="STYLE_URL" />
-    }
+    })
   }
 }
 ```
@@ -41,10 +41,10 @@ fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
   layout(&ctx, "Look ma, no link tag!")
 }
 
-fn layout(ctx: &PageContext, content: &str) -> Markup {
-  ctx.assets.include_style("style.css");
+fn layout(ctx: &PageContext, content: &str) -> impl Into<RenderResult> {
+  ctx.assets.include_style("style.css")?;
 
-  html! {
+  Ok(html! {
     head {
       title { "My page" }
       // No need to manually add the stylesheet here.
@@ -52,7 +52,7 @@ fn layout(ctx: &PageContext, content: &str) -> Markup {
     body {
       (PreEscaped(content))
     }
-  }
+  })
 }
 ```
 
