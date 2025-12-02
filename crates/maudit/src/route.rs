@@ -251,10 +251,10 @@ where
 ///
 /// impl Route for Index {
 ///   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-///     let logo = ctx.assets.add_image("logo.png");
+///     let logo = ctx.assets.add_image("logo.png")?;
 ///     let last_entries = &ctx.content.get_source::<ArticleContent>("articles").entries;
 ///
-///     html! {
+///     Ok(html! {
 ///       main {
 ///         (logo.render("Maudit logo, a crudely drawn crown"))
 ///         ul {
@@ -263,7 +263,7 @@ where
 ///           }
 ///         }
 ///       }
-///     }
+///     })
 ///   }
 /// }
 pub struct PageContext<'a> {

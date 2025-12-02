@@ -1,10 +1,10 @@
-use maud::{Markup, PreEscaped, html};
-use maudit::route::PageContext;
+use maud::{PreEscaped, html};
+use maudit::route::{PageContext, RenderResult};
 
-pub fn layout(ctx: &mut PageContext, content: String) -> Markup {
-    ctx.assets.include_style("src/style.css");
+pub fn layout(ctx: &mut PageContext, content: String) -> impl Into<RenderResult> {
+    ctx.assets.include_style("src/style.css")?;
 
-    html! {
+    Ok(html! {
         html {
             head {
                 meta charset="utf-8";
@@ -23,5 +23,5 @@ pub fn layout(ctx: &mut PageContext, content: String) -> Markup {
                 }
             }
         }
-    }
+    })
 }

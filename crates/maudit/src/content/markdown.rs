@@ -424,7 +424,8 @@ pub fn render_markdown(
                             let resolved = parent.join(dest_url.to_string());
                             route_ctx
                                 .as_mut()
-                                .map(|ctx| ctx.assets.add_image(resolved).url().clone())
+                                .and_then(|ctx| ctx.assets.add_image(resolved).ok())
+                                .map(|image| image.url().clone())
                         })
                         .map(|image_url| {
                             Event::Start(Tag::Image {

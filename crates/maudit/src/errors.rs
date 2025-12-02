@@ -1,5 +1,6 @@
 //! Error types for Maudit.
 use std::fmt::{self, Debug, Formatter};
+use std::path::PathBuf;
 use thiserror::Error;
 
 macro_rules! impl_debug_for_error {
@@ -32,4 +33,41 @@ pub enum BuildError {
     InvalidRenderResult { route: String },
 }
 
-impl_debug_for_error!(UrlError, BuildError);
+#[derive(Error)]
+pub enum AssetError {
+    #[error("Failed to read asset file: {path}")]
+    ReadFailed {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("Failed to get metadata for asset file: {path}")]
+    MetadataFailed {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("Failed to canonicalize asset path: {path}")]
+    CanonicalizeFailed {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+}
+
+#[derive(Error, Debug)]
+pub enum MauditError {
+    #[error(transparent)]
+    Asset(#[from] AssetError),
+
+    #[error(transparent)]
+    Url(#[from] UrlError),
+
+    #[error(transparent)]
+    Build(#[from] BuildError),
+
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+}
+
+impl_debug_for_error!(UrlError, BuildError, AssetError);

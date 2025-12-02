@@ -7,11 +7,11 @@ pub struct Index;
 
 impl Route for Index {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-        let logo = ctx.assets.add_image("images/logo.svg");
+        let logo = ctx.assets.add_image("images/logo.svg")?;
 
-        layout(html! {
+        Ok(layout(html! {
             (logo.render("Maudit logo, a crudely drawn crown"))
             h1 { "Hello World" }
-        })
+        }))
     }
 }

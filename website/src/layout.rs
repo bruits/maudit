@@ -75,7 +75,7 @@ pub fn docs_layout(
     headings: &[MarkdownHeading],
     seo: Option<SeoMeta>,
 ) -> impl Into<RenderResult> {
-    ctx.assets.include_script("assets/docs-sidebar.ts");
+    ctx.assets.include_script("assets/docs-sidebar.ts")?;
 
     layout(
         html! {
@@ -136,13 +136,13 @@ pub fn layout(
     licenses: bool,
     ctx: &mut PageContext,
     seo: Option<SeoMeta>,
-) -> impl Into<RenderResult> {
+) -> Result<Markup, Box<dyn std::error::Error>> {
     ctx.assets
-        .include_style_with_options("assets/prin.css", StyleOptions { tailwind: true });
+        .include_style_with_options("assets/prin.css", StyleOptions { tailwind: true })?;
 
     let seo_data = seo.unwrap_or_default();
 
-    html! {
+    Ok(html! {
         (DOCTYPE)
         html lang="en" {
             head {
@@ -154,7 +154,7 @@ pub fn layout(
             }
             body {
                 div.relative.bg-our-white {
-                    (header(ctx, bottom_border))
+                    (header(ctx, bottom_border)?)
                     (main)
                     footer.bg-our-black.text-white {
                         div.container.mx-auto.px-8.py-8.flex.justify-between.items-center.flex-col-reverse."sm:flex-row".gap-y-12 {
@@ -188,5 +188,5 @@ pub fn layout(
                 }
             }
         }
-    }
+    })
 }

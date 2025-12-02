@@ -3,8 +3,11 @@ use maud::PreEscaped;
 use maud::html;
 use maudit::route::PageContext;
 
-pub fn header(ctx: &mut PageContext, bottom_border: bool) -> Markup {
-    ctx.assets.include_script("assets/mobile-menu.ts");
+pub fn header(
+    ctx: &mut PageContext,
+    bottom_border: bool,
+) -> Result<Markup, maudit::errors::AssetError> {
+    ctx.assets.include_script("assets/mobile-menu.ts")?;
 
     let border = if bottom_border { "border-b" } else { "" };
     let nav_links = vec![
@@ -26,7 +29,7 @@ pub fn header(ctx: &mut PageContext, bottom_border: bool) -> Markup {
         ),
     ];
 
-    html! {
+    Ok(html! {
         header.px-4.md:px-8.py-4.text-our-black.bg-our-white."border-borders".(border) {
             div.container.flex.items-center.mx-auto.justify-between {
                 div.flex.items-center.gap-x-8 {
@@ -79,5 +82,5 @@ pub fn header(ctx: &mut PageContext, bottom_border: bool) -> Markup {
                 }
             }
         }
-    }
+    })
 }
