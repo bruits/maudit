@@ -16,6 +16,7 @@ pub use style::{Style, StyleOptions};
 pub use tailwind::TailwindPlugin;
 
 use crate::assets::image_cache::ImageCache;
+use crate::errors::AssetError;
 use crate::{AssetHashingStrategy, BuildOptions};
 
 #[derive(Default)]
@@ -57,35 +58,6 @@ impl RouteAssets {
         }
     }
 
-    /// Get a placeholder for an image using the cache if available
-    pub fn get_image_placeholder(
-        &self,
-        image_path: &Path,
-    ) -> Option<crate::assets::image::ImagePlaceholder> {
-        if let Some(cache) = &self.image_cache {
-            use base64::Engine;
-            use log::debug;
-
-            if let Some(cached) = cache.get_placeholder(image_path) {
-                debug!("Using cached placeholder for {}", image_path.display());
-                let thumbhash_base64 =
-                    base64::engine::general_purpose::STANDARD.encode(&cached.thumbhash);
-                return Some(crate::assets::image::ImagePlaceholder::new(
-                    cached.thumbhash,
-                    thumbhash_base64,
-                ));
-            }
-        }
-        None
-    }
-
-    /// Cache a placeholder for an image
-    pub fn cache_image_placeholder(&self, image_path: &Path, thumbhash: Vec<u8>) {
-        if let Some(cache) = &self.image_cache {
-            cache.cache_placeholder(image_path, thumbhash);
-        }
-    }
-
     pub fn assets(&self) -> impl Iterator<Item = &dyn Asset> {
         self.images
             .iter()
@@ -107,11 +79,20 @@ impl RouteAssets {
     /// Add an image to the page assets, causing the file to be created in the output directory. The image is resolved relative to the current working directory.
     ///
     /// The image will not automatically be included in the page, but can be included through the `.url()` method on the returned `Image` object.
-    pub fn add_image_with_options<P>(&mut self, image_path: P, options: ImageOptions) -> Image
+    pub fn add_image_with_options<P>(
+        &mut self,
+        image_path: P,
+        options: ImageOptions,
+    ) -> Result<Image, AssetError>
     where
         P: Into<PathBuf>,
     {
         let image_path = image_path.into();
+        let image_path =
+            fs::canonicalize(&image_path).map_err(|e| AssetError::CanonicalizeFailed {
+                path: image_path.clone(),
+                source: e,
+            })?;
 
         let image_options = if options == ImageOptions::default() {
             None
@@ -127,7 +108,7 @@ impl RouteAssets {
                 ),
                 hashing_strategy: &self.options.hashing_strategy,
             }),
-        );
+        )?;
 
         let image = Image::new(
             image_path,
@@ -139,10 +120,10 @@ impl RouteAssets {
 
         self.images.insert(image.clone());
 
-        image
+        Ok(image)
     }
 
-    pub fn add_image<P>(&mut self, image_path: P) -> Image
+    pub fn add_image<P>(&mut self, image_path: P) -> Result<Image, AssetError>
     where
         P: Into<PathBuf>,
     {
@@ -153,11 +134,16 @@ impl RouteAssets {
     ///
     /// The script will not automatically be included in the page, but can be included through the `.url()` method on the returned `Script` object.
     /// Alternatively, a script can be included automatically using the [RouteAssets::include_script] method instead.
-    pub fn add_script<P>(&mut self, script_path: P) -> Script
+    pub fn add_script<P>(&mut self, script_path: P) -> Result<Script, AssetError>
     where
         P: Into<PathBuf>,
     {
         let script_path = script_path.into();
+        let script_path =
+            fs::canonicalize(&script_path).map_err(|e| AssetError::CanonicalizeFailed {
+                path: script_path.clone(),
+                source: e,
+            })?;
 
         let hash = calculate_hash(
             &script_path,
@@ -165,13 +151,13 @@ impl RouteAssets {
                 asset_type: HashAssetType::Script,
                 hashing_strategy: &self.options.hashing_strategy,
             }),
-        );
+        )?;
 
         let script = Script::new(script_path, false, hash, &self.options);
 
         self.scripts.insert(script.clone());
 
-        script
+        Ok(script)
     }
 
     /// Include a script in the page. The script is resolved relative to the current working directory.
@@ -179,11 +165,16 @@ impl RouteAssets {
     /// This method will automatically include the script in the `<head>` of the page, if it exists. If the page does not include a `<head>` tag, at this time this method will silently fail.
     ///
     /// Subsequent calls to this function using the same path will result in the same script being included multiple times.
-    pub fn include_script<P>(&mut self, script_path: P)
+    pub fn include_script<P>(&mut self, script_path: P) -> Result<(), AssetError>
     where
         P: Into<PathBuf>,
     {
         let script_path = script_path.into();
+        let script_path =
+            fs::canonicalize(&script_path).map_err(|e| AssetError::CanonicalizeFailed {
+                path: script_path.clone(),
+                source: e,
+            })?;
 
         let hash = calculate_hash(
             &script_path,
@@ -191,11 +182,13 @@ impl RouteAssets {
                 asset_type: HashAssetType::Script,
                 hashing_strategy: &self.options.hashing_strategy,
             }),
-        );
+        )?;
 
         let script = Script::new(script_path, true, hash, &self.options);
 
         self.scripts.insert(script);
+
+        Ok(())
     }
 
     /// Add a style to the page assets, causing the file to be created in the output directory. The style is resolved relative to the current working directory.
@@ -204,7 +197,7 @@ impl RouteAssets {
     /// Alternatively, a style can be included automatically using the [RouteAssets::include_style] method instead.
     ///
     /// Subsequent calls to this method using the same path will return the same style, as such, the value returned by this method can be cloned and used multiple times without issue. This method is equivalent to calling `add_style_with_options` with the default `StyleOptions` and is purely provided for convenience.
-    pub fn add_style<P>(&mut self, style_path: P) -> Style
+    pub fn add_style<P>(&mut self, style_path: P) -> Result<Style, AssetError>
     where
         P: Into<PathBuf>,
     {
@@ -216,11 +209,20 @@ impl RouteAssets {
     /// The style will not automatically be included in the page, but can be included through the `.url()` method on the returned `Style` object.
     ///
     /// Subsequent calls to this method using the same path will return the same style, as such, the value returned by this method can be cloned and used multiple times without issue.
-    pub fn add_style_with_options<P>(&mut self, style_path: P, options: StyleOptions) -> Style
+    pub fn add_style_with_options<P>(
+        &mut self,
+        style_path: P,
+        options: StyleOptions,
+    ) -> Result<Style, AssetError>
     where
         P: Into<PathBuf>,
     {
         let style_path = style_path.into();
+        let style_path =
+            fs::canonicalize(&style_path).map_err(|e| AssetError::CanonicalizeFailed {
+                path: style_path.clone(),
+                source: e,
+            })?;
 
         let hash = calculate_hash(
             &style_path,
@@ -228,13 +230,13 @@ impl RouteAssets {
                 asset_type: HashAssetType::Style(&options),
                 hashing_strategy: &self.options.hashing_strategy,
             }),
-        );
+        )?;
 
         let style = Style::new(style_path, false, &options, hash, &self.options);
 
         self.styles.insert(style.clone());
 
-        style
+        Ok(style)
     }
 
     /// Include a style in the page
@@ -242,7 +244,7 @@ impl RouteAssets {
     /// This method will automatically include the style in the `<head>` of the page, if it exists. If the page does not include a `<head>` tag, at this time this method will silently fail.
     ///
     /// Subsequent calls to this method using the same path will result in the same style being included multiple times. This method is equivalent to calling `include_style_with_options` with the default `StyleOptions` and is purely provided for convenience.
-    pub fn include_style<P>(&mut self, style_path: P)
+    pub fn include_style<P>(&mut self, style_path: P) -> Result<(), AssetError>
     where
         P: Into<PathBuf>,
     {
@@ -254,11 +256,20 @@ impl RouteAssets {
     /// This method will automatically include the style in the `<head>` of the page, if it exists. If the page does not include a `<head>` tag, at this time this method will silently fail.
     ///
     /// Subsequent calls to this method using the same path will result in the same style being included multiple times.
-    pub fn include_style_with_options<P>(&mut self, style_path: P, options: StyleOptions)
+    pub fn include_style_with_options<P>(
+        &mut self,
+        style_path: P,
+        options: StyleOptions,
+    ) -> Result<(), AssetError>
     where
         P: Into<PathBuf>,
     {
         let style_path = style_path.into();
+        let style_path =
+            fs::canonicalize(&style_path).map_err(|e| AssetError::CanonicalizeFailed {
+                path: style_path.clone(),
+                source: e,
+            })?;
 
         let hash = calculate_hash(
             &style_path,
@@ -266,11 +277,13 @@ impl RouteAssets {
                 asset_type: HashAssetType::Style(&options),
                 hashing_strategy: &self.options.hashing_strategy,
             }),
-        );
+        )?;
 
         let style = Style::new(style_path, true, &options, hash, &self.options);
 
         self.styles.insert(style);
+
+        Ok(())
     }
 }
 
@@ -339,20 +352,29 @@ fn make_final_path(output_assets_dir: &Path, file_name: &Path) -> PathBuf {
     output_assets_dir.join(file_name)
 }
 
-fn calculate_hash(path: &Path, options: Option<&HashConfig>) -> String {
+fn calculate_hash(path: &Path, options: Option<&HashConfig>) -> Result<String, AssetError> {
     let start_time = Instant::now();
     let content = if options
         .is_some_and(|cfg| *cfg.hashing_strategy == AssetHashingStrategy::FastImprecise)
     {
-        let metadata = fs::metadata(path).unwrap();
+        let metadata = fs::metadata(path).map_err(|e| AssetError::MetadataFailed {
+            path: path.to_path_buf(),
+            source: e,
+        })?;
 
         let mut buf = Vec::with_capacity(16);
         buf.extend_from_slice(
             &metadata
                 .modified()
-                .unwrap()
+                .map_err(|e| AssetError::MetadataFailed {
+                    path: path.to_path_buf(),
+                    source: e,
+                })?
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .map_err(|e| AssetError::MetadataFailed {
+                    path: path.to_path_buf(),
+                    source: std::io::Error::new(std::io::ErrorKind::Other, e),
+                })?
                 .as_secs()
                 .to_le_bytes(),
         );
@@ -361,7 +383,10 @@ fn calculate_hash(path: &Path, options: Option<&HashConfig>) -> String {
 
         buf
     } else {
-        fs::read(path).unwrap_or_else(|_| panic!("Failed to read asset file: {:?}", path))
+        fs::read(path).map_err(|e| AssetError::ReadFailed {
+            path: path.to_path_buf(),
+            source: e,
+        })?
     };
 
     // Pre-allocate a single buffer to hash at once
@@ -399,7 +424,7 @@ fn calculate_hash(path: &Path, options: Option<&HashConfig>) -> String {
 
     // TODO: This works, but perhaps we can generate prettier hashes, see https://github.com/rolldown/rolldown/blob/abf62c45d7a69b42dab4bff92095e320b418e9b8/crates/rolldown_utils/src/xxhash.rs
     let hex = format!("{:016x}", hash);
-    hex[..5].to_string()
+    Ok(hex[..5].to_string())
 }
 
 #[cfg(test)]
@@ -422,7 +447,7 @@ mod tests {
     fn test_add_style() {
         let temp_dir = setup_temp_dir();
         let mut page_assets = RouteAssets::default();
-        page_assets.add_style(temp_dir.join("style.css"));
+        page_assets.add_style(temp_dir.join("style.css")).unwrap();
 
         assert!(page_assets.styles.len() == 1);
     }
@@ -432,7 +457,9 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = RouteAssets::default();
 
-        page_assets.include_style(temp_dir.join("style.css"));
+        page_assets
+            .include_style(temp_dir.join("style.css"))
+            .unwrap();
 
         assert!(page_assets.styles.len() == 1);
         assert!(page_assets.included_styles().count() == 1);
@@ -443,7 +470,7 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = RouteAssets::default();
 
-        page_assets.add_script(temp_dir.join("script.js"));
+        page_assets.add_script(temp_dir.join("script.js")).unwrap();
         assert!(page_assets.scripts.len() == 1);
     }
 
@@ -452,7 +479,9 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = RouteAssets::default();
 
-        page_assets.include_script(temp_dir.join("script.js"));
+        page_assets
+            .include_script(temp_dir.join("script.js"))
+            .unwrap();
 
         assert!(page_assets.scripts.len() == 1);
         assert!(page_assets.included_scripts().count() == 1);
@@ -463,7 +492,7 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = RouteAssets::default();
 
-        page_assets.add_image(temp_dir.join("image.png"));
+        page_assets.add_image(temp_dir.join("image.png")).unwrap();
         assert!(page_assets.images.len() == 1);
     }
 
@@ -472,13 +501,13 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = RouteAssets::default();
 
-        let image = page_assets.add_image(temp_dir.join("image.png"));
+        let image = page_assets.add_image(temp_dir.join("image.png")).unwrap();
         assert_eq!(image.url().chars().next(), Some('/'));
 
-        let script = page_assets.add_script(temp_dir.join("script.js"));
+        let script = page_assets.add_script(temp_dir.join("script.js")).unwrap();
         assert_eq!(script.url().chars().next(), Some('/'));
 
-        let style = page_assets.add_style(temp_dir.join("style.css"));
+        let style = page_assets.add_style(temp_dir.join("style.css")).unwrap();
         assert_eq!(style.url().chars().next(), Some('/'));
     }
 
@@ -487,13 +516,13 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = RouteAssets::default();
 
-        let image = page_assets.add_image(temp_dir.join("image.png"));
+        let image = page_assets.add_image(temp_dir.join("image.png")).unwrap();
         assert!(image.url().contains(&image.hash));
 
-        let script = page_assets.add_script(temp_dir.join("script.js"));
+        let script = page_assets.add_script(temp_dir.join("script.js")).unwrap();
         assert!(script.url().contains(&script.hash));
 
-        let style = page_assets.add_style(temp_dir.join("style.css"));
+        let style = page_assets.add_style(temp_dir.join("style.css")).unwrap();
         assert!(style.url().contains(&style.hash));
     }
 
@@ -502,13 +531,13 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = RouteAssets::default();
 
-        let image = page_assets.add_image(temp_dir.join("image.png"));
+        let image = page_assets.add_image(temp_dir.join("image.png")).unwrap();
         assert!(image.build_path().to_string_lossy().contains(&image.hash));
 
-        let script = page_assets.add_script(temp_dir.join("script.js"));
+        let script = page_assets.add_script(temp_dir.join("script.js")).unwrap();
         assert!(script.build_path().to_string_lossy().contains(&script.hash));
 
-        let style = page_assets.add_style(temp_dir.join("style.css"));
+        let style = page_assets.add_style(temp_dir.join("style.css")).unwrap();
         assert!(style.build_path().to_string_lossy().contains(&style.hash));
     }
 
@@ -530,30 +559,36 @@ mod tests {
         let mut page_assets = RouteAssets::default();
 
         // Test that different options produce different hashes
-        let image_default = page_assets.add_image(&image_path);
-        let image_webp = page_assets.add_image_with_options(
-            &image_path,
-            ImageOptions {
-                format: Some(ImageFormat::WebP),
-                ..Default::default()
-            },
-        );
-        let image_resized = page_assets.add_image_with_options(
-            &image_path,
-            ImageOptions {
-                width: Some(100),
-                height: Some(100),
-                ..Default::default()
-            },
-        );
-        let image_combined = page_assets.add_image_with_options(
-            &image_path,
-            ImageOptions {
-                width: Some(100),
-                height: Some(100),
-                format: Some(ImageFormat::WebP),
-            },
-        );
+        let image_default = page_assets.add_image(&image_path).unwrap();
+        let image_webp = page_assets
+            .add_image_with_options(
+                &image_path,
+                ImageOptions {
+                    format: Some(ImageFormat::WebP),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let image_resized = page_assets
+            .add_image_with_options(
+                &image_path,
+                ImageOptions {
+                    width: Some(100),
+                    height: Some(100),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let image_combined = page_assets
+            .add_image_with_options(
+                &image_path,
+                ImageOptions {
+                    width: Some(100),
+                    height: Some(100),
+                    format: Some(ImageFormat::WebP),
+                },
+            )
+            .unwrap();
 
         // All hashes should be different
         let hashes = [
@@ -593,23 +628,27 @@ mod tests {
         let mut page_assets = RouteAssets::default();
 
         // Same options should produce same hash
-        let image1 = page_assets.add_image_with_options(
-            &image_path,
-            ImageOptions {
-                width: Some(200),
-                height: Some(150),
-                format: Some(ImageFormat::Jpeg),
-            },
-        );
+        let image1 = page_assets
+            .add_image_with_options(
+                &image_path,
+                ImageOptions {
+                    width: Some(200),
+                    height: Some(150),
+                    format: Some(ImageFormat::Jpeg),
+                },
+            )
+            .unwrap();
 
-        let image2 = page_assets.add_image_with_options(
-            &image_path,
-            ImageOptions {
-                width: Some(200),
-                height: Some(150),
-                format: Some(ImageFormat::Jpeg),
-            },
-        );
+        let image2 = page_assets
+            .add_image_with_options(
+                &image_path,
+                ImageOptions {
+                    width: Some(200),
+                    height: Some(150),
+                    format: Some(ImageFormat::Jpeg),
+                },
+            )
+            .unwrap();
 
         assert_eq!(
             image1.hash, image2.hash,
@@ -625,9 +664,10 @@ mod tests {
         let mut page_assets = RouteAssets::new(&RouteAssetsOptions::default(), None);
 
         // Test that different tailwind options produce different hashes
-        let style_default = page_assets.add_style(&style_path);
-        let style_tailwind =
-            page_assets.add_style_with_options(&style_path, StyleOptions { tailwind: true });
+        let style_default = page_assets.add_style(&style_path).unwrap();
+        let style_tailwind = page_assets
+            .add_style_with_options(&style_path, StyleOptions { tailwind: true })
+            .unwrap();
 
         assert_ne!(
             style_default.hash, style_tailwind.hash,
@@ -649,8 +689,8 @@ mod tests {
 
         let mut page_assets = RouteAssets::new(&RouteAssetsOptions::default(), None);
 
-        let style1 = page_assets.add_style(&style1_path);
-        let style2 = page_assets.add_style(&style2_path);
+        let style1 = page_assets.add_style(&style1_path).unwrap();
+        let style2 = page_assets.add_style(&style2_path).unwrap();
 
         assert_ne!(
             style1.hash, style2.hash,
@@ -668,12 +708,12 @@ mod tests {
 
         // Write first content and get hash
         std::fs::write(&style_path, "body { background: red; }").unwrap();
-        let style1 = page_assets.add_style(&style_path);
+        let style1 = page_assets.add_style(&style_path).unwrap();
         let hash1 = style1.hash;
 
         // Write different content and get new hash
         std::fs::write(&style_path, "body { background: green; }").unwrap();
-        let style2 = page_assets.add_style(&style_path);
+        let style2 = page_assets.add_style(&style_path).unwrap();
         let hash2 = style2.hash;
 
         assert_ne!(

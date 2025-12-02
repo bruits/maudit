@@ -48,6 +48,6 @@ impl Route for Index {
         }
         .into_string();
 
-        layout(ctx, markup)
+        Ok(layout(ctx, markup)?)
     }
 }

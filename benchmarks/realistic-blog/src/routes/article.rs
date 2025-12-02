@@ -57,7 +57,7 @@ impl Route<ArticlesParams, PaginatedContentPage<ArticleContent>> for Articles {
         }
         .into_string();
 
-        layout(ctx, markup)
+        Ok(layout(ctx, markup)?)
     }
 }
 
@@ -86,6 +86,6 @@ impl Route<ArticleParams> for Article {
         let article = articles.get_entry(&params.article);
 
         let content = article.render(ctx);
-        layout(ctx, content)
+        Ok(layout(ctx, content)?)
     }
 }

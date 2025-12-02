@@ -75,59 +75,60 @@ pub fn docs_layout(
     headings: &[MarkdownHeading],
     seo: Option<SeoMeta>,
 ) -> impl Into<RenderResult> {
-    ctx.assets.include_script("assets/docs-sidebar.ts");
-
-    layout(
-        html! {
-            // Second header for docs navigation (mobile only)
-            header.sticky.top-0.z-40.bg-our-white.border-b.border-borders.md:hidden.bg-linear-to-b."from-darker-white" {
-                div.flex.items-center.justify-between {
-                    button id="left-sidebar-toggle" .px-4.py-3.flex.items-center.gap-x-2.text-base.font-medium.text-our-black aria-label="Toggle navigation menu" {
-                        (PreEscaped(include_str!("../assets/side-menu.svg")))
-                        span { "Menu" }
-                    }
-                    button id="right-sidebar-toggle" .px-4.py-3.flex.items-center.gap-x-2.text-base.font-medium.text-our-black aria-label="Toggle table of contents" {
-                        span { "On this page" }
-                        (PreEscaped(include_str!("../assets/toc.svg")))
+    match ctx.assets.include_script("assets/docs-sidebar.ts") {
+        Ok(_) => layout(
+            html! {
+                // Second header for docs navigation (mobile only)
+                header.sticky.top-0.z-40.bg-our-white.border-b.border-borders.md:hidden.bg-linear-to-b."from-darker-white" {
+                    div.flex.items-center.justify-between {
+                        button id="left-sidebar-toggle" .px-4.py-3.flex.items-center.gap-x-2.text-base.font-medium.text-our-black aria-label="Toggle navigation menu" {
+                            (PreEscaped(include_str!("../assets/side-menu.svg")))
+                            span { "Menu" }
+                        }
+                        button id="right-sidebar-toggle" .px-4.py-3.flex.items-center.gap-x-2.text-base.font-medium.text-our-black aria-label="Toggle table of contents" {
+                            span { "On this page" }
+                            (PreEscaped(include_str!("../assets/toc.svg")))
+                        }
                     }
                 }
-            }
 
-            // Mobile left sidebar overlay
-            div id="mobile-left-sidebar" .fixed."inset-0 bg-black/50".transition-opacity.opacity-0.pointer-events-none.z-50 {
-                div.w-80.max-w-sm.h-full.bg-our-white.overflow-y-auto.transform."-translate-x-full".transition-transform {
-                    div.px-4.py-4 {
+                // Mobile left sidebar overlay
+                div id="mobile-left-sidebar" .fixed."inset-0 bg-black/50".transition-opacity.opacity-0.pointer-events-none.z-50 {
+                    div.w-80.max-w-sm.h-full.bg-our-white.overflow-y-auto.transform."-translate-x-full".transition-transform {
+                        div.px-4.py-4 {
+                            (left_sidebar(ctx))
+                        }
+                    }
+                }
+
+                // Mobile right sidebar overlay
+                div id="mobile-right-sidebar" .fixed."inset-0 bg-black/50".transition-opacity.opacity-0.pointer-events-none.z-50.flex.justify-end {
+                    div.w-80.max-w-sm.h-full.bg-our-white.overflow-y-auto.transform."translate-x-full".transition-transform {
+                        div.px-4.py-4 {
+                            (right_sidebar(headings))
+                        }
+                    }
+                }
+
+                div.container.mx-auto."md:grid-cols-(--docs-tablet-columns)"."lg:grid-cols-(--docs-columns)".md:grid."min-h-[calc(100%-64px)]".px-6.md:px-0.pt-2.md:pt-0 {
+                    aside.bg-linear-to-l."from-darker-white"."py-8"."h-full".border-r.border-r-borders.hidden.md:block."md:pr-4"."lg:px-0" {
                         (left_sidebar(ctx))
                     }
-                }
-            }
-
-            // Mobile right sidebar overlay
-            div id="mobile-right-sidebar" .fixed."inset-0 bg-black/50".transition-opacity.opacity-0.pointer-events-none.z-50.flex.justify-end {
-                div.w-80.max-w-sm.h-full.bg-our-white.overflow-y-auto.transform."translate-x-full".transition-transform {
-                    div.px-4.py-4 {
+                    main.w-full.max-w-larger-prose.mx-auto.md:pt-8.py-4.pb-8.md:pb-16.md:px-6.lg:px-0 {
+                        (main)
+                    }
+                    aside."py-8".hidden."lg:block" {
                         (right_sidebar(headings))
                     }
                 }
-            }
-
-            div.container.mx-auto."md:grid-cols-(--docs-tablet-columns)"."lg:grid-cols-(--docs-columns)".md:grid."min-h-[calc(100%-64px)]".px-6.md:px-0.pt-2.md:pt-0 {
-                aside.bg-linear-to-l."from-darker-white"."py-8"."h-full".border-r.border-r-borders.hidden.md:block."md:pr-4"."lg:px-0" {
-                    (left_sidebar(ctx))
-                }
-                main.w-full.max-w-larger-prose.mx-auto.md:pt-8.py-4.pb-8.md:pb-16.md:px-6.lg:px-0 {
-                    (main)
-                }
-                aside."py-8".hidden."lg:block" {
-                    (right_sidebar(headings))
-                }
-            }
-        },
-        true,
-        false,
-        ctx,
-        seo,
-    )
+            },
+            true,
+            false,
+            ctx,
+            seo,
+        ).into(),
+        Err(e) => Err::<String, _>(Box::new(e) as Box<dyn std::error::Error>).into(),
+    }
 }
 
 pub fn layout(
@@ -138,11 +139,11 @@ pub fn layout(
     seo: Option<SeoMeta>,
 ) -> impl Into<RenderResult> {
     ctx.assets
-        .include_style_with_options("assets/prin.css", StyleOptions { tailwind: true });
+        .include_style_with_options("assets/prin.css", StyleOptions { tailwind: true })?;
 
     let seo_data = seo.unwrap_or_default();
 
-    html! {
+    Ok(html! {
         (DOCTYPE)
         html lang="en" {
             head {
@@ -154,7 +155,7 @@ pub fn layout(
             }
             body {
                 div.relative.bg-our-white {
-                    (header(ctx, bottom_border))
+                    (header(ctx, bottom_border)?)
                     (main)
                     footer.bg-our-black.text-white {
                         div.container.mx-auto.px-8.py-8.flex.justify-between.items-center.flex-col-reverse."sm:flex-row".gap-y-12 {
@@ -188,5 +189,5 @@ pub fn layout(
                 }
             }
         }
-    }
+    })
 }

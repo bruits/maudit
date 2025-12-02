@@ -19,17 +19,17 @@ impl Route<Params> for DynamicExample {
 
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let params = ctx.params::<Params>();
-        let image = ctx.assets.add_image("data/social-card.png");
+        let image = ctx.assets.add_image("data/social-card.png")?;
         ctx.assets
-            .include_style_with_options("data/tailwind.css", StyleOptions { tailwind: true });
+            .include_style_with_options("data/tailwind.css", StyleOptions { tailwind: true })?;
 
-        html! {
+        Ok(html! {
             head {
                 title { "Index" }
             }
             h1 { "Hello, world!" }
             (image.render("Maudit social card, a crudely drawn crown"))
             p { (params.page) }
-        }
+        })
     }
 }

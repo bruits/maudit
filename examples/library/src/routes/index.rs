@@ -13,7 +13,7 @@ pub struct Index;
 impl Route for Index {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let articles = ctx.content.get_source::<ArticleContent>("articles");
-        let logo = ctx.assets.add_image("images/logo.svg");
+        let logo = ctx.assets.add_image("images/logo.svg")?;
 
         let markup = html! {
           (logo.render("Maudit logo, a crudely drawn crown"))
@@ -30,6 +30,6 @@ impl Route for Index {
         }
         .into_string();
 
-        layout(markup)
+        Ok(layout(markup))
     }
 }
