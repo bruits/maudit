@@ -130,6 +130,27 @@ impl RouteAssets {
         self.add_image_with_options(image_path, ImageOptions::default())
     }
 
+    /// Add an image to the page assets, panicking on error. See [RouteAssets::add_image_with_options] for details.
+    pub fn add_image_with_options_unchecked<P>(
+        &mut self,
+        image_path: P,
+        options: ImageOptions,
+    ) -> Image
+    where
+        P: Into<PathBuf>,
+    {
+        self.add_image_with_options(image_path, options)
+            .expect("Failed to add image")
+    }
+
+    /// Add an image to the page assets, panicking on error. See [RouteAssets::add_image] for details.
+    pub fn add_image_unchecked<P>(&mut self, image_path: P) -> Image
+    where
+        P: Into<PathBuf>,
+    {
+        self.add_image(image_path).expect("Failed to add image")
+    }
+
     /// Add a script to the page assets, causing the file to be created in the output directory. The script is resolved relative to the current working directory.
     ///
     /// The script will not automatically be included in the page, but can be included through the `.url()` method on the returned `Script` object.
@@ -158,6 +179,14 @@ impl RouteAssets {
         self.scripts.insert(script.clone());
 
         Ok(script)
+    }
+
+    /// Add a script to the page assets, panicking on error. See [RouteAssets::add_script] for details.
+    pub fn add_script_unchecked<P>(&mut self, script_path: P) -> Script
+    where
+        P: Into<PathBuf>,
+    {
+        self.add_script(script_path).expect("Failed to add script")
     }
 
     /// Include a script in the page. The script is resolved relative to the current working directory.
@@ -191,6 +220,15 @@ impl RouteAssets {
         Ok(())
     }
 
+    /// Include a script in the page, panicking on error. See [RouteAssets::include_script] for details.
+    pub fn include_script_unchecked<P>(&mut self, script_path: P)
+    where
+        P: Into<PathBuf>,
+    {
+        self.include_script(script_path)
+            .expect("Failed to include script")
+    }
+
     /// Add a style to the page assets, causing the file to be created in the output directory. The style is resolved relative to the current working directory.
     ///
     /// The style will not automatically be included in the page, but can be included through the `.url()` method on the returned `Style` object.
@@ -202,6 +240,14 @@ impl RouteAssets {
         P: Into<PathBuf>,
     {
         self.add_style_with_options(style_path, StyleOptions::default())
+    }
+
+    /// Add a style to the page assets, panicking on error. See [RouteAssets::add_style] for details.
+    pub fn add_style_unchecked<P>(&mut self, style_path: P) -> Style
+    where
+        P: Into<PathBuf>,
+    {
+        self.add_style(style_path).expect("Failed to add style")
     }
 
     /// Add a style to the page assets, causing the file to be created in the output directory. The style is resolved relative to the current working directory.
@@ -239,6 +285,19 @@ impl RouteAssets {
         Ok(style)
     }
 
+    /// Add a style with options to the page assets, panicking on error. See [RouteAssets::add_style_with_options] for details.
+    pub fn add_style_with_options_unchecked<P>(
+        &mut self,
+        style_path: P,
+        options: StyleOptions,
+    ) -> Style
+    where
+        P: Into<PathBuf>,
+    {
+        self.add_style_with_options(style_path, options)
+            .expect("Failed to add style")
+    }
+
     /// Include a style in the page
     ///
     /// This method will automatically include the style in the `<head>` of the page, if it exists. If the page does not include a `<head>` tag, at this time this method will silently fail.
@@ -249,6 +308,15 @@ impl RouteAssets {
         P: Into<PathBuf>,
     {
         self.include_style_with_options(style_path, StyleOptions::default())
+    }
+
+    /// Include a style in the page, panicking on error. See [RouteAssets::include_style] for details.
+    pub fn include_style_unchecked<P>(&mut self, style_path: P)
+    where
+        P: Into<PathBuf>,
+    {
+        self.include_style(style_path)
+            .expect("Failed to include style")
     }
 
     /// Include a style in the page
@@ -284,6 +352,15 @@ impl RouteAssets {
         self.styles.insert(style);
 
         Ok(())
+    }
+
+    /// Include a style with options in the page, panicking on error. See [RouteAssets::include_style_with_options] for details.
+    pub fn include_style_with_options_unchecked<P>(&mut self, style_path: P, options: StyleOptions)
+    where
+        P: Into<PathBuf>,
+    {
+        self.include_style_with_options(style_path, options)
+            .expect("Failed to include style")
     }
 }
 
