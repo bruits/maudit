@@ -4,7 +4,7 @@ use maudit::route::PageContext;
 pub fn layout(
     ctx: &mut PageContext,
     content: String,
-) -> Result<Markup, maudit::errors::AssetError> {
+) -> Result<Markup, Box<dyn std::error::Error>> {
     ctx.assets.include_style("src/style.css")?;
 
     Ok(html! {

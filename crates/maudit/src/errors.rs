@@ -55,4 +55,19 @@ pub enum AssetError {
     },
 }
 
+#[derive(Error, Debug)]
+pub enum MauditError {
+    #[error(transparent)]
+    Asset(#[from] AssetError),
+
+    #[error(transparent)]
+    Url(#[from] UrlError),
+
+    #[error(transparent)]
+    Build(#[from] BuildError),
+
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+}
+
 impl_debug_for_error!(UrlError, BuildError, AssetError);

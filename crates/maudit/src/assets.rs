@@ -373,7 +373,7 @@ fn calculate_hash(path: &Path, options: Option<&HashConfig>) -> Result<String, A
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_err(|e| AssetError::MetadataFailed {
                     path: path.to_path_buf(),
-                    source: std::io::Error::new(std::io::ErrorKind::Other, e),
+                    source: std::io::Error::other(e),
                 })?
                 .as_secs()
                 .to_le_bytes(),
