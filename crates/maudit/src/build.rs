@@ -308,6 +308,9 @@ pub async fn build(
             let start_process = Instant::now();
             let dest_path: &PathBuf = image.build_path();
 
+            let image_cwd_relative = diff_paths(image.path(), env::current_dir().unwrap())
+                .unwrap_or_else(|| image.path().to_path_buf());
+
             if let Some(image_options) = &image.options {
                 let final_filename = image.filename();
 
@@ -317,7 +320,7 @@ pub async fn build(
                 if let Some(cached_path) = cached_path {
                     // Copy from cache instead of processing
                     if fs::copy(&cached_path, dest_path).is_ok() {
-                        info!(target: "assets", "{} -> {} (from cache) {}", image.path().to_string_lossy(), dest_path.to_string_lossy().dimmed(), format_elapsed_time(start_process.elapsed(), &route_format_options).dimmed());
+                        info!(target: "assets", "{} -> {} (from cache) {}", image_cwd_relative.to_string_lossy(), dest_path.to_string_lossy().dimmed(), format_elapsed_time(start_process.elapsed(), &route_format_options).dimmed());
                         return;
                     }
                 }
@@ -345,9 +348,6 @@ pub async fn build(
                     )
                 });
             }
-            // Make path relative to cwd for logging
-            let image_cwd_relative = diff_paths(image.path(), env::current_dir().unwrap())
-                .unwrap_or_else(|| image.path().to_path_buf());
             info!(target: "assets", "{} -> {} {}", image_cwd_relative.to_string_lossy(), dest_path.to_string_lossy().dimmed(), format_elapsed_time(start_process.elapsed(), &route_format_options).dimmed());
         });
 
