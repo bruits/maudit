@@ -1,5 +1,11 @@
 # maudit
 
+## 0.6.7 — 2025-12-09
+
+### Patch changes
+
+- [9611a61](https://github.com/bruits/maudit/commit/9611a61e46b1950469ccd6518e37b486224f6cf4) Fixes cached entries for processed assets showing a longer log than intended — Thanks @Princesseuh!
+
 ## 0.6.6 — 2025-12-02
 
 ### Patch changes
