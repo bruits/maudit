@@ -1,5 +1,11 @@
 # oubli
 
+## 0.1.10 — 2025-12-09
+
+### Patch changes
+
+- Updated dependencies: maudit (Cargo)@0.6.7
+
 ## 0.1.9 — 2025-12-02
 
 ### Patch changes
