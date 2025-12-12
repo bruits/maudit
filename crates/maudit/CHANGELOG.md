@@ -1,5 +1,11 @@
 # maudit
 
+## 0.6.8 — 2025-12-12
+
+### Patch changes
+
+- [fc25ac2](https://github.com/bruits/maudit/commit/fc25ac2257ef7d38ff116b17418401fdb22f273c) Improve hashing performance — Thanks @Princesseuh!
+
 ## 0.6.7 — 2025-12-09
 
 ### Patch changes
