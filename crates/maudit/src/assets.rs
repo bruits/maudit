@@ -1,9 +1,10 @@
 use log::debug;
+use rapidhash::fast::RapidHasher;
 use rustc_hash::FxHashSet;
+use std::hash::Hasher;
 use std::path::Path;
 use std::time::Instant;
 use std::{fs, path::PathBuf};
-use xxhash_rust::xxh3::xxh3_64;
 
 mod image;
 pub mod image_cache;
@@ -491,7 +492,9 @@ fn calculate_hash(path: &Path, options: Option<&HashConfig>) -> Result<String, A
         }
     }
 
-    let hash = xxh3_64(&buf); // one-shot, much faster than streaming
+    let mut hasher = RapidHasher::default();
+    hasher.write(&buf);
+    let hash = hasher.finish(); // one-shot, much faster than streaming
 
     debug!(
         "Calculated hash for asset {:?} in {:?}",

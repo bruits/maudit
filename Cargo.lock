@@ -2567,6 +2567,7 @@ dependencies = [
  "oxipng",
  "pathdiff",
  "pulldown-cmark",
+ "rapidhash",
  "rayon",
  "rustc-hash",
  "serde",
@@ -2577,7 +2578,6 @@ dependencies = [
  "thumbhash",
  "tokio",
  "webp",
- "xxhash-rust",
 ]
 
 [[package]]
@@ -4056,6 +4056,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38"
 dependencies = [
  "getrandom 0.3.4",
+]
+
+[[package]]
+name = "rapidhash"
+version = "4.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8e65c75143ce5d47c55b510297eeb1182f3c739b6043c537670e9fc18612dae"
+dependencies = [
+ "rustversion",
 ]
 
 [[package]]
