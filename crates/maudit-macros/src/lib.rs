@@ -1,18 +1,88 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse::{self, Parse, ParseStream, Parser as _, Result};
-use syn::{Expr, ItemStruct, parse_macro_input};
+use syn::{Expr, Ident, ItemStruct, Token, parse_macro_input, punctuated::Punctuated};
 
 struct Args {
-    path: Expr,
+    path: Option<Expr>,
 }
 
 impl Parse for Args {
     fn parse(input: ParseStream) -> Result<Self> {
-        let path = input.parse()?;
-
-        Ok(Args { path })
+        if input.is_empty() {
+            Ok(Args { path: None })
+        } else {
+            let path = input.parse()?;
+            Ok(Args { path: Some(path) })
+        }
     }
+}
+
+struct LocaleVariant {
+    locale: Ident,
+    path: Expr,
+}
+
+impl Parse for LocaleVariant {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let locale = input.parse::<Ident>()?;
+
+        let content;
+        syn::parenthesized!(content in input);
+
+        content.parse::<Ident>()?; // "path"
+        content.parse::<Token![=]>()?;
+        let path = content.parse::<Expr>()?;
+
+        Ok(LocaleVariant { locale, path })
+    }
+}
+
+struct LocalesArgs {
+    variants: Punctuated<LocaleVariant, Token![,]>,
+}
+
+impl Parse for LocalesArgs {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let variants = Punctuated::parse_terminated(input)?;
+        Ok(LocalesArgs { variants })
+    }
+}
+
+#[proc_macro_attribute]
+pub fn locales(attrs: TokenStream, item: TokenStream) -> TokenStream {
+    // Parse and validate the locales
+    let locales_args = syn::parse_macro_input!(attrs as LocalesArgs);
+    let item_struct = syn::parse_macro_input!(item as ItemStruct);
+
+    // Serialize the locale data into a doc comment that route macro can parse
+    let mut locale_data = String::from("maudit_locales:");
+    for variant in &locales_args.variants {
+        let locale_name = variant.locale.to_string();
+        let locale_path = match &variant.path {
+            Expr::Lit(lit) => {
+                if let syn::Lit::Str(s) = &lit.lit {
+                    s.value()
+                } else {
+                    panic!("locale path must be a string literal");
+                }
+            }
+            _ => panic!("locale path must be a string literal"),
+        };
+        locale_data.push_str(&format!("{}={},", locale_name, locale_path));
+    }
+
+    // Add the doc comment to the struct's attributes
+    let mut modified_struct = item_struct.clone();
+    modified_struct.attrs.push(syn::parse_quote! {
+        #[doc = #locale_data]
+    });
+
+    let expanded = quote! {
+        #modified_struct
+    };
+
+    TokenStream::from(expanded)
 }
 
 #[proc_macro_attribute]
@@ -22,13 +92,78 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let attrs = syn::parse_macro_input!(attrs as Args);
 
     let struct_name = &item_struct.ident;
-    let path = &attrs.path;
 
-    let expanded = quote! {
-        impl maudit::route::InternalRoute for #struct_name {
+    // Look for locale data in doc comments (set by locales macro)
+    let locale_data = item_struct.attrs.iter().find_map(|attr| {
+        if attr.path().is_ident("doc")
+            && let syn::Meta::NameValue(meta) = &attr.meta
+            && let Expr::Lit(lit) = &meta.value
+            && let syn::Lit::Str(s) = &lit.lit
+        {
+            let content = s.value();
+            if content.starts_with("maudit_locales:") {
+                return Some(content);
+            }
+        }
+        None
+    });
+
+    let variant_methods = if let Some(locale_data) = locale_data {
+        // Parse the locale data from the doc comment
+        let data = locale_data.strip_prefix("maudit_locales:").unwrap();
+        let mut variants = Vec::new();
+
+        for pair in data.split(',') {
+            if pair.is_empty() {
+                continue;
+            }
+            let parts: Vec<&str> = pair.split('=').collect();
+            if parts.len() == 2 {
+                let id = parts[0].to_string();
+                let path = parts[1].to_string();
+                variants.push((id, path));
+            }
+        }
+
+        let variant_tuples = variants.iter().map(|(id, path)| {
+            quote! {
+                (#id.to_string(), #path.to_string())
+            }
+        });
+
+        quote! {
+            fn variants(&self) -> Vec<(String, String)> {
+                vec![#(#variant_tuples),*]
+            }
+        }
+    } else {
+        quote! {
+            fn variants(&self) -> Vec<(String, String)> {
+                vec![]
+            }
+        }
+    };
+
+    // Generate route_raw implementation based on whether path is provided
+    let route_raw_impl = if let Some(path) = &attrs.path {
+        quote! {
             fn route_raw(&self) -> String {
                 #path.to_string()
             }
+        }
+    } else {
+        quote! {
+            fn route_raw(&self) -> String {
+                String::new()
+            }
+        }
+    };
+
+    let expanded = quote! {
+        impl maudit::route::InternalRoute for #struct_name {
+            #route_raw_impl
+
+            #variant_methods
         }
 
         impl maudit::route::FullRoute for #struct_name {

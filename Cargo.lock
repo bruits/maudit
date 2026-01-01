@@ -2636,6 +2636,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "maudit-example-i18n"
+version = "0.1.0"
+dependencies = [
+ "maud",
+ "maudit",
+]
+
+[[package]]
 name = "maudit-example-image-processing"
 version = "0.1.0"
 dependencies = [

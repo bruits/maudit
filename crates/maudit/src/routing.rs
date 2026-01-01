@@ -1,7 +1,5 @@
 use std::path::Path;
 
-use crate::route::RouteType;
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct ParameterDef {
     pub(crate) key: String,
@@ -50,14 +48,6 @@ pub fn extract_params_from_raw_route(raw_route: &str) -> Vec<ParameterDef> {
     params
 }
 
-pub fn get_route_type_from_route_params(params_def: &[ParameterDef]) -> RouteType {
-    if params_def.is_empty() {
-        RouteType::Static
-    } else {
-        RouteType::Dynamic
-    }
-}
-
 pub fn guess_if_route_is_endpoint(raw_route: &str) -> bool {
     let real_path = Path::new(&raw_route);
 
@@ -66,10 +56,7 @@ pub fn guess_if_route_is_endpoint(raw_route: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        route::RouteType,
-        routing::{ParameterDef, extract_params_from_raw_route, get_route_type_from_route_params},
-    };
+    use crate::routing::{ParameterDef, extract_params_from_raw_route};
 
     #[test]
     fn test_extract_params() {
@@ -136,55 +123,5 @@ mod tests {
         }];
 
         assert_eq!(extract_params_from_raw_route(input), expected);
-    }
-
-    #[test]
-    fn test_route_type_static() {
-        let input = "/articles";
-        let params_def = extract_params_from_raw_route(input);
-        assert_eq!(
-            get_route_type_from_route_params(&params_def),
-            RouteType::Static
-        );
-    }
-
-    #[test]
-    fn test_route_type_dynamic() {
-        let input = "/articles/[article]";
-        let params_def = extract_params_from_raw_route(input);
-        assert_eq!(
-            get_route_type_from_route_params(&params_def),
-            RouteType::Dynamic
-        );
-    }
-
-    #[test]
-    fn test_route_type_dynamic_multiple() {
-        let input = "/articles/[article]/[id]";
-        let params_def = extract_params_from_raw_route(input);
-        assert_eq!(
-            get_route_type_from_route_params(&params_def),
-            RouteType::Dynamic
-        );
-    }
-
-    #[test]
-    fn test_route_type_dynamic_escaped() {
-        let input = "/articles/\\[article\\]";
-        let params_def = extract_params_from_raw_route(input);
-        assert_eq!(
-            get_route_type_from_route_params(&params_def),
-            RouteType::Static
-        );
-    }
-
-    #[test]
-    fn test_route_type_dynamic_mixed_escaped_brackets() {
-        let input = "/articles/\\[article\\]/[id]";
-        let params_def = extract_params_from_raw_route(input);
-        assert_eq!(
-            get_route_type_from_route_params(&params_def),
-            RouteType::Dynamic
-        );
     }
 }

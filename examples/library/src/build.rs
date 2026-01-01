@@ -39,6 +39,7 @@ pub fn build_website(
                     &mut page_assets,
                     &url,
                     &options.base_url,
+                    None,
                 );
 
                 let content = route.build(&mut ctx)?;
@@ -68,6 +69,7 @@ pub fn build_website(
                 let mut dynamic_ctx = DynamicRouteContext {
                     content: &content_sources,
                     assets: &mut page_assets,
+                    variant: None,
                 };
 
                 let routes = route.get_pages(&mut dynamic_ctx);
@@ -78,13 +80,15 @@ pub fn build_website(
 
                     // Here the context is created from a dynamic route, as the context has to include the page parameters and properties.
                     let url = route.url(params);
-                    let mut ctx = PageContext::from_dynamic_route(
-                        &page,
-                        &content_sources,
-                        &mut page_assets,
-                        &url,
-                        &options.base_url,
-                    );
+                    let mut ctx = PageContext {
+                        params: page.1.as_ref(),
+                        props: page.2.as_ref(),
+                        content: &content_sources,
+                        assets: &mut page_assets,
+                        current_path: &url,
+                        base_url: &options.base_url,
+                        variant: None,
+                    };
 
                     // Everything below here is the same as for static routes.
 

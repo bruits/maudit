@@ -4,9 +4,7 @@
 use crate::assets::{Asset, RouteAssets};
 use crate::content::{ContentSources, Entry};
 use crate::errors::BuildError;
-use crate::routing::{
-    extract_params_from_raw_route, get_route_type_from_route_params, guess_if_route_is_endpoint,
-};
+use crate::routing::{extract_params_from_raw_route, guess_if_route_is_endpoint};
 use rustc_hash::FxHashMap;
 use std::any::Any;
 use std::path::{Path, PathBuf};
@@ -275,6 +273,8 @@ pub struct PageContext<'a> {
     pub current_path: &'a String,
     /// The base URL as defined in [`BuildOptions::base_url`](crate::BuildOptions::base_url)
     pub base_url: &'a Option<String>,
+    /// The variant being rendered, e.g. `Some("en")` for English variant, `None` for base route
+    pub variant: Option<String>,
 }
 
 impl<'a> PageContext<'a> {
@@ -283,14 +283,16 @@ impl<'a> PageContext<'a> {
         assets: &'a mut RouteAssets,
         current_path: &'a String,
         base_url: &'a Option<String>,
+        variant: Option<String>,
     ) -> Self {
-        Self {
+        PageContext {
             params: &(),
             props: &(),
             content,
             assets,
             current_path,
             base_url,
+            variant,
         }
     }
 
@@ -300,6 +302,7 @@ impl<'a> PageContext<'a> {
         assets: &'a mut RouteAssets,
         current_path: &'a String,
         base_url: &'a Option<String>,
+        variant: Option<String>,
     ) -> Self {
         Self {
             params: dynamic_page.1.as_ref(),
@@ -308,6 +311,7 @@ impl<'a> PageContext<'a> {
             assets,
             current_path,
             base_url,
+            variant,
         }
     }
 
@@ -383,9 +387,12 @@ impl<'a> PageContext<'a> {
 ///   }
 /// }
 /// ```
+/// Allows to access content and assets in a dynamic route's pages method.
 pub struct DynamicRouteContext<'a> {
     pub content: &'a ContentSources,
     pub assets: &'a mut RouteAssets,
+    /// The variant being generated, e.g. `Some("en")` for English variant, `None` for base route
+    pub variant: Option<&'a str>,
 }
 
 /// Must be implemented for every page of your website.
@@ -464,13 +471,32 @@ pub enum RouteType {
 /// We expose it because the derive macro implements it for the user behind the scenes.
 pub trait InternalRoute {
     fn route_raw(&self) -> String;
+
+    fn variants(&self) -> Vec<(String, String)> {
+        vec![]
+    }
+
     fn is_endpoint(&self) -> bool {
         guess_if_route_is_endpoint(&self.route_raw())
     }
     fn route_type(&self) -> RouteType {
         let params_def = extract_params_from_raw_route(&self.route_raw());
 
-        get_route_type_from_route_params(&params_def)
+        // Check if base route is dynamic
+        if !params_def.is_empty() {
+            return RouteType::Dynamic;
+        }
+
+        // Check if any variant is dynamic
+        let variants = self.variants();
+        for (_id, variant_path) in variants {
+            let variant_params = extract_params_from_raw_route(&variant_path);
+            if !variant_params.is_empty() {
+                return RouteType::Dynamic;
+            }
+        }
+
+        RouteType::Static
     }
 
     fn url(&self, params: &PageParams) -> String {
@@ -541,7 +567,7 @@ use std::sync::OnceLock;
 
 // This function and the one below are extremely performance-sensitive, as they are called for every single page during the build.
 // It'd be great to optimize them as much as possible, make them allocation-free, etc. But, I'm not smart enough right now to do that!
-fn build_url_with_params(
+pub fn build_url_with_params(
     route_template: &str,
     params_def: &[ParameterDef],
     params: &PageParams,
@@ -586,7 +612,7 @@ fn build_url_with_params(
     result
 }
 
-fn build_file_path_with_params(
+pub fn build_file_path_with_params(
     route_template: &str,
     params_def: &[ParameterDef],
     params: &PageParams,
@@ -663,8 +689,27 @@ impl<'a> InternalRoute for CachedRoute<'a> {
         self.inner.route_raw()
     }
 
+    fn variants(&self) -> Vec<(String, String)> {
+        self.inner.variants()
+    }
+
     fn route_type(&self) -> RouteType {
-        get_route_type_from_route_params(self.get_cached_params())
+        // Check if base route is dynamic
+        let params_def = self.get_cached_params();
+        if !params_def.is_empty() {
+            return RouteType::Dynamic;
+        }
+
+        // Check if any variant is dynamic
+        let variants = self.variants();
+        for (_id, variant_path) in variants {
+            let variant_params = extract_params_from_raw_route(&variant_path);
+            if !variant_params.is_empty() {
+                return RouteType::Dynamic;
+            }
+        }
+
+        RouteType::Static
     }
 
     fn url(&self, params: &PageParams) -> String {
@@ -771,7 +816,7 @@ pub mod prelude {
         StyleOptions,
     };
     pub use crate::content::{ContentContext, ContentEntry, Entry, EntryInner, MarkdownContent};
-    pub use maudit_macros::{Params, route};
+    pub use maudit_macros::{Params, locales, route};
 }
 
 #[cfg(test)]

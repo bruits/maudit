@@ -1,0 +1,12 @@
+[package]
+name = "maudit-example-i18n"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[package.metadata.maudit]
+intended_version = "0.6.4"
+
+[dependencies]
+maudit = { workspace = true }
+maud = "0.27.0"
