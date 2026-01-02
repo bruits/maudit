@@ -15,11 +15,8 @@ use crate::{
     content::ContentSources,
     is_dev,
     logging::print_title,
-    route::{
-        CachedRoute, DynamicRouteContext, FullRoute, InternalRoute, PageContext, PageParams,
-        build_file_path_with_params, build_url_with_params,
-    },
-    routing::{extract_params_from_raw_route, guess_if_route_is_endpoint},
+    route::{CachedRoute, DynamicRouteContext, FullRoute, InternalRoute, PageContext, PageParams},
+    routing::extract_params_from_raw_route,
 };
 use colored::{ColoredString, Colorize};
 use log::{debug, info, trace, warn};
@@ -239,11 +236,8 @@ pub async fn build(
                 let mut route_assets =
                     RouteAssets::new(&route_assets_options, Some(image_cache.clone()));
 
-                let url = if variant_path.starts_with('/') {
-                    variant_path.clone()
-                } else {
-                    format!("/{}", variant_path)
-                };
+                let params = PageParams::default();
+                let url = cached_route.variant_url(&params, &variant_id)?;
 
                 let result = route.build(&mut PageContext::from_static_route(
                     content_sources,
@@ -253,10 +247,8 @@ pub async fn build(
                     Some(variant_id.clone()),
                 ))?;
 
-                let file_path = options
-                    .output_dir
-                    .join(variant_path.trim_start_matches('/'))
-                    .join("index.html");
+                let file_path =
+                    cached_route.variant_file_path(&params, &options.output_dir, &variant_id)?;
 
                 write_route_file(&result, &file_path)?;
 
@@ -295,12 +287,7 @@ pub async fn build(
                     warn!(target: "build", "Variant {} has dynamic parameters but Route::pages returned an empty Vec.", variant_id.bold());
                 } else {
                     for page in pages {
-                        let url = build_url_with_params(
-                            &variant_path,
-                            &variant_params,
-                            &page.0,
-                            guess_if_route_is_endpoint(&variant_path),
-                        );
+                        let url = cached_route.variant_url(&page.0, &variant_id)?;
 
                         let content = route.build(&mut PageContext::from_dynamic_route(
                             &page,
@@ -311,13 +298,11 @@ pub async fn build(
                             Some(variant_id.clone()),
                         ))?;
 
-                        let file_path = build_file_path_with_params(
-                            &variant_path,
-                            &variant_params,
+                        let file_path = cached_route.variant_file_path(
                             &page.0,
                             &options.output_dir,
-                            guess_if_route_is_endpoint(&variant_path),
-                        );
+                            &variant_id,
+                        )?;
 
                         write_route_file(&content, &file_path)?;
 

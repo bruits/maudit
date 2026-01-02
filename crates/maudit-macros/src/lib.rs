@@ -65,8 +65,7 @@ impl Parse for RouteArgs {
 
         // First argument: either a path expression or a named argument like locales(...)
         if input.peek(Ident) && input.peek2(syn::token::Paren) {
-            // First argument is a named argument (e.g., locales(...))
-            // This means it's a variant-only route with no base path
+            // If the first argument is a named one, that means there's no base path and this route should only have variants
             let ident: Ident = input.parse()?;
             let ident_str = ident.to_string();
 
@@ -82,11 +81,11 @@ impl Parse for RouteArgs {
                 ));
             }
         } else {
-            // First argument is a path expression
+            // First argument is a path expression, e.g., "/about" so proceed as normal
             path = Some(input.parse::<Expr>()?);
         }
 
-        // Parse remaining named arguments (locales, middleware, etc.)
+        // Parse remaining named arguments (right now just locales(...))
         while !input.is_empty() {
             input.parse::<Token![,]>()?;
 
@@ -94,7 +93,7 @@ impl Parse for RouteArgs {
                 break;
             }
 
-            // All subsequent arguments must be named (e.g., locales(...), middleware(...))
+            // All subsequent arguments must be named (e.g., locales(...), the path must be first)
             if input.peek(Ident) && input.peek2(syn::token::Paren) {
                 let ident: Ident = input.parse()?;
                 let ident_str = ident.to_string();
@@ -160,7 +159,7 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let struct_name = &item_struct.ident;
 
     // Generate variants method based on locales
-    let variant_methods = if !args.locales.is_empty() {
+    let variant_method = if !args.locales.is_empty() {
         let variant_tuples = args.locales.iter().map(|variant| {
             let locale_name = variant.locale.to_string();
 
@@ -218,7 +217,7 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
         impl maudit::route::InternalRoute for #struct_name {
             #route_raw_impl
 
-            #variant_methods
+            #variant_method
         }
 
         impl maudit::route::FullRoute for #struct_name {
