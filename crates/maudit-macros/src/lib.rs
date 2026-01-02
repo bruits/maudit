@@ -63,53 +63,70 @@ impl Parse for RouteArgs {
             return Ok(RouteArgs { path, locales });
         }
 
-        // Try to parse the first argument
-        let lookahead = input.lookahead1();
+        // First argument: either a path expression or a named argument like locales(...)
+        if input.peek(Ident) && input.peek2(syn::token::Paren) {
+            // First argument is a named argument (e.g., locales(...))
+            // This means it's a variant-only route with no base path
+            let ident: Ident = input.parse()?;
+            let ident_str = ident.to_string();
 
-        // Check if it's "locales(...)"
-        if lookahead.peek(Ident) {
-            let ident: Ident = input.fork().parse()?;
-            if ident == "locales" {
-                // Parse locales(...) argument
-                input.parse::<Ident>()?; // consume "locales"
+            if ident_str == "locales" {
                 let content;
                 syn::parenthesized!(content in input);
-
                 let variants = Punctuated::<LocaleVariant, Token![,]>::parse_terminated(&content)?;
                 locales = variants.into_iter().collect();
-
-                // Check for duplicate locales
-                Self::check_duplicate_locales(&locales)?;
-
-                return Ok(RouteArgs { path, locales });
+            } else {
+                return Err(syn::Error::new_spanned(
+                    ident,
+                    format!("unknown argument '{}', expected 'locales'", ident_str),
+                ));
             }
-        }
-
-        // Otherwise, try to parse as path expression
-        if !input.is_empty() {
+        } else {
+            // First argument is a path expression
             path = Some(input.parse::<Expr>()?);
         }
 
-        // Check if there's a comma and more args
-        if !input.is_empty() {
+        // Parse remaining named arguments (locales, middleware, etc.)
+        while !input.is_empty() {
             input.parse::<Token![,]>()?;
 
-            // Check for locales(...) as second argument
-            if input.peek(Ident) {
+            if input.is_empty() {
+                break;
+            }
+
+            // All subsequent arguments must be named (e.g., locales(...), middleware(...))
+            if input.peek(Ident) && input.peek2(syn::token::Paren) {
                 let ident: Ident = input.parse()?;
-                if ident == "locales" {
+                let ident_str = ident.to_string();
+
+                if ident_str == "locales" {
+                    if !locales.is_empty() {
+                        return Err(syn::Error::new_spanned(
+                            ident,
+                            "locales specified multiple times",
+                        ));
+                    }
                     let content;
                     syn::parenthesized!(content in input);
-
                     let variants =
                         Punctuated::<LocaleVariant, Token![,]>::parse_terminated(&content)?;
                     locales = variants.into_iter().collect();
-
-                    // Check for duplicate locales
-                    Self::check_duplicate_locales(&locales)?;
+                } else {
+                    return Err(syn::Error::new_spanned(
+                        ident,
+                        format!("unknown argument '{}'", ident_str),
+                    ));
                 }
+            } else {
+                return Err(syn::Error::new(
+                    input.span(),
+                    "expected named argument (e.g., locales(...)), path must be first argument",
+                ));
             }
         }
+
+        // Check for duplicate locales
+        Self::check_duplicate_locales(&locales)?;
 
         Ok(RouteArgs { path, locales })
     }

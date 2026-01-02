@@ -1,0 +1,15 @@
+use crate::layout::layout;
+use maud::html;
+use maudit::route::prelude::*;
+
+// This should produce a compile error because path comes after locales
+#[route(locales(en = "/en"), "/about")]
+pub struct WrongOrder;
+
+impl Route for WrongOrder {
+    fn render(&self, _ctx: &mut PageContext) -> impl Into<RenderResult> {
+        layout(html! {
+            h1 { "This should not compile!" }
+        })
+    }
+}
