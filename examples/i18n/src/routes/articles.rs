@@ -7,8 +7,10 @@ pub struct ArticleParams {
     pub slug: String,
 }
 
-#[locales(en(path = "/en/articles/[slug]"), sv(path = "/sv/artiklar/[slug]"))]
-#[route("/articles/[slug]")]
+#[route(
+    "/articles/[slug]",
+    locales(en = "/en/articles/[slug]", sv = "/sv/artiklar/[slug]")
+)]
 pub struct Article;
 
 impl Route<ArticleParams> for Article {

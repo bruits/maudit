@@ -2,8 +2,7 @@ use crate::layout::layout;
 use maud::html;
 use maudit::route::prelude::*;
 
-#[locales(en(path = "/en"), sv(path = "/sv"), de(path = "/de"))]
-#[route]
+#[route(locales(en = "/en", sv = "/sv", de = "/de"))]
 pub struct Index;
 
 impl Route for Index {

@@ -816,7 +816,7 @@ pub mod prelude {
         StyleOptions,
     };
     pub use crate::content::{ContentContext, ContentEntry, Entry, EntryInner, MarkdownContent};
-    pub use maudit_macros::{Params, locales, route};
+    pub use maudit_macros::{Params, route};
 }
 
 #[cfg(test)]

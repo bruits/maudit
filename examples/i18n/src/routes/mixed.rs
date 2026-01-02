@@ -9,8 +9,7 @@ pub struct MixedParams {
 
 // Base route is static (/products)
 // But variants have dynamic parameters (/en/products/[id])
-#[locales(en(path = "/en/products/[id]"), sv(path = "/sv/produkter/[id]"))]
-#[route]
+#[route(locales(en = "/en/products/[id]", sv = "/sv/produkter/[id]"))]
 pub struct Mixed;
 
 impl Route<MixedParams> for Mixed {
