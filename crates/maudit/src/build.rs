@@ -41,6 +41,34 @@ pub fn execute_build(
     async_runtime.block_on(async { build(routes, content_sources, options).await })
 }
 
+/// Represents a page to be built
+struct PageToBuild {
+    /// The actual URL for this page (e.g., "/blog/my-post")
+    url: String,
+    /// The output file path
+    file_path: PathBuf,
+    /// Full page result for dynamic routes from get_pages (params, props, typed_params)
+    page_result: Option<(
+        PageParams,
+        crate::route::PageProps,
+        crate::route::PageTypedParams,
+    )>,
+    /// Optional variant ID
+    variant_id: Option<String>,
+    /// Tree depth for logging (0 = base, 1 = variant/dynamic page)
+    tree_depth: usize,
+}
+
+impl PageToBuild {
+    fn log_prefix(&self) -> &str {
+        match self.tree_depth {
+            0 => "",
+            1 => "├─ ",
+            _ => "│  ├─ ",
+        }
+    }
+}
+
 pub async fn build(
     routes: &[&dyn FullRoute],
     content_sources: &mut ContentSources,
@@ -133,52 +161,28 @@ pub async fn build(
 
         trace!(target: "build", "Processing route: base='{}', variants={}", base_path, variants.len());
 
-        // Determine if we need to fetch dynamic pages
-        let base_params = extract_params_from_raw_route(&base_path);
+        // Build list of pages to generate for this route
+        let mut pages_to_build: Vec<PageToBuild> = Vec::new();
 
-        // Collect logging data for structured output
-        let mut base_log_line = String::new();
-        let mut variant_logs: Vec<String> = Vec::new();
-        let mut base_dynamic_logs: Vec<String> = Vec::new();
-
-        // Generate base route pages
+        // Handle base route
         if !base_path.is_empty() {
+            let base_params = extract_params_from_raw_route(&base_path);
+
             if base_params.is_empty() {
-                // Static base route - generate one page
-                let mut route_assets =
-                    RouteAssets::new(&route_assets_options, Some(image_cache.clone()));
+                // Static base route
                 let params = PageParams::default();
                 let url = cached_route.url(&params);
-
-                let result = route.build(&mut PageContext::from_static_route(
-                    content_sources,
-                    &mut route_assets,
-                    &url,
-                    &options.base_url,
-                    None,
-                ))?;
-
                 let file_path = cached_route.file_path(&params, &options.output_dir);
-                write_route_file(&result, &file_path)?;
 
-                base_log_line = format!("{} -> {}", url, file_path.to_string_lossy().dimmed());
-
-                build_pages_images.extend(route_assets.images);
-                build_pages_scripts.extend(route_assets.scripts);
-                build_pages_styles.extend(route_assets.styles);
-
-                build_metadata.add_page(
-                    base_path.clone(),
-                    file_path.to_string_lossy().to_string(),
-                    None,
-                );
-
-                page_count += 1;
+                pages_to_build.push(PageToBuild {
+                    url,
+                    file_path,
+                    page_result: None,
+                    variant_id: None,
+                    tree_depth: 0,
+                });
             } else {
-                // Dynamic base route - just show the pattern
-                base_log_line = base_path.clone();
-
-                // Fetch pages for base route with no variant
+                // Dynamic base route - fetch pages
                 let mut page_assets =
                     RouteAssets::new(&route_assets_options, Some(image_cache.clone()));
                 let pages = route.get_pages(&mut DynamicRouteContext {
@@ -190,31 +194,20 @@ pub async fn build(
                 if pages.is_empty() {
                     warn!(target: "build", "{} has dynamic parameters but Route::pages returned an empty Vec. No pages will be generated.", base_path.bold());
                 } else {
-                    // Generate pages for each dynamic page (logging collected later)
+                    // Log the pattern first
+                    info!(target: "pages", "{}", base_path);
+
                     for page in pages {
                         let url = cached_route.url(&page.0);
-
-                        let content = route.build(&mut PageContext::from_dynamic_route(
-                            &page,
-                            content_sources,
-                            &mut page_assets,
-                            &url,
-                            &options.base_url,
-                            None,
-                        ))?;
-
                         let file_path = cached_route.file_path(&page.0, &options.output_dir);
-                        write_route_file(&content, &file_path)?;
 
-                        base_dynamic_logs.push(format!("{}", file_path.to_string_lossy().dimmed()));
-
-                        build_metadata.add_page(
-                            base_path.clone(),
-                            file_path.to_string_lossy().to_string(),
-                            Some(page.0.0.clone()),
-                        );
-
-                        page_count += 1;
+                        pages_to_build.push(PageToBuild {
+                            url,
+                            file_path,
+                            page_result: Some(page),
+                            variant_id: None,
+                            tree_depth: 1,
+                        });
                     }
                 }
 
@@ -222,59 +215,28 @@ pub async fn build(
                 build_pages_scripts.extend(page_assets.scripts);
                 build_pages_styles.extend(page_assets.styles);
             }
-        } else if !variants.is_empty() {
-            // No base route, just variants
-            base_log_line = "(variants only)".to_string();
         }
 
-        // Generate variant pages
+        // Handle variants
         for (variant_id, variant_path) in variants {
             let variant_params = extract_params_from_raw_route(&variant_path);
 
             if variant_params.is_empty() {
-                // Static variant - generate one page
-                let mut route_assets =
-                    RouteAssets::new(&route_assets_options, Some(image_cache.clone()));
-
+                // Static variant
                 let params = PageParams::default();
                 let url = cached_route.variant_url(&params, &variant_id)?;
-
-                let result = route.build(&mut PageContext::from_static_route(
-                    content_sources,
-                    &mut route_assets,
-                    &url,
-                    &options.base_url,
-                    Some(variant_id.clone()),
-                ))?;
-
                 let file_path =
                     cached_route.variant_file_path(&params, &options.output_dir, &variant_id)?;
 
-                write_route_file(&result, &file_path)?;
-
-                variant_logs.push(format!(
-                    "├─ {} -> {}",
+                pages_to_build.push(PageToBuild {
                     url,
-                    file_path.to_string_lossy().dimmed()
-                ));
-
-                build_pages_images.extend(route_assets.images);
-                build_pages_scripts.extend(route_assets.scripts);
-                build_pages_styles.extend(route_assets.styles);
-
-                build_metadata.add_page(
-                    format!("{} ({})", base_path, variant_id),
-                    file_path.to_string_lossy().to_string(),
-                    None,
-                );
-
-                page_count += 1;
+                    file_path,
+                    page_result: None,
+                    variant_id: Some(variant_id.clone()),
+                    tree_depth: 1,
+                });
             } else {
-                // Dynamic variant - show pattern then pages
-                let variant_log = format!("├─ {}", variant_path);
-                let mut variant_page_logs: Vec<String> = Vec::new();
-
-                // Fetch pages for this variant
+                // Dynamic variant - fetch pages
                 let mut page_assets =
                     RouteAssets::new(&route_assets_options, Some(image_cache.clone()));
                 let pages = route.get_pages(&mut DynamicRouteContext {
@@ -286,43 +248,26 @@ pub async fn build(
                 if pages.is_empty() {
                     warn!(target: "build", "Variant {} has dynamic parameters but Route::pages returned an empty Vec.", variant_id.bold());
                 } else {
+                    // Log the variant pattern first
+                    info!(target: "pages", "├─ {}", variant_path);
+
                     for page in pages {
                         let url = cached_route.variant_url(&page.0, &variant_id)?;
-
-                        let content = route.build(&mut PageContext::from_dynamic_route(
-                            &page,
-                            content_sources,
-                            &mut page_assets,
-                            &url,
-                            &options.base_url,
-                            Some(variant_id.clone()),
-                        ))?;
-
                         let file_path = cached_route.variant_file_path(
                             &page.0,
                             &options.output_dir,
                             &variant_id,
                         )?;
 
-                        write_route_file(&content, &file_path)?;
-
-                        variant_page_logs
-                            .push(format!("│  ├─ {}", file_path.to_string_lossy().dimmed()));
-
-                        build_metadata.add_page(
-                            format!("{} ({})", base_path, variant_id),
-                            file_path.to_string_lossy().to_string(),
-                            Some(page.0.0.clone()),
-                        );
-
-                        page_count += 1;
+                        pages_to_build.push(PageToBuild {
+                            url,
+                            file_path,
+                            page_result: Some(page),
+                            variant_id: Some(variant_id.clone()),
+                            tree_depth: 2,
+                        });
                     }
                 }
-
-                // Add variant pattern line
-                variant_logs.push(variant_log);
-                // Add all the variant's pages
-                variant_logs.extend(variant_page_logs);
 
                 build_pages_images.extend(page_assets.images);
                 build_pages_scripts.extend(page_assets.scripts);
@@ -330,15 +275,72 @@ pub async fn build(
             }
         }
 
-        // Output logging in hierarchical structure
-        if !base_log_line.is_empty() {
-            info!(target: "pages", "{}", base_log_line);
-        }
-        for variant_log in variant_logs {
-            info!(target: "pages", "{}", variant_log);
-        }
-        for base_page_log in base_dynamic_logs {
-            info!(target: "pages", "├─ {}", base_page_log);
+        // Now build all pages for this route and log as we go
+        for page_info in pages_to_build {
+            let mut route_assets =
+                RouteAssets::new(&route_assets_options, Some(image_cache.clone()));
+
+            let content = if let Some(ref page_result) = page_info.page_result {
+                // Build dynamic page
+                route.build(&mut PageContext::from_dynamic_route(
+                    page_result,
+                    content_sources,
+                    &mut route_assets,
+                    &page_info.url,
+                    &options.base_url,
+                    page_info.variant_id.clone(),
+                ))?
+            } else {
+                // Build static page
+                route.build(&mut PageContext::from_static_route(
+                    content_sources,
+                    &mut route_assets,
+                    &page_info.url,
+                    &options.base_url,
+                    page_info.variant_id.clone(),
+                ))?
+            };
+
+            write_route_file(&content, &page_info.file_path)?;
+
+            // Log immediately
+            let log_line = if page_info.tree_depth == 0 {
+                format!(
+                    "{} -> {}",
+                    page_info.url,
+                    page_info.file_path.to_string_lossy().dimmed()
+                )
+            } else {
+                format!(
+                    "{}{}",
+                    page_info.log_prefix(),
+                    page_info.file_path.to_string_lossy().dimmed()
+                )
+            };
+            info!(target: "pages", "{}", log_line);
+
+            // Add to metadata
+            let metadata_route_name = if let Some(variant_id) = &page_info.variant_id {
+                if base_path.is_empty() {
+                    format!("({})", variant_id)
+                } else {
+                    format!("{} ({})", base_path, variant_id)
+                }
+            } else {
+                base_path.clone()
+            };
+
+            build_metadata.add_page(
+                metadata_route_name,
+                page_info.file_path.to_string_lossy().to_string(),
+                page_info.page_result.as_ref().map(|pr| pr.0.0.clone()),
+            );
+
+            build_pages_images.extend(route_assets.images);
+            build_pages_scripts.extend(route_assets.scripts);
+            build_pages_styles.extend(route_assets.styles);
+
+            page_count += 1;
         }
     }
 
