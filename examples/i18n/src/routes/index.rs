@@ -10,11 +10,16 @@ impl Route for Index {
         layout(html! {
             h1 { "i18n Example" }
             p { "This route only exists as variants - no base path!" }
+            p { "The current variant is: " (if let Some(variant) = &_ctx.variant {
+                variant
+            } else {
+                "none"
+            }) }
             nav {
                 ul {
-                    li { a href="/en" { "English" } }
-                    li { a href="/sv" { "Swedish" } }
-                    li { a href="/de" { "German" } }
+                    li { a href="/en/" { "English" } }
+                    li { a href="/sv/" { "Swedish" } }
+                    li { a href="/de/" { "German" } }
                 }
             }
         })
