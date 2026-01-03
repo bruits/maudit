@@ -41,15 +41,6 @@ pub fn execute_build(
     async_runtime.block_on(async { build(routes, content_sources, options).await })
 }
 
-/// Returns the log prefix for a given tree depth
-fn log_prefix(tree_depth: usize) -> &'static str {
-    match tree_depth {
-        0 => "",
-        1 => "├─ ",
-        _ => "│  ├─ ",
-    }
-}
-
 pub async fn build(
     routes: &[&dyn FullRoute],
     content_sources: &mut ContentSources,
@@ -136,6 +127,7 @@ pub async fn build(
     // how fast most sites build. Ideally, it'd be configurable and default to serial, but I haven't found an ergonomic way to do that yet.
     // If you manage to make it parallel and it actually improves performance, please open a PR!
     for route in routes {
+        let route_start = Instant::now();
         let cached_route = CachedRoute::new(*route);
         let base_path = route.route_raw();
         let variants = cached_route.variants();
@@ -144,7 +136,6 @@ pub async fn build(
 
         let has_base_route = !base_path.is_empty();
 
-        // If no base route but has variants, show "(variants only)" header
         if !has_base_route && !variants.is_empty() {
             info!(target: "pages", "(variants only)");
         }
@@ -153,13 +144,13 @@ pub async fn build(
         if has_base_route {
             let base_params = extract_params_from_raw_route(&base_path);
 
+            // Static base route
             if base_params.is_empty() {
-                // Static base route
                 let mut route_assets =
                     RouteAssets::new(&route_assets_options, Some(image_cache.clone()));
+
                 let params = PageParams::default();
                 let url = cached_route.url(&params);
-                let file_path = cached_route.file_path(&params, &options.output_dir);
 
                 let result = route.build(&mut PageContext::from_static_route(
                     content_sources,
@@ -169,9 +160,11 @@ pub async fn build(
                     None,
                 ))?;
 
+                let file_path = cached_route.file_path(&params, &options.output_dir);
+
                 write_route_file(&result, &file_path)?;
 
-                info!(target: "pages", "{} -> {}", url, file_path.to_string_lossy().dimmed());
+                info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
                 build_pages_images.extend(route_assets.images);
                 build_pages_scripts.extend(route_assets.scripts);
@@ -195,12 +188,13 @@ pub async fn build(
                 });
 
                 if pages.is_empty() {
-                    warn!(target: "build", "{} has dynamic parameters but Route::pages returned an empty Vec. No pages will be generated.", base_path.bold());
+                    warn!(target: "build", "{} is a dynamic route, but its implementation of Route::pages returned an empty Vec. No pages will be generated for this route.", base_path.bold());
+                    continue;
                 } else {
                     // Log the pattern first
                     info!(target: "pages", "{}", base_path);
 
-                    // Build all pages for this group
+                    // Build all pages for this route
                     for page in pages {
                         let url = cached_route.url(&page.0);
                         let file_path = cached_route.file_path(&page.0, &options.output_dir);
@@ -216,7 +210,7 @@ pub async fn build(
 
                         write_route_file(&content, &file_path)?;
 
-                        info!(target: "pages", "{}{}", log_prefix(1), file_path.to_string_lossy().dimmed());
+                        info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
                         build_metadata.add_page(
                             base_path.clone(),
@@ -236,8 +230,8 @@ pub async fn build(
 
         // Handle variants
         for (variant_id, variant_path) in variants {
+            let variant_start = Instant::now();
             let variant_params = extract_params_from_raw_route(&variant_path);
-            let variant_depth = 1;
 
             if variant_params.is_empty() {
                 // Static variant
@@ -259,7 +253,7 @@ pub async fn build(
 
                 write_route_file(&result, &file_path)?;
 
-                info!(target: "pages", "{}{}", log_prefix(variant_depth), file_path.to_string_lossy().dimmed());
+                info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_start.elapsed(), &route_format_options));
 
                 build_pages_images.extend(route_assets.images);
                 build_pages_scripts.extend(route_assets.scripts);
@@ -286,10 +280,11 @@ pub async fn build(
                     warn!(target: "build", "Variant {} has dynamic parameters but Route::pages returned an empty Vec.", variant_id.bold());
                 } else {
                     // Log the variant pattern first
-                    info!(target: "pages", "{}{}", log_prefix(variant_depth), variant_path);
+                    info!(target: "pages", "├─ {}", variant_path);
 
                     // Build all pages for this variant group
                     for page in pages {
+                        let variant_page_start = Instant::now();
                         let url = cached_route.variant_url(&page.0, &variant_id)?;
                         let file_path = cached_route.variant_file_path(
                             &page.0,
@@ -308,12 +303,12 @@ pub async fn build(
 
                         write_route_file(&content, &file_path)?;
 
-                        info!(target: "pages", "{}{}", log_prefix(variant_depth + 1), file_path.to_string_lossy().dimmed());
+                        info!(target: "pages", "│  ├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_page_start.elapsed(), &route_format_options));
 
                         build_metadata.add_page(
-                            format!("{} ({})", base_path, variant_id),
+                            route.route_raw().to_string(),
                             file_path.to_string_lossy().to_string(),
-                            Some(page.0.0.clone()),
+                            Some(page.0.0),
                         );
 
                         page_count += 1;
