@@ -201,14 +201,14 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     // Generate route_raw implementation based on whether path is provided
     let route_raw_impl = if let Some(path) = &args.path {
         quote! {
-            fn route_raw(&self) -> String {
-                #path.to_string()
+            fn route_raw(&self) -> Option<String> {
+                Some(#path.to_string())
             }
         }
     } else {
         quote! {
-            fn route_raw(&self) -> String {
-                String::new()
+            fn route_raw(&self) -> Option<String> {
+                None
             }
         }
     };

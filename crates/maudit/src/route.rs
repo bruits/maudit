@@ -470,19 +470,23 @@ pub enum RouteType {
 /// Used internally by Maudit and should not be implemented by the user.
 /// We expose it because the derive macro implements it for the user behind the scenes.
 pub trait InternalRoute {
-    fn route_raw(&self) -> String;
+    fn route_raw(&self) -> Option<String>;
 
     fn variants(&self) -> Vec<(String, String)> {
         vec![]
     }
 
     fn is_endpoint(&self) -> bool {
-        guess_if_route_is_endpoint(&self.route_raw())
+        self.route_raw()
+            .as_ref()
+            .map(|path| guess_if_route_is_endpoint(path))
+            .unwrap_or(false)
     }
 
     #[deprecated]
     fn route_type(&self) -> RouteType {
-        let params_def = extract_params_from_raw_route(&self.route_raw());
+        let path = self.route_raw().unwrap_or_default();
+        let params_def = extract_params_from_raw_route(&path);
 
         // Check if base route is dynamic
         if !params_def.is_empty() {
@@ -502,7 +506,7 @@ pub trait InternalRoute {
     }
 
     fn url(&self, params: &PageParams) -> String {
-        let route = self.route_raw();
+        let route = self.route_raw().unwrap_or_default();
         let params_def = extract_params_from_raw_route(&route);
         build_url_with_params(&route, &params_def, params, self.is_endpoint())
     }
@@ -525,7 +529,7 @@ pub trait InternalRoute {
     }
 
     fn file_path(&self, params: &PageParams, output_dir: &Path) -> PathBuf {
-        let route = self.route_raw();
+        let route = self.route_raw().unwrap_or_default();
         let params_def = extract_params_from_raw_route(&route);
         build_file_path_with_params(&route, &params_def, params, output_dir, self.is_endpoint())
     }
@@ -606,7 +610,7 @@ pub trait FullRoute: InternalRoute + Sync + Send {
 
     fn build(&self, ctx: &mut PageContext) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let result = self.render_internal(ctx)?;
-        let bytes = finish_route(result, ctx.assets, self.route_raw())?;
+        let bytes = finish_route(result, ctx.assets, self.route_raw().unwrap_or_default())?;
 
         Ok(bytes)
     }
@@ -725,14 +729,15 @@ impl<'a> CachedRoute<'a> {
     }
 
     fn get_cached_params(&self) -> &Vec<ParameterDef> {
-        self.params_cache
-            .get_or_init(|| extract_params_from_raw_route(&self.inner.route_raw()))
+        self.params_cache.get_or_init(|| {
+            extract_params_from_raw_route(&self.inner.route_raw().unwrap_or_default())
+        })
     }
 
     fn is_endpoint(&self) -> bool {
         *self
             .is_endpoint
-            .get_or_init(|| guess_if_route_is_endpoint(&self.inner.route_raw()))
+            .get_or_init(|| guess_if_route_is_endpoint(&self.inner.route_raw().unwrap_or_default()))
     }
 
     fn get_variant_cache(&self, variant_id: &str) -> Option<&(Vec<ParameterDef>, bool)> {
@@ -751,7 +756,7 @@ impl<'a> CachedRoute<'a> {
 }
 
 impl<'a> InternalRoute for CachedRoute<'a> {
-    fn route_raw(&self) -> String {
+    fn route_raw(&self) -> Option<String> {
         self.inner.route_raw()
     }
 
@@ -780,7 +785,7 @@ impl<'a> InternalRoute for CachedRoute<'a> {
 
     fn url(&self, params: &PageParams) -> String {
         build_url_with_params(
-            &self.route_raw(),
+            &self.route_raw().unwrap_or_default(),
             self.get_cached_params(),
             params,
             self.is_endpoint(),
@@ -807,7 +812,7 @@ impl<'a> InternalRoute for CachedRoute<'a> {
 
     fn file_path(&self, params: &PageParams, output_dir: &Path) -> PathBuf {
         build_file_path_with_params(
-            &self.route_raw(),
+            &self.route_raw().unwrap_or_default(),
             self.get_cached_params(),
             params,
             output_dir,
@@ -939,8 +944,8 @@ mod tests {
     }
 
     impl InternalRoute for TestPage {
-        fn route_raw(&self) -> String {
-            self.route.clone()
+        fn route_raw(&self) -> Option<String> {
+            Some(self.route.clone())
         }
     }
 

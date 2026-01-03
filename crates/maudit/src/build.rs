@@ -132,17 +132,17 @@ pub async fn build(
         let base_path = route.route_raw();
         let variants = cached_route.variants();
 
-        trace!(target: "build", "Processing route: base='{}', variants={}", base_path, variants.len());
+        trace!(target: "build", "Processing route: base='{}', variants={}", base_path.as_deref().unwrap_or(""), variants.len());
 
-        let has_base_route = !base_path.is_empty();
+        let has_base_route = base_path.is_some();
 
         if !has_base_route && !variants.is_empty() {
             info!(target: "pages", "(variants only)");
         }
 
         // Handle base route
-        if has_base_route {
-            let base_params = extract_params_from_raw_route(&base_path);
+        if let Some(ref base_path) = base_path {
+            let base_params = extract_params_from_raw_route(base_path);
 
             // Static base route
             if base_params.is_empty() {
@@ -260,7 +260,7 @@ pub async fn build(
                 build_pages_styles.extend(route_assets.styles);
 
                 build_metadata.add_page(
-                    format!("{} ({})", base_path, variant_id),
+                    variant_path.clone(),
                     file_path.to_string_lossy().to_string(),
                     None,
                 );
@@ -306,9 +306,9 @@ pub async fn build(
                         info!(target: "pages", "│  ├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_page_start.elapsed(), &route_format_options));
 
                         build_metadata.add_page(
-                            route.route_raw().to_string(),
+                            variant_path.clone(),
                             file_path.to_string_lossy().to_string(),
-                            Some(page.0.0),
+                            Some(page.0.0.clone()),
                         );
 
                         page_count += 1;
