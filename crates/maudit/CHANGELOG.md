@@ -1,5 +1,11 @@
 # maudit
 
+## 0.7.0 — 2026-01-03
+
+### Minor changes
+
+- [f40ccc7](https://github.com/bruits/maudit/commit/f40ccc75879b9af7788624959a74997ee47a016c) Adds support for generating variants of pages for the purpose of internationalization — Thanks @Princesseuh!
+
 ## 0.6.8 — 2025-12-12
 
 ### Patch changes
