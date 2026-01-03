@@ -17,15 +17,15 @@ The built-in `coronate` function takes a list of routes (which all implements th
 ```rs
 use maudit::{
   content::ContentSources,
-  page::{FullRoute, RouteAssets},
-  routing::{DynamicRouteContext, PageContext, PageParams, RouteType},
+  route::{DynamicRouteContext, FullRoute, PageContext, PageParams},
+  routing::extract_params_from_raw_route,
   BuildOptions,
 };
 
 pub fn build_website(
   routes: &[&dyn FullRoute],
   mut content_sources: ContentSources,
-  options: BuildOptions
+  options: &BuildOptions
 ) -> Result<(), Box<dyn std::error::Error>> {
   // We'll fill this in later.
   Ok(())
@@ -36,11 +36,13 @@ pub fn build_website(
 
 The first step in building our own entrypoint is to iterate over the routes and build each page. Routes can either be static (i.e. `/index`) or dynamic (i.e. `/articles/[id]`). For now, we'll only handle static routes.
 
+To determine if a route is static or dynamic, we get its raw route path using `route_raw()` and check if it contains any parameters using `extract_params_from_raw_route()`.
+
 ```rs
 pub fn build_website(
   routes: &[&dyn FullRoute],
   mut content_sources: ContentSources,
-  options: BuildOptions,
+  options: &BuildOptions,
 ) -> Result<(), Box<dyn std::error::Error>> {
 
   // Options we'll be passing to RouteAssets instances.
@@ -48,34 +50,43 @@ pub fn build_website(
   let route_assets_options = options.route_assets_options();
 
   for route in routes {
-    match route.route_type() {
-      RouteType::Static => {
-        // Our page does not include content or assets, but we'll set those up for future use.
-        // RouteAssets also can take a cache parameter, but we'll leave it empty for simplicity.
-        let mut route_assets = RouteAssets::new(&route_assets_options, None);
+    // Get the raw route path (e.g., "/articles/[slug]")
+    let Some(route_path) = route.route_raw() else {
+      // Skip routes without a base path (variants-only routes)
+      continue;
+    };
 
-        // Static and dynamic routes share the same interface for building, but static routes do not require any parameters.
-        // As such, we can just pass an empty set of parameters (the default for PageParams).
-        let params = PageParams::default();
+    // Extract parameters from the route path to determine if it's static or dynamic
+    let params = extract_params_from_raw_route(&route_path);
 
-        // Every page has a PageContext, which contains information about the current route, as well as access to content and assets.
-        let url = route.url(&params);
-        let mut ctx = PageContext::from_static_route(&content_sources, &mut route_assets, &url, &options.base_url);
+    if params.is_empty() {
+      // Static route - no parameters in the path
 
-        let content = route.build(&mut ctx)?;
+      // Our page does not include content or assets, but we'll set those up for future use.
+      // RouteAssets can take an optional image cache parameter, but we'll leave it as None for simplicity.
+      let mut route_assets = RouteAssets::new(&route_assets_options, None);
 
-        let route_filepath = route.file_path(&params, &options.output_dir);
+      // Static and dynamic routes share the same interface for building, but static routes do not require any parameters.
+      // As such, we can just pass an empty set of parameters (the default for PageParams).
+      let params = PageParams::default();
 
-        // On some platforms, creating a file in a nested directory requires that the directory already exists or the file creation will fail.
-        if let Some(parent_dir) = route_filepath.parent() {
-            fs::create_dir_all(parent_dir)?
-        }
+      // Every page has a PageContext, which contains information about the current route, as well as access to content and assets.
+      let url = route.url(&params);
+      let mut ctx = PageContext::from_static_route(&content_sources, &mut route_assets, &url, &options.base_url, None);
 
-        fs::write(route_filepath, content)?;
+      let content = route.build(&mut ctx)?;
+
+      let route_filepath = route.file_path(&params, &options.output_dir);
+
+      // On some platforms, creating a file in a nested directory requires that the directory already exists or the file creation will fail.
+      if let Some(parent_dir) = route_filepath.parent() {
+          fs::create_dir_all(parent_dir)?
       }
-      RouteType::Dynamic => {
-        unimplemented!("We'll handle dynamic routes later");
-      }
+
+      fs::write(route_filepath, content)?;
+    } else {
+      // We'll handle dynamic routes later
+      unimplemented!("Dynamic routes not yet implemented");
     }
   }
 
@@ -124,9 +135,9 @@ Each individual page is essentially a static route, but it has a slightly differ
 ```rs
 // No changes before this block.
 
-RouteType::Dynamic => {
+} else {
   // Every page of a dynamic route may share a reference to the same RouteAssets instance, as it can help with caching.
-  // However, it is not stricly necessary, and you may want to instead create a new instance of RouteAssets especially if you were to parallelize the building of pages.
+  // However, it is not strictly necessary, and you may want to instead create a new instance of RouteAssets especially if you were to parallelize the building of pages.
   let mut page_assets = RouteAssets::new(&route_assets_options, None);
 
   // The `get_pages` method returns all the possible pages for this route, along with their parameters and properties.
@@ -135,22 +146,24 @@ RouteType::Dynamic => {
   let mut dynamic_ctx = DynamicRouteContext {
       content: &content_sources,
       assets: &mut page_assets,
+      variant: None,
   };
 
-  let routes = route.get_pages(&dynamic_ctx);
+  let pages = route.get_pages(&dynamic_ctx);
 
-  for dynamic_route in routes {
+  for page in pages {
       // The dynamic route includes the parameters for this specific route.
-      let params = &dynamic_route.0;
+      let params = &page.0;
 
       // Here the context is created from a dynamic route, as the context has to include the route parameters and properties.
       let url = route.url(params);
       let mut ctx = PageContext::from_dynamic_route(
-          &dynamic_route,
+          &page,
           &content_sources,
           &mut page_assets,
           &url,
-          &options.base_url
+          &options.base_url,
+          None,
       );
 
       // Everything after this is the same as for static routes.
@@ -160,6 +173,6 @@ RouteType::Dynamic => {
 
 ## Conclusion
 
-And with that, you've succesfully rebuilt Maudit at home! There's a few more things that can be done to improve this implementation, like adding logging, copying static assets (from [`options.static_dir`](https://docs.rs/maudit/latest/maudit/struct.BuildOptions.html#structfield.static_dir)), asset processing, better error handling, parallelization, caching, etc, etc.
+And with that, you've successfully rebuilt Maudit at home! There's a few more things that can be done to improve this implementation, like adding logging, adding support [for variants](/docs/routing/#internationalization-i18n), copying static assets (from [`options.static_dir`](https://docs.rs/maudit/latest/maudit/struct.BuildOptions.html#structfield.static_dir)), asset processing, better error handling, parallelization, caching, etc, etc.
 
 But, this is a fully functional implementation that can be used as a starting point for more advanced use cases... or just as a learning exercise to understand how Maudit works under the hood.

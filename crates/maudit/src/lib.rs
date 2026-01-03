@@ -10,8 +10,7 @@ pub mod assets;
 pub mod content;
 pub mod errors;
 pub mod route;
-
-mod routing;
+pub mod routing;
 
 // Exports for end-users
 pub use build::metadata::{BuildOutput, PageOutput, StaticAssetOutput};
