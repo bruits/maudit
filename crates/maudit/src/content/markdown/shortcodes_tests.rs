@@ -75,6 +75,7 @@ mod tests {
             params: &(),
             props: &(),
             base_url: &None,
+            variant: None,
         };
 
         f(&mut ctx)

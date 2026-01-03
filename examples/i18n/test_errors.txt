@@ -1,0 +1,26 @@
+Test cases for error handling:
+
+1. Duplicate locales error:
+#[route("/about", locales(en = "/en"), locales(sv = "/sv"))]
+Expected error: "locales specified multiple times"
+
+2. Duplicate locale within locales:
+#[route("/about", locales(en = "/en", en = "/english"))]
+Expected error: "duplicate locale 'en' specified"
+
+3. Unknown argument:
+#[route("/about", something(foo = "bar"))]
+Expected error: "unknown argument 'something'"
+
+4. Prefix without base path:
+#[route(locales(en(prefix = "/en")))]
+Expected error: "Cannot use locale prefix without a base route path"
+
+5. Path in wrong position:
+#[route(locales(en = "/en"), "/about")]
+Expected error: "expected named argument (e.g., locales(...)), path must be first argument"
+
+All these cases should produce compile-time errors with clear messages.
+The refactored parser enforces that the path must be the first argument (if present),
+followed by named arguments like locales(...). This is flexible enough to support
+future named arguments while maintaining clear syntax rules.

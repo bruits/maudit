@@ -4,9 +4,7 @@
 use crate::assets::{Asset, RouteAssets};
 use crate::content::{ContentSources, Entry};
 use crate::errors::BuildError;
-use crate::routing::{
-    extract_params_from_raw_route, get_route_type_from_route_params, guess_if_route_is_endpoint,
-};
+use crate::routing::{extract_params_from_raw_route, guess_if_route_is_endpoint};
 use rustc_hash::FxHashMap;
 use std::any::Any;
 use std::path::{Path, PathBuf};
@@ -275,6 +273,8 @@ pub struct PageContext<'a> {
     pub current_path: &'a String,
     /// The base URL as defined in [`BuildOptions::base_url`](crate::BuildOptions::base_url)
     pub base_url: &'a Option<String>,
+    /// The variant being rendered, e.g. `Some("en")` for English variant, `None` for base route
+    pub variant: Option<String>,
 }
 
 impl<'a> PageContext<'a> {
@@ -283,6 +283,7 @@ impl<'a> PageContext<'a> {
         assets: &'a mut RouteAssets,
         current_path: &'a String,
         base_url: &'a Option<String>,
+        variant: Option<String>,
     ) -> Self {
         Self {
             params: &(),
@@ -291,6 +292,7 @@ impl<'a> PageContext<'a> {
             assets,
             current_path,
             base_url,
+            variant,
         }
     }
 
@@ -300,6 +302,7 @@ impl<'a> PageContext<'a> {
         assets: &'a mut RouteAssets,
         current_path: &'a String,
         base_url: &'a Option<String>,
+        variant: Option<String>,
     ) -> Self {
         Self {
             params: dynamic_page.1.as_ref(),
@@ -308,6 +311,7 @@ impl<'a> PageContext<'a> {
             assets,
             current_path,
             base_url,
+            variant,
         }
     }
 
@@ -383,9 +387,12 @@ impl<'a> PageContext<'a> {
 ///   }
 /// }
 /// ```
+/// Allows to access content and assets in a dynamic route's pages method.
 pub struct DynamicRouteContext<'a> {
     pub content: &'a ContentSources,
     pub assets: &'a mut RouteAssets,
+    /// The variant being generated, e.g. `Some("en")` for English variant, `None` for base route
+    pub variant: Option<&'a str>,
 }
 
 /// Must be implemented for every page of your website.
@@ -463,30 +470,91 @@ pub enum RouteType {
 /// Used internally by Maudit and should not be implemented by the user.
 /// We expose it because the derive macro implements it for the user behind the scenes.
 pub trait InternalRoute {
-    fn route_raw(&self) -> String;
-    fn is_endpoint(&self) -> bool {
-        guess_if_route_is_endpoint(&self.route_raw())
-    }
-    fn route_type(&self) -> RouteType {
-        let params_def = extract_params_from_raw_route(&self.route_raw());
+    fn route_raw(&self) -> Option<String>;
 
-        get_route_type_from_route_params(&params_def)
+    fn variants(&self) -> Vec<(String, String)> {
+        vec![]
+    }
+
+    fn is_endpoint(&self) -> bool {
+        self.route_raw()
+            .as_ref()
+            .map(|path| guess_if_route_is_endpoint(path))
+            .unwrap_or(false)
+    }
+
+    #[deprecated]
+    fn route_type(&self) -> RouteType {
+        let path = self.route_raw().unwrap_or_default();
+        let params_def = extract_params_from_raw_route(&path);
+
+        // Check if base route is dynamic
+        if !params_def.is_empty() {
+            return RouteType::Dynamic;
+        }
+
+        // Check if any variant is dynamic
+        let variants = self.variants();
+        for (_id, variant_path) in variants {
+            let variant_params = extract_params_from_raw_route(&variant_path);
+            if !variant_params.is_empty() {
+                return RouteType::Dynamic;
+            }
+        }
+
+        RouteType::Static
     }
 
     fn url(&self, params: &PageParams) -> String {
-        let params_def = extract_params_from_raw_route(&self.route_raw());
-        build_url_with_params(&self.route_raw(), &params_def, params, self.is_endpoint())
+        let route = self.route_raw().unwrap_or_default();
+        let params_def = extract_params_from_raw_route(&route);
+        build_url_with_params(&route, &params_def, params, self.is_endpoint())
+    }
+
+    fn variant_url(&self, params: &PageParams, variant: &str) -> Result<String, String> {
+        let variants = self.variants();
+        let variant_path = variants
+            .iter()
+            .find(|(id, _)| id == variant)
+            .map(|(_, path)| path.clone())
+            .ok_or_else(|| format!("Variant '{}' not found", variant))?;
+        let is_endpoint = guess_if_route_is_endpoint(&variant_path);
+        let params_def = extract_params_from_raw_route(&variant_path);
+        Ok(build_url_with_params(
+            &variant_path,
+            &params_def,
+            params,
+            is_endpoint,
+        ))
     }
 
     fn file_path(&self, params: &PageParams, output_dir: &Path) -> PathBuf {
-        let params_def = extract_params_from_raw_route(&self.route_raw());
-        build_file_path_with_params(
-            &self.route_raw(),
+        let route = self.route_raw().unwrap_or_default();
+        let params_def = extract_params_from_raw_route(&route);
+        build_file_path_with_params(&route, &params_def, params, output_dir, self.is_endpoint())
+    }
+
+    fn variant_file_path(
+        &self,
+        params: &PageParams,
+        output_dir: &Path,
+        variant: &str,
+    ) -> Result<PathBuf, String> {
+        let variants = self.variants();
+        let variant_path = variants
+            .iter()
+            .find(|(id, _)| id == variant)
+            .map(|(_, path)| path.clone())
+            .ok_or_else(|| format!("Variant '{}' not found", variant))?;
+        let is_endpoint = guess_if_route_is_endpoint(&variant_path);
+        let params_def = extract_params_from_raw_route(&variant_path);
+        Ok(build_file_path_with_params(
+            &variant_path,
             &params_def,
             params,
             output_dir,
-            self.is_endpoint(),
-        )
+            is_endpoint,
+        ))
     }
 }
 
@@ -501,6 +569,18 @@ where
     /// Note that this method merely generates the URL based on the route pattern and parameters, it does not verify if a corresponding route actually exists.
     fn url(&self, params: Params) -> String {
         InternalRoute::url(self, &params.into())
+    }
+
+    /// Get the URL for this page with the given parameters and variant
+    ///
+    /// Returns an error if the variant does not exist on this route.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// let url = route.variant_url(params, "en")?;
+    /// ```
+    fn variant_url(&self, params: Params, variant: &str) -> Result<String, String> {
+        InternalRoute::variant_url(self, &params.into(), variant)
     }
 }
 
@@ -530,7 +610,7 @@ pub trait FullRoute: InternalRoute + Sync + Send {
 
     fn build(&self, ctx: &mut PageContext) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let result = self.render_internal(ctx)?;
-        let bytes = finish_route(result, ctx.assets, self.route_raw())?;
+        let bytes = finish_route(result, ctx.assets, self.route_raw().unwrap_or_default())?;
 
         Ok(bytes)
     }
@@ -541,7 +621,7 @@ use std::sync::OnceLock;
 
 // This function and the one below are extremely performance-sensitive, as they are called for every single page during the build.
 // It'd be great to optimize them as much as possible, make them allocation-free, etc. But, I'm not smart enough right now to do that!
-fn build_url_with_params(
+pub fn build_url_with_params(
     route_template: &str,
     params_def: &[ParameterDef],
     params: &PageParams,
@@ -586,7 +666,7 @@ fn build_url_with_params(
     result
 }
 
-fn build_file_path_with_params(
+pub fn build_file_path_with_params(
     route_template: &str,
     params_def: &[ParameterDef],
     params: &PageParams,
@@ -635,6 +715,7 @@ pub struct CachedRoute<'a> {
     inner: &'a dyn FullRoute,
     params_cache: OnceLock<Vec<ParameterDef>>,
     is_endpoint: OnceLock<bool>,
+    variant_caches: OnceLock<FxHashMap<String, (Vec<ParameterDef>, bool)>>,
 }
 
 impl<'a> CachedRoute<'a> {
@@ -643,47 +724,124 @@ impl<'a> CachedRoute<'a> {
             inner: route,
             params_cache: OnceLock::new(),
             is_endpoint: OnceLock::new(),
+            variant_caches: OnceLock::new(),
         }
     }
 
     fn get_cached_params(&self) -> &Vec<ParameterDef> {
-        self.params_cache
-            .get_or_init(|| extract_params_from_raw_route(&self.inner.route_raw()))
+        self.params_cache.get_or_init(|| {
+            extract_params_from_raw_route(&self.inner.route_raw().unwrap_or_default())
+        })
     }
 
     fn is_endpoint(&self) -> bool {
         *self
             .is_endpoint
-            .get_or_init(|| guess_if_route_is_endpoint(&self.inner.route_raw()))
+            .get_or_init(|| guess_if_route_is_endpoint(&self.inner.route_raw().unwrap_or_default()))
+    }
+
+    fn get_variant_cache(&self, variant_id: &str) -> Option<&(Vec<ParameterDef>, bool)> {
+        let variant_caches = self.variant_caches.get_or_init(|| {
+            let mut map = FxHashMap::default();
+            for (id, path) in self.inner.variants() {
+                let params = extract_params_from_raw_route(&path);
+                let is_endpoint = guess_if_route_is_endpoint(&path);
+                map.insert(id, (params, is_endpoint));
+            }
+            map
+        });
+
+        variant_caches.get(variant_id)
     }
 }
 
 impl<'a> InternalRoute for CachedRoute<'a> {
-    fn route_raw(&self) -> String {
+    fn route_raw(&self) -> Option<String> {
         self.inner.route_raw()
     }
 
+    fn variants(&self) -> Vec<(String, String)> {
+        self.inner.variants()
+    }
+
     fn route_type(&self) -> RouteType {
-        get_route_type_from_route_params(self.get_cached_params())
+        // Check if base route is dynamic
+        let params_def = self.get_cached_params();
+        if !params_def.is_empty() {
+            return RouteType::Dynamic;
+        }
+
+        // Check if any variant is dynamic
+        let variants = self.variants();
+        for (_id, variant_path) in variants {
+            let variant_params = extract_params_from_raw_route(&variant_path);
+            if !variant_params.is_empty() {
+                return RouteType::Dynamic;
+            }
+        }
+
+        RouteType::Static
     }
 
     fn url(&self, params: &PageParams) -> String {
         build_url_with_params(
-            &self.route_raw(),
+            &self.route_raw().unwrap_or_default(),
             self.get_cached_params(),
             params,
             self.is_endpoint(),
         )
     }
 
+    fn variant_url(&self, params: &PageParams, variant: &str) -> Result<String, String> {
+        let (params_def, is_endpoint) = self
+            .get_variant_cache(variant)
+            .ok_or_else(|| format!("Variant '{}' not found", variant))?;
+        let variants = self.inner.variants();
+        let variant_path = variants
+            .iter()
+            .find(|(id, _)| id == variant)
+            .map(|(_, path)| path.clone())
+            .ok_or_else(|| format!("Variant '{}' not found", variant))?;
+        Ok(build_url_with_params(
+            &variant_path,
+            params_def,
+            params,
+            *is_endpoint,
+        ))
+    }
+
     fn file_path(&self, params: &PageParams, output_dir: &Path) -> PathBuf {
         build_file_path_with_params(
-            &self.route_raw(),
+            &self.route_raw().unwrap_or_default(),
             self.get_cached_params(),
             params,
             output_dir,
             self.is_endpoint(),
         )
+    }
+
+    fn variant_file_path(
+        &self,
+        params: &PageParams,
+        output_dir: &Path,
+        variant: &str,
+    ) -> Result<PathBuf, String> {
+        let (params_def, is_endpoint) = self
+            .get_variant_cache(variant)
+            .ok_or_else(|| format!("Variant '{}' not found", variant))?;
+        let variants = self.inner.variants();
+        let variant_path = variants
+            .iter()
+            .find(|(id, _)| id == variant)
+            .map(|(_, path)| path.clone())
+            .ok_or_else(|| format!("Variant '{}' not found", variant))?;
+        Ok(build_file_path_with_params(
+            &variant_path,
+            params_def,
+            params,
+            output_dir,
+            *is_endpoint,
+        ))
     }
 }
 
@@ -786,8 +944,8 @@ mod tests {
     }
 
     impl InternalRoute for TestPage {
-        fn route_raw(&self) -> String {
-            self.route.clone()
+        fn route_raw(&self) -> Option<String> {
+            Some(self.route.clone())
         }
     }
 

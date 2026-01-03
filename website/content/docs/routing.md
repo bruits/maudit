@@ -159,3 +159,42 @@ impl Route for HelloWorld {
   }
 }
 ```
+
+## Internationalization (i18n)
+
+Maudit includes the ability to generate *variants* of pages based on locales. For instance, you may have a `/about` page and want to create a `/fr/about` or `/a-propos` page with a localized slug.
+
+While you could do this by duplicating your `/about` page, creating a new struct, re-implementing Route etc etc, it would be quite time consuming if your website support more languages and probably lead to a lot of duplicated code, as your Swedish about page probably uses a lot of the same layout as your Danish one.
+
+To create these variants, specify the named `locales` attribute on your route, after the path:
+
+```rs
+use maudit::route::prelude::*;
+
+#[route(
+    "/contact",
+    locales(sv(prefix = "/sv"), de(path = "/de/kontakt"))
+)]
+pub struct Contact;
+
+impl Route for Contact {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        match &ctx.variant {
+            Some(language) => match language.as_str() {
+                "sv" => "Kontakta oss.",
+                "de" => "Kontaktieren Sie uns.",
+                _ => unreachable!(),
+            },
+            _ => "Contact us.",
+        }
+    }
+}
+```
+
+For this example, Maudit will generate three pages:
+
+- `/contact`
+- `/sv/contact`
+- `/de/kontakt`
+
+Calling `render()` three times with a different `ctx.variant` each time.

@@ -1,17 +1,152 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse::{self, Parse, ParseStream, Parser as _, Result};
-use syn::{Expr, ItemStruct, parse_macro_input};
+use syn::{Expr, Ident, ItemStruct, Token, parse_macro_input, punctuated::Punctuated};
 
-struct Args {
-    path: Expr,
+enum LocaleKind {
+    FullPath(Expr),
+    Prefix(Expr),
 }
 
-impl Parse for Args {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let path = input.parse()?;
+struct LocaleVariant {
+    locale: Ident,
+    kind: LocaleKind,
+}
 
-        Ok(Args { path })
+impl Parse for LocaleVariant {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let locale = input.parse::<Ident>()?;
+
+        // Check if it's `locale = "path"`, `locale(path = "path")`, or `locale(prefix = "path")`
+        let lookahead = input.lookahead1();
+
+        let kind = if lookahead.peek(Token![=]) {
+            // Shorthand full path: `en = "/en/about"`
+            input.parse::<Token![=]>()?;
+            let path = input.parse::<Expr>()?;
+            LocaleKind::FullPath(path)
+        } else if lookahead.peek(syn::token::Paren) {
+            // Either `en(path = "...")` or `en(prefix = "...")`
+            let content;
+            syn::parenthesized!(content in input);
+
+            let key_ident: Ident = content.parse()?;
+            content.parse::<Token![=]>()?;
+            let value = content.parse::<Expr>()?;
+
+            if key_ident == "path" {
+                LocaleKind::FullPath(value)
+            } else if key_ident == "prefix" {
+                LocaleKind::Prefix(value)
+            } else {
+                return Err(content.error("expected 'path' or 'prefix'"));
+            }
+        } else {
+            return Err(lookahead.error());
+        };
+
+        Ok(LocaleVariant { locale, kind })
+    }
+}
+
+struct RouteArgs {
+    path: Option<Expr>,
+    locales: Vec<LocaleVariant>,
+}
+
+impl Parse for RouteArgs {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let mut path = None;
+        let mut locales = Vec::new();
+
+        if input.is_empty() {
+            return Ok(RouteArgs { path, locales });
+        }
+
+        // First argument: either a path expression or a named argument like locales(...)
+        if input.peek(Ident) && input.peek2(syn::token::Paren) {
+            // If the first argument is a named one, that means there's no base path and this route should only have variants
+            let ident: Ident = input.parse()?;
+            let ident_str = ident.to_string();
+
+            if ident_str == "locales" {
+                let content;
+                syn::parenthesized!(content in input);
+                let variants = Punctuated::<LocaleVariant, Token![,]>::parse_terminated(&content)?;
+                locales = variants.into_iter().collect();
+            } else {
+                return Err(syn::Error::new_spanned(
+                    ident,
+                    format!("unknown argument '{}', expected 'locales'", ident_str),
+                ));
+            }
+        } else {
+            // First argument is a path expression, e.g., "/about" so proceed as normal
+            path = Some(input.parse::<Expr>()?);
+        }
+
+        // Parse remaining named arguments (right now just locales(...))
+        while !input.is_empty() {
+            input.parse::<Token![,]>()?;
+
+            if input.is_empty() {
+                break;
+            }
+
+            // All subsequent arguments must be named (e.g., locales(...), the path must be first)
+            if input.peek(Ident) && input.peek2(syn::token::Paren) {
+                let ident: Ident = input.parse()?;
+                let ident_str = ident.to_string();
+
+                if ident_str == "locales" {
+                    if !locales.is_empty() {
+                        return Err(syn::Error::new_spanned(
+                            ident,
+                            "locales specified multiple times",
+                        ));
+                    }
+                    let content;
+                    syn::parenthesized!(content in input);
+                    let variants =
+                        Punctuated::<LocaleVariant, Token![,]>::parse_terminated(&content)?;
+                    locales = variants.into_iter().collect();
+                } else {
+                    return Err(syn::Error::new_spanned(
+                        ident,
+                        format!("unknown argument '{}'", ident_str),
+                    ));
+                }
+            } else {
+                return Err(syn::Error::new(
+                    input.span(),
+                    "expected named argument (e.g., locales(...)), path must be first argument",
+                ));
+            }
+        }
+
+        // Check for duplicate locales
+        Self::check_duplicate_locales(&locales)?;
+
+        Ok(RouteArgs { path, locales })
+    }
+}
+
+impl RouteArgs {
+    fn check_duplicate_locales(locales: &[LocaleVariant]) -> Result<()> {
+        use std::collections::HashSet;
+        let mut seen = HashSet::new();
+
+        for variant in locales {
+            let locale_name = variant.locale.to_string();
+            if !seen.insert(locale_name.clone()) {
+                return Err(syn::Error::new_spanned(
+                    &variant.locale,
+                    format!("duplicate locale '{}' specified", locale_name),
+                ));
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -19,16 +154,70 @@ impl Parse for Args {
 pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree
     let item_struct = syn::parse_macro_input!(item as ItemStruct);
-    let attrs = syn::parse_macro_input!(attrs as Args);
+    let args = syn::parse_macro_input!(attrs as RouteArgs);
 
     let struct_name = &item_struct.ident;
-    let path = &attrs.path;
+
+    // Generate variants method based on locales
+    let variant_method = if !args.locales.is_empty() {
+        let variant_tuples = args.locales.iter().map(|variant| {
+            let locale_name = variant.locale.to_string();
+
+            match &variant.kind {
+                LocaleKind::FullPath(path) => {
+                    quote! {
+                        (#locale_name.to_string(), #path.to_string())
+                    }
+                }
+                LocaleKind::Prefix(prefix) => {
+                    if args.path.is_none() {
+                        // Emit compile error if prefix is used without base path
+                        quote! {
+                            compile_error!("Cannot use locale prefix without a base route path")
+                        }
+                    } else {
+                        let base_path = args.path.as_ref().unwrap();
+                        quote! {
+                            (#locale_name.to_string(), format!("{}{}", #prefix, #base_path))
+                        }
+                    }
+                }
+            }
+        });
+
+        quote! {
+            fn variants(&self) -> Vec<(String, String)> {
+                vec![#(#variant_tuples),*]
+            }
+        }
+    } else {
+        quote! {
+            fn variants(&self) -> Vec<(String, String)> {
+                vec![]
+            }
+        }
+    };
+
+    // Generate route_raw implementation based on whether path is provided
+    let route_raw_impl = if let Some(path) = &args.path {
+        quote! {
+            fn route_raw(&self) -> Option<String> {
+                Some(#path.to_string())
+            }
+        }
+    } else {
+        quote! {
+            fn route_raw(&self) -> Option<String> {
+                None
+            }
+        }
+    };
 
     let expanded = quote! {
         impl maudit::route::InternalRoute for #struct_name {
-            fn route_raw(&self) -> String {
-                #path.to_string()
-            }
+            #route_raw_impl
+
+            #variant_method
         }
 
         impl maudit::route::FullRoute for #struct_name {
