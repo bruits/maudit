@@ -1,5 +1,12 @@
 # maudit
 
+## 0.8.0 — 2026-01-04
+
+### Patch changes
+
+- [5a8a7de](https://github.com/bruits/maudit/commit/5a8a7de194de981dfb733d87cc5eb2d92b26deac) Fixes wrong version of maudit-macros being used — Thanks @Princesseuh!
+- Updated dependencies: maudit-macros (Cargo)@0.6.0
+
 ## 0.7.0 — 2026-01-03
 
 ### Minor changes
