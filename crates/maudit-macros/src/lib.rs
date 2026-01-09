@@ -49,18 +49,74 @@ impl Parse for LocaleVariant {
     }
 }
 
+struct SitemapArgs {
+    exclude: Option<bool>,
+    changefreq: Option<Expr>,
+    priority: Option<Expr>,
+}
+
+impl Parse for SitemapArgs {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let mut exclude = None;
+        let mut changefreq = None;
+        let mut priority = None;
+
+        while !input.is_empty() {
+            let key: Ident = input.parse()?;
+            input.parse::<Token![=]>()?;
+
+            match key.to_string().as_str() {
+                "exclude" => {
+                    let value: syn::LitBool = input.parse()?;
+                    exclude = Some(value.value);
+                }
+                "changefreq" => {
+                    changefreq = Some(input.parse()?);
+                }
+                "priority" => {
+                    priority = Some(input.parse()?);
+                }
+                _ => {
+                    return Err(syn::Error::new_spanned(
+                        key,
+                        "unknown sitemap argument, expected 'exclude', 'changefreq', or 'priority'",
+                    ));
+                }
+            }
+
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+            } else {
+                break;
+            }
+        }
+
+        Ok(SitemapArgs {
+            exclude,
+            changefreq,
+            priority,
+        })
+    }
+}
+
 struct RouteArgs {
     path: Option<Expr>,
     locales: Vec<LocaleVariant>,
+    sitemap: Option<SitemapArgs>,
 }
 
 impl Parse for RouteArgs {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut path = None;
         let mut locales = Vec::new();
+        let mut sitemap = None;
 
         if input.is_empty() {
-            return Ok(RouteArgs { path, locales });
+            return Ok(RouteArgs {
+                path,
+                locales,
+                sitemap,
+            });
         }
 
         // First argument: either a path expression or a named argument like locales(...)
@@ -74,10 +130,17 @@ impl Parse for RouteArgs {
                 syn::parenthesized!(content in input);
                 let variants = Punctuated::<LocaleVariant, Token![,]>::parse_terminated(&content)?;
                 locales = variants.into_iter().collect();
+            } else if ident_str == "sitemap" {
+                let content;
+                syn::parenthesized!(content in input);
+                sitemap = Some(content.parse()?);
             } else {
                 return Err(syn::Error::new_spanned(
                     ident,
-                    format!("unknown argument '{}', expected 'locales'", ident_str),
+                    format!(
+                        "unknown argument '{}', expected 'locales' or 'sitemap'",
+                        ident_str
+                    ),
                 ));
             }
         } else {
@@ -110,6 +173,16 @@ impl Parse for RouteArgs {
                     let variants =
                         Punctuated::<LocaleVariant, Token![,]>::parse_terminated(&content)?;
                     locales = variants.into_iter().collect();
+                } else if ident_str == "sitemap" {
+                    if sitemap.is_some() {
+                        return Err(syn::Error::new_spanned(
+                            ident,
+                            "sitemap specified multiple times",
+                        ));
+                    }
+                    let content;
+                    syn::parenthesized!(content in input);
+                    sitemap = Some(content.parse()?);
                 } else {
                     return Err(syn::Error::new_spanned(
                         ident,
@@ -127,7 +200,11 @@ impl Parse for RouteArgs {
         // Check for duplicate locales
         Self::check_duplicate_locales(&locales)?;
 
-        Ok(RouteArgs { path, locales })
+        Ok(RouteArgs {
+            path,
+            locales,
+            sitemap,
+        })
     }
 }
 
@@ -213,11 +290,50 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
+    // Generate sitemap metadata method
+    let sitemap_method = if let Some(sitemap_args) = &args.sitemap {
+        let exclude_impl = if let Some(exclude) = sitemap_args.exclude {
+            quote! { Some(#exclude) }
+        } else {
+            quote! { None }
+        };
+
+        let changefreq_impl = if let Some(changefreq) = &sitemap_args.changefreq {
+            quote! { Some(#changefreq) }
+        } else {
+            quote! { None }
+        };
+
+        let priority_impl = if let Some(priority) = &sitemap_args.priority {
+            quote! { Some(#priority) }
+        } else {
+            quote! { None }
+        };
+
+        quote! {
+            fn sitemap_metadata(&self) -> maudit::sitemap::RouteSitemapMetadata {
+                maudit::sitemap::RouteSitemapMetadata {
+                    exclude: #exclude_impl,
+                    changefreq: #changefreq_impl,
+                    priority: #priority_impl,
+                }
+            }
+        }
+    } else {
+        quote! {
+            fn sitemap_metadata(&self) -> maudit::sitemap::RouteSitemapMetadata {
+                maudit::sitemap::RouteSitemapMetadata::default()
+            }
+        }
+    };
+
     let expanded = quote! {
         impl maudit::route::InternalRoute for #struct_name {
             #route_raw_impl
 
             #variant_method
+
+            #sitemap_method
         }
 
         impl maudit::route::FullRoute for #struct_name {

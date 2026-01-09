@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf};
 
-use crate::{assets::RouteAssetsOptions, is_dev};
+use crate::{assets::RouteAssetsOptions, is_dev, sitemap::SitemapOptions};
 
 /// Maudit build options. Should be passed to [`coronate()`](crate::coronate()).
 ///
@@ -57,6 +57,9 @@ pub struct BuildOptions {
     pub clean_output_dir: bool,
 
     pub assets: AssetsOptions,
+
+    /// Options for sitemap generation. See [`SitemapOptions`] for configuration.
+    pub sitemap: SitemapOptions,
 }
 
 impl BuildOptions {
@@ -147,6 +150,7 @@ impl Default for BuildOptions {
             static_dir: "static".into(),
             clean_output_dir: true,
             assets: AssetsOptions::default(),
+            sitemap: SitemapOptions::default(),
         }
     }
 }
