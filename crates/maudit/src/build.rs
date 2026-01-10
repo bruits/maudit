@@ -124,6 +124,12 @@ pub async fn build(
     let mut sitemap_entries: Vec<SitemapEntry> = Vec::new();
     let mut page_count = 0;
 
+    // Normalize base_url once to avoid repeated trimming
+    let normalized_base_url = options
+        .base_url
+        .as_ref()
+        .map(|url| url.trim_end_matches('/'));
+
     // This is fully serial. It is somewhat trivial to make it parallel, but it currently isn't because every time I've tried to
     // (uncommited, #25, #41, #46) it either made no difference or was slower. The overhead of parallelism is just too high for
     // how fast most sites build. Ideally, it'd be configurable and default to serial, but I haven't found an ergonomic way to do that yet.
@@ -180,7 +186,7 @@ pub async fn build(
 
                 add_sitemap_entry(
                     &mut sitemap_entries,
-                    options.base_url.as_ref(),
+                    normalized_base_url,
                     &url,
                     base_path,
                     &route.sitemap_metadata(),
@@ -231,7 +237,7 @@ pub async fn build(
 
                         add_sitemap_entry(
                             &mut sitemap_entries,
-                            options.base_url.as_ref(),
+                            normalized_base_url,
                             &url,
                             base_path,
                             &route.sitemap_metadata(),
@@ -287,7 +293,7 @@ pub async fn build(
 
                 add_sitemap_entry(
                     &mut sitemap_entries,
-                    options.base_url.as_ref(),
+                    normalized_base_url,
                     &url,
                     &variant_path,
                     &route.sitemap_metadata(),
@@ -342,7 +348,7 @@ pub async fn build(
 
                         add_sitemap_entry(
                             &mut sitemap_entries,
-                            options.base_url.as_ref(),
+                            normalized_base_url,
                             &url,
                             &variant_path,
                             &route.sitemap_metadata(),
@@ -513,7 +519,7 @@ pub async fn build(
 
     // Generate sitemap
     if options.sitemap.enabled {
-        if let Some(ref base_url) = options.base_url {
+        if let Some(base_url) = normalized_base_url {
             let sitemap_start = Instant::now();
             print_title("generating sitemap");
 
@@ -542,7 +548,7 @@ pub async fn build(
 
 fn add_sitemap_entry(
     sitemap_entries: &mut Vec<SitemapEntry>,
-    base_url: Option<&String>,
+    base_url: Option<&str>,
     url: &str,
     route_path: &str,
     sitemap_metadata: &crate::sitemap::RouteSitemapMetadata,
@@ -562,7 +568,7 @@ fn add_sitemap_entry(
     let full_url = if url == "/" {
         base_url.to_string()
     } else {
-        format!("{}{}", base_url.trim_end_matches('/'), url)
+        format!("{}{}", base_url, url)
     };
 
     // Add entry

@@ -157,7 +157,7 @@ fn resolve_stylesheet_url(base_url: &str, stylesheet_path: &str) -> String {
     if stylesheet_path.starts_with("http://") || stylesheet_path.starts_with("https://") {
         stylesheet_path.to_string()
     } else {
-        format!("{}{}", base_url.trim_end_matches('/'), stylesheet_path)
+        format!("{}{}", base_url, stylesheet_path)
     }
 }
 
@@ -175,6 +175,9 @@ pub fn generate_sitemap(
     if entries.is_empty() {
         return Ok(());
     }
+
+    // Normalize base_url once to avoid repeated trimming
+    let base_url = base_url.trim_end_matches('/');
 
     // Sort entries by URL for consistency
     let mut sorted_entries = entries;
@@ -223,7 +226,7 @@ pub fn generate_sitemap(
             options.stylesheet.as_deref(),
         )?;
 
-        let sitemap_url = format!("{}/{}", base_url.trim_end_matches('/'), sitemap_filename);
+        let sitemap_url = format!("{}/{}", base_url, sitemap_filename);
         sitemap_refs.push(SitemapReference {
             loc: sitemap_url,
             lastmod: None, // TODO: Somehow the user should be able to specify lastmod per chunk or we should somehow calculate it? Probably can't and probably doesn't matter anyway.
