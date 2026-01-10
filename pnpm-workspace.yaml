@@ -2,4 +2,4 @@ packages:
   - crates/*
 
 onlyBuiltDependencies:
-  - '@parcel/watcher'
+  - "@parcel/watcher"

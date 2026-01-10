@@ -213,7 +213,7 @@ Shortcodes provide a way to extend Markdown with custom functionality. They serv
 
 ```markdown
 ---
-title: {{ enhance title="Super Title" /}}
+title: { { enhance title="Super Title" / } }
 ---
 
 Here's an image with a caption:

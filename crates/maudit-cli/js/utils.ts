@@ -24,8 +24,6 @@ function mauditMessage(level: "log" | "warn" | "error", message: unknown[]) {
 	console[level](
 		"%cMaudit",
 		"background: #ba1f33; color: white; padding-inline: 4px; border-radius: 2px; font-family: serif;",
-		...message.map((m) =>
-			typeof m === "string" ? stripAnsi(m) : JSON.stringify(m, null, 2),
-		),
+		...message.map((m) => (typeof m === "string" ? stripAnsi(m) : JSON.stringify(m, null, 2))),
 	);
 }

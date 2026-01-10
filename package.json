@@ -3,18 +3,25 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"lint": "oxlint",
-		"lint:fix": "oxlint --fix",
-		"format": "oxfmt",
-		"format:check": "oxfmt --check"
+		"check": "pnpm run check:js && pnpm run check:rs",
+		"check:ts": "tsgo",
+		"check:rs": "cargo check",
+		"lint": "pnpm run lint:ts && pnpm run lint:rs",
+		"lint:ts": "oxlint --type-aware",
+		"lint:rs": "cargo clippy",
+		"lint:fix": "oxlint --fix --type-aware && cargo clippy --fix --allow-dirty --allow-staged",
+		"format": "pnpm run format:ts && pnpm run format:rs",
+		"format:ts": "oxfmt",
+		"format:rs": "cargo fmt"
 	},
 	"dependencies": {
 		"@tailwindcss/cli": "^4.1.18",
 		"tailwindcss": "^4.1.18"
 	},
 	"devDependencies": {
+		"@typescript/native-preview": "7.0.0-dev.20260109.1",
 		"oxfmt": "^0.23.0",
 		"oxlint": "^1.38.0",
-		"typescript": "^5.9.3"
+		"oxlint-tsgolint": "^0.11.0"
 	}
 }
