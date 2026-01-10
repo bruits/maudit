@@ -213,6 +213,7 @@ pub async fn build(
 
                     // Build all pages for this route
                     for page in pages {
+                        let page_start = Instant::now();
                         let url = cached_route.url(&page.0);
                         let file_path = cached_route.file_path(&page.0, &options.output_dir);
 
@@ -227,7 +228,7 @@ pub async fn build(
 
                         write_route_file(&content, &file_path)?;
 
-                        info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
+                        info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), &route_format_options));
 
                         build_metadata.add_page(
                             base_path.clone(),
