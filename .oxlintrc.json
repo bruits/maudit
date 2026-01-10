@@ -3,5 +3,5 @@
 	"env": {
 		"browser": true
 	},
-	"ignorePatterns": ["dist", "node_modules"]
+	"ignorePatterns": ["dist", "node_modules", "target"]
 }
