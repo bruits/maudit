@@ -70,7 +70,5 @@ export function createErrorOverlay(err: Message["message"]) {
 }
 
 export function clearErrorOverlay() {
-	document
-		.querySelectorAll<MauditErrorOverlay>(overlayTagName)
-		.forEach((n) => n.close());
+	document.querySelectorAll<MauditErrorOverlay>(overlayTagName).forEach((n) => n.close());
 }

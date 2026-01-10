@@ -1,0 +1,12 @@
+{
+	"$schema": "./node_modules/oxfmt/configuration_schema.json",
+	"ignorePatterns": [
+		"node_modules",
+		"dist",
+		"pnpm-lock.yaml",
+		"target",
+		"benchmarks",
+		"CHANGELOG.md"
+	],
+	"useTabs": true
+}

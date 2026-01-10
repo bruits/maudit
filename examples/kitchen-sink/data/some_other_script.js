@@ -1,4 +1,4 @@
 export function sayHello() {
-  const world = "world";
-  console.log(`hello${world}`);
+	const world = "world";
+	console.log(`hello${world}`);
 }

@@ -1,9 +1,0 @@
-{
-	"tailwindCSS.includeLanguages": {
-		"rust": "html"
-	},
-	"tailwindCSS.experimental.classRegex": [
-		["[\\w-]+((?:\\.\\s*\\S+\\s*)*)", "\\.\"?([^.\"]+)\"?"]
-	],
-	"biome.enabled": false
-}

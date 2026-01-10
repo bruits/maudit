@@ -22,6 +22,5 @@
 		"moduleDetection": "force",
 		"skipLibCheck": true,
 	},
-	"include": ["crates/**/js", "website/assets"],
 	"exclude": ["node_modules", "dist", "vendor"],
 }

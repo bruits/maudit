@@ -13,20 +13,12 @@ path = "src/main.rs"
 chrono = "0.4.39"
 colored = "2.2.0"
 clap = { version = "4.5.23", features = ["derive"] }
-tokio = { version = "1", features = [
-    "macros",
-    "rt-multi-thread",
-    "signal",
-    "process",
-] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "process"] }
 axum = { version = "0.8.6", features = ["ws"] }
 futures = "0.3"
 tower-http = { version = "0.6.6", features = ["fs", "trace"] }
 tracing = "0.1"
-tracing-subscriber = { version = "=0.3.19", features = [
-    "env-filter",
-    "chrono",
-] }
+tracing-subscriber = { version = "=0.3.19", features = ["env-filter", "chrono"] }
 notify = "8.2.0"
 notify-debouncer-full = "0.6.0"
 inquire = "0.7.5"

@@ -1,4 +1,5 @@
 const ansiPattern = new RegExp(
+	// oxlint-disable-next-line no-control-regex
 	"(?:\\u001B\\][\\s\\S]*?(?:\\u0007|\\u001B\\u005C|\\u009C))|[\\u001B\\u009B][[\\]()#;?]*(?:\\d{1,4}(?:[;:]\\d{0,4})*)?[\\dA-PR-TZcf-nq-uy=><~]",
 	"g",
 );

@@ -5,7 +5,7 @@ author: The Maudit Team
 date: 2025-10-15
 ---
 
-We have one goal for Maudit: To make it the best tool to generate static websites. This may include helpful side features like loading Markdown content, syntax highlighting, image processing, sitemap generation, RSS feeds, etc. 
+We have one goal for Maudit: To make it the best tool to generate static websites. This may include helpful side features like loading Markdown content, syntax highlighting, image processing, sitemap generation, RSS feeds, etc.
 
 But the end result is always the same: You get a static website. No server, no serverless (with a server), no nothing. You get `.html` files that you can host wherever support hosting static files.
 
