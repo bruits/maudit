@@ -2,7 +2,7 @@
 name = "maudit-macros"
 description = "Procedural macros for the maudit crate"
 license = "MIT"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 
 [lib]
