@@ -9,6 +9,7 @@
 			"formatter": "language_server"
 		},
 		"TypeScript": {
+			"language_servers": ["tsgo", "!vtsls", "!typescript-language-server", "!eslint", "..."],
 			"formatter": [
 				{
 					"language_server": {
@@ -21,6 +22,7 @@
 			]
 		},
 		"JavaScript": {
+			"language_servers": ["tsgo", "!vtsls", "!typescript-language-server", "!eslint", "..."],
 			"formatter": [
 				{
 					"language_server": {

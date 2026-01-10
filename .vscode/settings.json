@@ -1,0 +1,15 @@
+{
+  "typescript.experimental.useTsgo": true,
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "oxc.typeAware": true,
+  "oxc.fixKind": "safe_fix",
+  "oxc.unusedDisableDirectives": "deny",
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer"
+  },
+  "editor.codeActionsOnSave": {
+    "source.fixAll.oxc": "explicit"
+  },
+  "biome.enabled": false,
+    "css.lint.unknownAtRules": "ignore",
+}
