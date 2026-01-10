@@ -1,5 +1,11 @@
 # maudit-macros
 
+## 0.7.0 — 2026-01-10
+
+### Minor changes
+
+- [bce6fd1](https://github.com/bruits/maudit/commit/bce6fd12eb9c5275ea66c9205ad9b63889155ec2) Adds support for automatically generating sitemaps — Thanks @Princesseuh!
+
 ## 0.6.0 — 2026-01-04
 
 ### Minor changes

@@ -1,5 +1,16 @@
 # maudit
 
+## 0.9.0 — 2026-01-10
+
+### Minor changes
+
+- [bce6fd1](https://github.com/bruits/maudit/commit/bce6fd12eb9c5275ea66c9205ad9b63889155ec2) Adds support for automatically generating sitemaps — Thanks @Princesseuh!
+
+### Patch changes
+
+- [bce6fd1](https://github.com/bruits/maudit/commit/bce6fd12eb9c5275ea66c9205ad9b63889155ec2) Fixes route timings being wrongly based of the start of the group instead of per route for dynamic routes — Thanks @Princesseuh!
+- Updated dependencies: maudit-macros (Cargo)@0.7.0
+
 ## 0.8.0 — 2026-01-04
 
 ### Patch changes
