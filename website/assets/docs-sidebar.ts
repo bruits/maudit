@@ -1,10 +1,6 @@
 document.addEventListener("DOMContentLoaded", function () {
-	const leftSidebarToggleElement = document.getElementById(
-		"left-sidebar-toggle"
-	);
-	const rightSidebarToggleElement = document.getElementById(
-		"right-sidebar-toggle"
-	);
+	const leftSidebarToggleElement = document.getElementById("left-sidebar-toggle");
+	const rightSidebarToggleElement = document.getElementById("right-sidebar-toggle");
 	const leftSidebarElement = document.getElementById("mobile-left-sidebar");
 	const rightSidebarElement = document.getElementById("mobile-right-sidebar");
 
@@ -53,9 +49,7 @@ document.addEventListener("DOMContentLoaded", function () {
 	function toggleRightSidebar() {
 		rightOpen = !rightOpen;
 
-		const rightSidebarContent = rightSidebar.querySelector(
-			"div"
-		) as HTMLElement;
+		const rightSidebarContent = rightSidebar.querySelector("div") as HTMLElement;
 
 		// Toggle overlay opacity
 		rightSidebar.classList.toggle("opacity-0", !rightOpen);
@@ -98,11 +92,7 @@ document.addEventListener("DOMContentLoaded", function () {
 	// Close right sidebar when clicking on table of contents links
 	rightSidebar.addEventListener("click", function (event) {
 		const target = event.target as HTMLElement;
-		if (
-			target &&
-			target.tagName === "A" &&
-			target.getAttribute("href")?.startsWith("#")
-		) {
+		if (target && target.tagName === "A" && target.getAttribute("href")?.startsWith("#")) {
 			if (rightOpen) {
 				toggleRightSidebar();
 			}

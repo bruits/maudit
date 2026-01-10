@@ -6,7 +6,7 @@ section: "core-concepts"
 
 Maudit supports adding JavaScript and TypeScript files to your site.
 
-To import a script, add it anywhere in your project's directory, and use the [`ctx.assets.add_script()`](https://docs.rs/maudit/latest/maudit/assets/struct.RouteAssets.html#method.add_script) method to add it to a page's assets. 
+To import a script, add it anywhere in your project's directory, and use the [`ctx.assets.add_script()`](https://docs.rs/maudit/latest/maudit/assets/struct.RouteAssets.html#method.add_script) method to add it to a page's assets.
 
 This function will return an error if the image file does not exist, or cannot be read for any reason. If you'd rather not deal with errors, you can use the `add_script_unchecked()` method, which will instead panic on failure.
 

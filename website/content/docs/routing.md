@@ -162,7 +162,7 @@ impl Route for HelloWorld {
 
 ## Internationalization (i18n)
 
-Maudit includes the ability to generate *variants* of pages based on locales. For instance, you may have a `/about` page and want to create a `/fr/about` or `/a-propos` page with a localized slug.
+Maudit includes the ability to generate _variants_ of pages based on locales. For instance, you may have a `/about` page and want to create a `/fr/about` or `/a-propos` page with a localized slug.
 
 While you could do this by duplicating your `/about` page, creating a new struct, re-implementing Route etc etc, it would be quite time consuming if your website support more languages and probably lead to a lot of duplicated code, as your Swedish about page probably uses a lot of the same layout as your Danish one.
 

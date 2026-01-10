@@ -34,6 +34,21 @@ jobs:
           cache-target: release
           bins: cargo-codspeed
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: latest
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build JS dependencies
+        run: cargo xtask build-js
+
       - name: Build the benchmark target(s)
         run: cargo codspeed build
 

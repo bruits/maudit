@@ -23,6 +23,21 @@ jobs:
       - name: Setup Rust
         uses: moonrepo/setup-rust@v1
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: latest
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build JS dependencies
+        run: cargo xtask build-js
+
       - name: Run Sampo Release/Publish Action
         uses: bruits/sampo/crates/sampo-github-action@main
         env:

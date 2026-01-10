@@ -1,0 +1,8 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rolldown = { package = "brk_rolldown", version = "0.2.3" }
+tokio = { version = "1", features = ["rt"] }

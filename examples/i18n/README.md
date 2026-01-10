@@ -35,6 +35,7 @@ pub struct About;
 ```
 
 This route is accessible at:
+
 - `/about` - the base/default path
 - `/en/about` - English variant
 - `/sv/om-oss` - Swedish variant (using natural Swedish URL structure)
@@ -62,7 +63,7 @@ impl Route<MixedParams> for Mixed {
             Page::from_params(MixedParams { id: "phone".to_string() }),
         ]
     }
-    
+
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let params = ctx.params::<MixedParams>();
         // Render using params.id
@@ -71,6 +72,7 @@ impl Route<MixedParams> for Mixed {
 ```
 
 This generates only variant pages:
+
 - `/en/products/laptop` and `/en/products/phone`
 - `/sv/produkter/laptop` and `/sv/produkter/phone`
 
@@ -97,7 +99,7 @@ impl Route<ArticleParams> for Article {
             Page::from_params(ArticleParams { slug: "getting-started".to_string() }),
         ]
     }
-    
+
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let params = ctx.params::<ArticleParams>();
         // Render using params.slug
@@ -106,6 +108,7 @@ impl Route<ArticleParams> for Article {
 ```
 
 This generates:
+
 - `/articles/hello-world` and `/articles/getting-started` - base pages
 - `/en/articles/hello-world` and `/en/articles/getting-started` - English variants
 - `/sv/artiklar/hello-world` and `/sv/artiklar/getting-started` - Swedish variants (note the localized "artiklar" path segment)
@@ -119,6 +122,7 @@ Routes with variants expose a method via the `InternalRoute` trait:
 - `variants(&self) -> Vec<(String, String)>` - Get all variants as `(id, path)` tuples
 
 Example:
+
 ```rust
 let about = About;
 let variants = about.variants();
@@ -173,7 +177,7 @@ impl Route<ArticleParams> for Article {
 
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let params = ctx.params::<ArticleParams>();
-        
+
         // Render differently based on variant
         let greeting = match ctx.variant.as_deref() {
             Some("en") => "Hello",
@@ -181,7 +185,7 @@ impl Route<ArticleParams> for Article {
             None => "Hi",
             _ => "?"
         };
-        
+
         format!("{}: {}", greeting, params.slug)
     }
 }

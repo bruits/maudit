@@ -1,0 +1,7 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"env": {
+		"browser": true
+	},
+	"ignorePatterns": ["dist", "node_modules", "target", "benchmarks"]
+}
