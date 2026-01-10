@@ -178,7 +178,6 @@ pub async fn build(
                     None,
                 );
 
-                // Add to sitemap if not excluded and not a 404
                 add_sitemap_entry(
                     &mut sitemap_entries,
                     options.base_url.as_ref(),
@@ -230,7 +229,6 @@ pub async fn build(
                             Some(page.0.0.clone()),
                         );
 
-                        // Add to sitemap if not excluded and not a 404
                         add_sitemap_entry(
                             &mut sitemap_entries,
                             options.base_url.as_ref(),
@@ -287,7 +285,6 @@ pub async fn build(
                     None,
                 );
 
-                // Add to sitemap if not excluded and not a 404
                 add_sitemap_entry(
                     &mut sitemap_entries,
                     options.base_url.as_ref(),
@@ -516,15 +513,20 @@ pub async fn build(
 
     // Generate sitemap
     if options.sitemap.enabled {
-        if options.base_url.is_some() {
+        if let Some(ref base_url) = options.base_url {
             let sitemap_start = Instant::now();
             print_title("generating sitemap");
 
-            generate_sitemap(sitemap_entries, &options.output_dir, &options.sitemap)?;
+            generate_sitemap(
+                sitemap_entries,
+                base_url,
+                &options.output_dir,
+                &options.sitemap,
+            )?;
 
             info!(target: "build", "{}", format!("Sitemap generated in {}", format_elapsed_time(sitemap_start.elapsed(), &FormatElapsedTimeOptions::default())).bold());
         } else {
-            warn!(target: "build", "Sitemap generation is enabled but no base_url is set in BuildOptions. Skipping sitemap generation.");
+            warn!(target: "build", "Sitemap generation is enabled but no base_url is set in BuildOptions. Either disable sitemap generation or set a base_url to enable it.");
         }
     }
 
@@ -552,7 +554,7 @@ fn add_sitemap_entry(
     };
 
     // Skip if route is excluded or is a 404 page
-    if sitemap_metadata.should_exclude() || route_path.contains("404") {
+    if sitemap_metadata.exclude.unwrap_or(false) || route_path.contains("404") {
         return;
     }
 
@@ -567,8 +569,12 @@ fn add_sitemap_entry(
     sitemap_entries.push(SitemapEntry {
         loc: full_url,
         lastmod: None,
-        changefreq: sitemap_metadata.get_changefreq(sitemap_options.default_changefreq),
-        priority: sitemap_metadata.get_priority(sitemap_options.default_priority),
+        changefreq: sitemap_metadata
+            .changefreq
+            .or(sitemap_options.default_changefreq),
+        priority: sitemap_metadata
+            .priority
+            .or(sitemap_options.default_priority),
     });
 }
 
