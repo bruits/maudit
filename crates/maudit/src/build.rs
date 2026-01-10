@@ -17,6 +17,7 @@ use crate::{
     logging::print_title,
     route::{CachedRoute, DynamicRouteContext, FullRoute, InternalRoute, PageContext, PageParams},
     routing::extract_params_from_raw_route,
+    sitemap::{SitemapEntry, generate_sitemap},
 };
 use colored::{ColoredString, Colorize};
 use log::{debug, info, trace, warn};
@@ -120,7 +121,14 @@ pub async fn build(
     let mut build_pages_scripts: FxHashSet<assets::Script> = FxHashSet::default();
     let mut build_pages_styles: FxHashSet<assets::Style> = FxHashSet::default();
 
+    let mut sitemap_entries: Vec<SitemapEntry> = Vec::new();
     let mut page_count = 0;
+
+    // Normalize base_url once to avoid repeated trimming
+    let normalized_base_url = options
+        .base_url
+        .as_ref()
+        .map(|url| url.trim_end_matches('/'));
 
     // This is fully serial. It is somewhat trivial to make it parallel, but it currently isn't because every time I've tried to
     // (uncommited, #25, #41, #46) it either made no difference or was slower. The overhead of parallelism is just too high for
@@ -176,6 +184,15 @@ pub async fn build(
                     None,
                 );
 
+                add_sitemap_entry(
+                    &mut sitemap_entries,
+                    normalized_base_url,
+                    &url,
+                    base_path,
+                    &route.sitemap_metadata(),
+                    &options.sitemap,
+                );
+
                 page_count += 1;
             } else {
                 // Dynamic base route
@@ -196,6 +213,7 @@ pub async fn build(
 
                     // Build all pages for this route
                     for page in pages {
+                        let page_start = Instant::now();
                         let url = cached_route.url(&page.0);
                         let file_path = cached_route.file_path(&page.0, &options.output_dir);
 
@@ -210,12 +228,21 @@ pub async fn build(
 
                         write_route_file(&content, &file_path)?;
 
-                        info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
+                        info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), &route_format_options));
 
                         build_metadata.add_page(
                             base_path.clone(),
                             file_path.to_string_lossy().to_string(),
                             Some(page.0.0.clone()),
+                        );
+
+                        add_sitemap_entry(
+                            &mut sitemap_entries,
+                            normalized_base_url,
+                            &url,
+                            base_path,
+                            &route.sitemap_metadata(),
+                            &options.sitemap,
                         );
 
                         page_count += 1;
@@ -265,6 +292,15 @@ pub async fn build(
                     None,
                 );
 
+                add_sitemap_entry(
+                    &mut sitemap_entries,
+                    normalized_base_url,
+                    &url,
+                    &variant_path,
+                    &route.sitemap_metadata(),
+                    &options.sitemap,
+                );
+
                 page_count += 1;
             } else {
                 // Dynamic variant
@@ -309,6 +345,15 @@ pub async fn build(
                             variant_path.clone(),
                             file_path.to_string_lossy().to_string(),
                             Some(page.0.0.clone()),
+                        );
+
+                        add_sitemap_entry(
+                            &mut sitemap_entries,
+                            normalized_base_url,
+                            &url,
+                            &variant_path,
+                            &route.sitemap_metadata(),
+                            &options.sitemap,
                         );
 
                         page_count += 1;
@@ -473,6 +518,25 @@ pub async fn build(
         info!(target: "build", "{}", format!("Assets copied in {}", format_elapsed_time(assets_start.elapsed(), &FormatElapsedTimeOptions::default())).bold());
     }
 
+    // Generate sitemap
+    if options.sitemap.enabled {
+        if let Some(base_url) = normalized_base_url {
+            let sitemap_start = Instant::now();
+            print_title("generating sitemap");
+
+            generate_sitemap(
+                sitemap_entries,
+                base_url,
+                &options.output_dir,
+                &options.sitemap,
+            )?;
+
+            info!(target: "build", "{}", format!("Sitemap generated in {}", format_elapsed_time(sitemap_start.elapsed(), &FormatElapsedTimeOptions::default())).bold());
+        } else {
+            warn!(target: "build", "Sitemap generation is enabled but no base_url is set in BuildOptions. Either disable sitemap generation or set a base_url to enable it.");
+        }
+    }
+
     info!(target: "SKIP_FORMAT", "{}", "");
     info!(target: "build", "{}", format!("Build completed in {}", format_elapsed_time(build_start.elapsed(), &section_format_options)).bold());
 
@@ -481,6 +545,44 @@ pub async fn build(
     }
 
     Ok(build_metadata)
+}
+
+fn add_sitemap_entry(
+    sitemap_entries: &mut Vec<SitemapEntry>,
+    base_url: Option<&str>,
+    url: &str,
+    route_path: &str,
+    sitemap_metadata: &crate::sitemap::RouteSitemapMetadata,
+    sitemap_options: &crate::sitemap::SitemapOptions,
+) {
+    // Skip if no base_url configured
+    let Some(base_url) = base_url else {
+        return;
+    };
+
+    // Skip if route is excluded or is a 404 page
+    if sitemap_metadata.exclude.unwrap_or(false) || route_path.contains("404") {
+        return;
+    }
+
+    // Construct full URL
+    let full_url = if url == "/" {
+        base_url.to_string()
+    } else {
+        format!("{}{}", base_url, url)
+    };
+
+    // Add entry
+    sitemap_entries.push(SitemapEntry {
+        loc: full_url,
+        lastmod: None,
+        changefreq: sitemap_metadata
+            .changefreq
+            .or(sitemap_options.default_changefreq),
+        priority: sitemap_metadata
+            .priority
+            .or(sitemap_options.default_priority),
+    });
 }
 
 fn copy_recursively(

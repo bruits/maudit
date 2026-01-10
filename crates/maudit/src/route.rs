@@ -476,6 +476,10 @@ pub trait InternalRoute {
         vec![]
     }
 
+    fn sitemap_metadata(&self) -> crate::sitemap::RouteSitemapMetadata {
+        crate::sitemap::RouteSitemapMetadata::default()
+    }
+
     fn is_endpoint(&self) -> bool {
         self.route_raw()
             .as_ref()
