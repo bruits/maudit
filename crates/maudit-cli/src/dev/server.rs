@@ -72,7 +72,8 @@ struct AppState {
 fn inject_live_reload_script(html_content: &str, socket_addr: SocketAddr, host: bool) -> String {
     let mut content = html_content.to_string();
 
-    let script_content = include_str!(concat!(env!("OUT_DIR"), "/js/client.js")).replace(
+    // Run cargo xtask build-cli-js to build the client.js file if missing
+    let script_content = include_str!("../../js/dist/client.js").replace(
         "{SERVER_ADDRESS}",
         &format!(
             "{}:{}",

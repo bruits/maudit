@@ -41,7 +41,3 @@ quanta = "0.12.6"
 serde_json = "1.0"
 tokio-util = "0.7"
 cargo_metadata = "0.23.0"
-
-[build-dependencies]
-rolldown = { package = "brk_rolldown", version = "0.2.3" }
-tokio = { version = "1", features = ["rt"] }

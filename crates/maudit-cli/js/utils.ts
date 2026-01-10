@@ -1,6 +1,6 @@
 const ansiPattern = new RegExp(
 	"(?:\\u001B\\][\\s\\S]*?(?:\\u0007|\\u001B\\u005C|\\u009C))|[\\u001B\\u009B][[\\]()#;?]*(?:\\d{1,4}(?:[;:]\\d{0,4})*)?[\\dA-PR-TZcf-nq-uy=><~]",
-	"g"
+	"g",
 );
 
 export function stripAnsi(str: string): string {
@@ -24,7 +24,7 @@ function mauditMessage(level: "log" | "warn" | "error", message: unknown[]) {
 		"%cMaudit",
 		"background: #ba1f33; color: white; padding-inline: 4px; border-radius: 2px; font-family: serif;",
 		...message.map((m) =>
-			typeof m === "string" ? stripAnsi(m) : JSON.stringify(m, null, 2)
-		)
+			typeof m === "string" ? stripAnsi(m) : JSON.stringify(m, null, 2),
+		),
 	);
 }

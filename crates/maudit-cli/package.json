@@ -1,0 +1,7 @@
+{
+	"name": "maudit-cli-packages",
+	"private": true,
+	"dependencies": {
+		"ansi_up": "^6.0.6"
+	}
+}
