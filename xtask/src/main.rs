@@ -62,6 +62,7 @@ fn build_cli_js() -> Result<(), DynError> {
         input: Some(input_items),
         dir: Some(js_dist_dir.to_string_lossy().to_string()),
         format: Some(rolldown::OutputFormat::Esm),
+        platform: Some(rolldown::Platform::Browser),
         minify: Some(RawMinifyOptions::Bool(true)),
         ..Default::default()
     };
@@ -102,14 +103,16 @@ fn build_maudit_js() -> Result<(), DynError> {
 
     // Configure Rolldown bundler input
     let input_items = vec![InputItem {
-        name: Some("preload".to_string()),
-        import: js_src_dir.join("preload.ts").to_string_lossy().to_string(),
+        name: Some("prefetch".to_string()),
+        import: js_src_dir.join("prefetch.ts").to_string_lossy().to_string(),
     }];
 
     let bundler_options = BundlerOptions {
         input: Some(input_items),
         dir: Some(js_dist_dir.to_string_lossy().to_string()),
         format: Some(rolldown::OutputFormat::Esm),
+        platform: Some(rolldown::Platform::Browser),
+        minify: Some(RawMinifyOptions::Bool(true)),
         ..Default::default()
     };
 

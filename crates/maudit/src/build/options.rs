@@ -58,6 +58,8 @@ pub struct BuildOptions {
 
     pub assets: AssetsOptions,
 
+    pub prefetch: bool,
+
     /// Options for sitemap generation. See [`SitemapOptions`] for configuration.
     pub sitemap: SitemapOptions,
 }
@@ -149,6 +151,7 @@ impl Default for BuildOptions {
             output_dir: "dist".into(),
             static_dir: "static".into(),
             clean_output_dir: true,
+            prefetch: true,
             assets: AssetsOptions::default(),
             sitemap: SitemapOptions::default(),
         }

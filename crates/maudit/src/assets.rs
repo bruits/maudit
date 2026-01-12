@@ -8,10 +8,12 @@ use std::{fs, path::PathBuf};
 
 mod image;
 pub mod image_cache;
+mod prefetch;
 mod script;
 mod style;
 mod tailwind;
 pub use image::{Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt, RenderedImage};
+pub use prefetch::PrefetchPlugin;
 pub use script::Script;
 pub use style::{Style, StyleOptions};
 pub use tailwind::TailwindPlugin;

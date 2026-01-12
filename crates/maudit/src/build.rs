@@ -10,7 +10,7 @@ use std::{
 
 use crate::{
     BuildOptions, BuildOutput,
-    assets::{self, RouteAssets, TailwindPlugin, image_cache::ImageCache},
+    assets::{self, PrefetchPlugin, RouteAssets, Script, TailwindPlugin, image_cache::ImageCache},
     build::images::process_image,
     content::ContentSources,
     is_dev,
@@ -130,6 +130,32 @@ pub async fn build(
         .as_ref()
         .map(|url| url.trim_end_matches('/'));
 
+    let mut default_scripts = vec![];
+
+    if options.prefetch {
+        let prefetch_script = Script::new(
+            PathBuf::from("maudit:prefetch"),
+            true,
+            {
+                use rapidhash::fast::RapidHasher;
+                use std::hash::Hasher;
+
+                let prefetch_content = include_str!("../js/prefetch.ts");
+                let mut buf = Vec::with_capacity(prefetch_content.len());
+                buf.extend_from_slice(include_str!("../js/prefetch.ts").as_bytes());
+
+                let mut hasher = RapidHasher::default();
+                hasher.write(&buf);
+
+                let hash = hasher.finish();
+                let hex = format!("{:016x}", hash);
+                hex[..5].to_string()
+            },
+            &route_assets_options,
+        );
+        default_scripts.push(prefetch_script);
+    }
+
     // This is fully serial. It is somewhat trivial to make it parallel, but it currently isn't because every time I've tried to
     // (uncommited, #25, #41, #46) it either made no difference or was slower. The overhead of parallelism is just too high for
     // how fast most sites build. Ideally, it'd be configurable and default to serial, but I haven't found an ergonomic way to do that yet.
@@ -156,6 +182,8 @@ pub async fn build(
             if base_params.is_empty() {
                 let mut route_assets =
                     RouteAssets::new(&route_assets_options, Some(image_cache.clone()));
+
+                route_assets.scripts.extend(default_scripts.clone());
 
                 let params = PageParams::default();
                 let url = cached_route.url(&params);
@@ -376,7 +404,7 @@ pub async fn build(
         fs::create_dir_all(&route_assets_options.output_assets_dir)?;
     }
 
-    if !build_pages_styles.is_empty() || !build_pages_scripts.is_empty() {
+    if true {
         let assets_start = Instant::now();
         print_title("generating assets");
 
@@ -409,6 +437,14 @@ pub async fn build(
             .chain(css_inputs.into_iter())
             .collect::<Vec<InputItem>>();
 
+        println!(
+            "Bundler inputs: {:?}",
+            bundler_inputs
+                .iter()
+                .map(|input| input.import.clone())
+                .collect::<Vec<String>>()
+        );
+
         if !bundler_inputs.is_empty() {
             let mut module_types_hashmap = FxHashMap::default();
             module_types_hashmap.insert("woff".to_string(), ModuleType::Asset);
@@ -427,19 +463,22 @@ pub async fn build(
                     module_types: Some(module_types_hashmap),
                     ..Default::default()
                 },
-                vec![Arc::new(TailwindPlugin {
-                    tailwind_path: options.assets.tailwind_binary_path.clone(),
-                    tailwind_entries: build_pages_styles
-                        .iter()
-                        .filter_map(|style| {
-                            if style.tailwind {
-                                Some(style.path().clone())
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<PathBuf>>(),
-                })],
+                vec![
+                    Arc::new(TailwindPlugin {
+                        tailwind_path: options.assets.tailwind_binary_path.clone(),
+                        tailwind_entries: build_pages_styles
+                            .iter()
+                            .filter_map(|style| {
+                                if style.tailwind {
+                                    Some(style.path().clone())
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect::<Vec<PathBuf>>(),
+                    }),
+                    Arc::new(PrefetchPlugin {}),
+                ],
             )?;
 
             let _result = bundler.write().await?;
