@@ -9,6 +9,7 @@ use std::{fs, path::PathBuf};
 mod image;
 pub mod image_cache;
 mod prefetch;
+mod sanitize_filename;
 mod script;
 mod style;
 mod tailwind;
@@ -413,9 +414,10 @@ enum HashAssetType<'a> {
 
 fn make_filename(path: &Path, hash: &String, extension: Option<&str>) -> PathBuf {
     let file_stem = path.file_stem().unwrap();
+    let sanitized_stem = sanitize_filename::default_sanitize_file_name(file_stem.to_str().unwrap());
 
     let mut filename = PathBuf::new();
-    filename.push(format!("{}.{}", file_stem.to_str().unwrap(), hash));
+    filename.push(format!("{}.{}", sanitized_stem, hash));
 
     if let Some(extension) = extension {
         filename.set_extension(format!("{}.{}", hash, extension));
