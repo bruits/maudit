@@ -1,13 +1,28 @@
-use rolldown::{
-    ModuleType,
-    plugin::{HookUsage, Plugin},
-};
+use std::path::PathBuf;
 
-const PREFETCH_CODE: &str = include_str!("../../js/prefetch.ts");
+use rolldown::plugin::{HookUsage, Plugin};
 
-/// Rolldown plugin to expose the prefetch module as a virtual module.
+/// Rolldown plugin to resolve prefetch modules to their actual file paths.
 #[derive(Debug)]
 pub struct PrefetchPlugin;
+
+impl PrefetchPlugin {
+    /// Get the base directory where the prefetch files are located.
+    fn get_base_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("js")
+    }
+
+    /// Resolve a maudit:prefetch specifier to its actual file path.
+    fn resolve_prefetch_path(specifier: &str) -> Option<PathBuf> {
+        let base_dir = Self::get_base_dir();
+
+        match specifier {
+            "maudit:prefetch" => Some(base_dir.join("prefetch.ts")),
+            "maudit:prefetch:hover" => Some(base_dir.join("prefetch").join("hover.ts")),
+            _ => None,
+        }
+    }
+}
 
 impl Plugin for PrefetchPlugin {
     fn name(&self) -> std::borrow::Cow<'static, str> {
@@ -15,7 +30,7 @@ impl Plugin for PrefetchPlugin {
     }
 
     fn register_hook_usage(&self) -> HookUsage {
-        HookUsage::ResolveId | HookUsage::Load
+        HookUsage::ResolveId
     }
 
     async fn resolve_id(
@@ -23,24 +38,9 @@ impl Plugin for PrefetchPlugin {
         _ctx: &rolldown::plugin::PluginContext,
         args: &rolldown::plugin::HookResolveIdArgs<'_>,
     ) -> rolldown::plugin::HookResolveIdReturn {
-        if args.specifier == "maudit:prefetch" {
+        if let Some(path) = Self::resolve_prefetch_path(args.specifier) {
             return Ok(Some(rolldown::plugin::HookResolveIdOutput {
-                id: "maudit:prefetch".to_string().into(),
-                ..Default::default()
-            }));
-        }
-        Ok(None)
-    }
-
-    async fn load(
-        &self,
-        _ctx: &rolldown::plugin::PluginContext,
-        args: &rolldown::plugin::HookLoadArgs<'_>,
-    ) -> rolldown::plugin::HookLoadReturn {
-        if args.id == "maudit:prefetch" {
-            return Ok(Some(rolldown::plugin::HookLoadOutput {
-                code: PREFETCH_CODE.to_string().into(),
-                module_type: Some(ModuleType::Ts),
+                id: path.to_string_lossy().to_string().into(),
                 ..Default::default()
             }));
         }

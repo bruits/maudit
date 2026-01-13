@@ -102,10 +102,20 @@ fn build_maudit_js() -> Result<(), DynError> {
     fs::create_dir_all(&js_dist_dir)?;
 
     // Configure Rolldown bundler input
-    let input_items = vec![InputItem {
-        name: Some("prefetch".to_string()),
-        import: js_src_dir.join("prefetch.ts").to_string_lossy().to_string(),
-    }];
+    let input_items = vec![
+        InputItem {
+            name: Some("prefetch".to_string()),
+            import: js_src_dir.join("prefetch.ts").to_string_lossy().to_string(),
+        },
+        InputItem {
+            name: Some("hover".to_string()),
+            import: js_src_dir
+                .join("prefetch")
+                .join("hover.ts")
+                .to_string_lossy()
+                .to_string(),
+        },
+    ];
 
     let bundler_options = BundlerOptions {
         input: Some(input_items),

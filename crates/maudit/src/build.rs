@@ -134,7 +134,7 @@ pub async fn build(
 
     if options.prefetch {
         let prefetch_script = Script::new(
-            PathBuf::from("maudit:prefetch"),
+            PathBuf::from("maudit:prefetch:hover"),
             true,
             {
                 use rapidhash::fast::RapidHasher;

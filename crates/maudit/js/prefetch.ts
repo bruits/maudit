@@ -1,15 +1,21 @@
-const preloadedResources = new Set<string>();
+const preloadedUrls = new Set<string>();
 
 interface PreloadConfig {
 	skipConnectionCheck?: boolean;
 }
 
 export function prefetch(url: string, config?: PreloadConfig) {
-	url = url.replace(/#.*/, "");
+	let urlObj: URL;
+	try {
+		urlObj = new URL(url, window.location.href);
+		urlObj.hash = "";
+	} catch {
+		throw new Error(`Invalid URL provided to prefetch: ${url}`);
+	}
 
-	const bypassConnectionCheck = config?.skipConnectionCheck ?? false;
+	const skipConnectionCheck = config?.skipConnectionCheck ?? false;
 
-	if (!canPrefetchUrl(url, bypassConnectionCheck)) {
+	if (!canPrefetchUrl(urlObj, skipConnectionCheck)) {
 		return;
 	}
 
@@ -20,25 +26,18 @@ export function prefetch(url: string, config?: PreloadConfig) {
 		linkElement.rel = "prefetch";
 		linkElement.href = url;
 		document.head.appendChild(linkElement);
-		preloadedResources.add(url);
+		preloadedUrls.add(urlObj.href);
 	}
 }
 
-function canPrefetchUrl(url: string, bypassConnectionCheck: boolean): boolean {
+function canPrefetchUrl(url: URL, skipConnectionCheck: boolean): boolean {
 	if (!navigator.onLine) return false;
-	if (!bypassConnectionCheck && hasLimitedBandwidth()) return false;
+	if (!skipConnectionCheck && hasLimitedBandwidth()) return false;
 
-	try {
-		const destination = new URL(url, window.location.href);
-
-		return (
-			(window.location.origin === destination.origin &&
-				window.location.pathname !== destination.pathname) ||
-			(window.location.search !== destination.search && !preloadedResources.has(url))
-		);
-	} catch {
-		return false;
-	}
+	return (
+		(window.location.origin === url.origin && window.location.pathname !== url.pathname) ||
+		(window.location.search !== url.search && !preloadedUrls.has(url.href))
+	);
 }
 
 function hasLimitedBandwidth(): boolean {
@@ -46,7 +45,7 @@ function hasLimitedBandwidth(): boolean {
 	// https://caniuse.com/?search=navigator.connection
 	if ("connection" in navigator) {
 		const networkInfo = (navigator as any).connection;
-		return networkInfo.saveData || /2g/.test(networkInfo.effectiveType);
+		return networkInfo.saveData || networkInfo.effectiveType.endsWith("2g");
 	}
 
 	return false;
