@@ -1,30 +1,16 @@
-use std::path::PathBuf;
-
 use rolldown::plugin::{HookUsage, Plugin};
 
-/// Rolldown plugin to resolve prefetch modules to their actual file paths.
+pub const PREFETCH_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/js/prefetch.ts");
+pub const PREFETCH_HOVER_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/js/prefetch/hover.ts");
+pub const PREFETCH_TAP_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/js/prefetch/tap.ts");
+pub const PREFETCH_VIEWPORT_PATH: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/js/prefetch/viewport.ts");
+
+/// Rolldown plugin to handle the maudit:prefetch specifier.
+/// Importing the actual prefetch.ts file from Maudit's crate is very cumbersome in JS, and TypeScript anyway won't enjoy finding the types there
+/// As such, this plugin resolves the maudit:prefetch specifier to the actual file path of prefetch.ts in the Maudit crate for the user.
 #[derive(Debug)]
 pub struct PrefetchPlugin;
-
-impl PrefetchPlugin {
-    /// Get the base directory where the prefetch files are located.
-    fn get_base_dir() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("js")
-    }
-
-    /// Resolve a maudit:prefetch specifier to its actual file path.
-    fn resolve_prefetch_path(specifier: &str) -> Option<PathBuf> {
-        let base_dir = Self::get_base_dir();
-
-        match specifier {
-            "maudit:prefetch" => Some(base_dir.join("prefetch.ts")),
-            "maudit:prefetch:hover" => Some(base_dir.join("prefetch").join("hover.ts")),
-            "maudit:prefetch:tap" => Some(base_dir.join("prefetch").join("tap.ts")),
-            "maudit:prefetch:viewport" => Some(base_dir.join("prefetch").join("viewport.ts")),
-            _ => None,
-        }
-    }
-}
 
 impl Plugin for PrefetchPlugin {
     fn name(&self) -> std::borrow::Cow<'static, str> {
@@ -40,9 +26,9 @@ impl Plugin for PrefetchPlugin {
         _ctx: &rolldown::plugin::PluginContext,
         args: &rolldown::plugin::HookResolveIdArgs<'_>,
     ) -> rolldown::plugin::HookResolveIdReturn {
-        if let Some(path) = Self::resolve_prefetch_path(args.specifier) {
+        if args.specifier == "maudit:prefetch" {
             return Ok(Some(rolldown::plugin::HookResolveIdOutput {
-                id: path.to_string_lossy().to_string().into(),
+                id: PREFETCH_PATH.into(),
                 ..Default::default()
             }));
         }
