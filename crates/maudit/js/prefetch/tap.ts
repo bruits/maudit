@@ -6,27 +6,28 @@ const listenedAnchors = new WeakSet<HTMLAnchorElement>();
 const observeMutations = true;
 
 function init() {
-	// Attach click listeners to all anchors
+	// Attach touchstart/mousedown listeners to all anchors
 	const attachListeners = () => {
 		const anchors = document.getElementsByTagName("a");
 		for (const anchor of anchors) {
 			if (listenedAnchors.has(anchor)) continue;
 
 			listenedAnchors.add(anchor);
-			anchor.addEventListener("click", handleClick, { passive: true });
+			anchor.addEventListener("touchstart", handleTap, { passive: true });
+			anchor.addEventListener("mousedown", handleTap, { passive: true });
 		}
 	};
 
 	document.addEventListener("DOMContentLoaded", attachListeners);
 
-	function handleClick(e: Event) {
+	function handleTap(e: Event) {
 		const target = e.target as HTMLAnchorElement;
 
 		if (!target.href) {
 			return;
 		}
 
-		// Prefetch on click
+		// Prefetch on tap/mousedown
 		prefetch(target.href);
 	}
 
