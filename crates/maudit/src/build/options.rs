@@ -23,6 +23,7 @@ use crate::{assets::RouteAssetsOptions, is_dev, sitemap::SitemapOptions};
 /// ```rust
 /// use maudit::{
 ///   content_sources, coronate, routes, BuildOptions, BuildOutput, AssetsOptions,
+///   PrefetchOptions, PrefetchStrategy,
 /// };
 ///
 /// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
@@ -37,6 +38,9 @@ use crate::{assets::RouteAssetsOptions, is_dev, sitemap::SitemapOptions};
 ///         tailwind_binary_path: "./node_modules/.bin/tailwindcss".into(),
 ///         image_cache_dir: ".cache/maudit/images".into(),
 ///         ..Default::default()
+///       },
+///       prefetch: PrefetchOptions {
+///         strategy: PrefetchStrategy::Viewport,
 ///       },
 ///       ..Default::default()
 ///     },
@@ -58,10 +62,36 @@ pub struct BuildOptions {
 
     pub assets: AssetsOptions,
 
-    pub prefetch: bool,
+    pub prefetch: PrefetchOptions,
 
     /// Options for sitemap generation. See [`SitemapOptions`] for configuration.
     pub sitemap: SitemapOptions,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum PrefetchStrategy {
+    /// No prefetching
+    None,
+    /// Prefetch links when users hover over them (with 80ms delay)
+    Hover,
+    /// Prefetch links when users click/tap on them
+    Tap,
+    /// Prefetch all links currently visible in the viewport
+    Viewport,
+}
+
+#[derive(Clone)]
+pub struct PrefetchOptions {
+    /// The prefetch strategy to use
+    pub strategy: PrefetchStrategy,
+}
+
+impl Default for PrefetchOptions {
+    fn default() -> Self {
+        Self {
+            strategy: PrefetchStrategy::Tap,
+        }
+    }
 }
 
 impl BuildOptions {
@@ -151,7 +181,7 @@ impl Default for BuildOptions {
             output_dir: "dist".into(),
             static_dir: "static".into(),
             clean_output_dir: true,
-            prefetch: true,
+            prefetch: PrefetchOptions::default(),
             assets: AssetsOptions::default(),
             sitemap: SitemapOptions::default(),
         }

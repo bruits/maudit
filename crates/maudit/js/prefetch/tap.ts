@@ -6,56 +6,29 @@ const listenedAnchors = new WeakSet<HTMLAnchorElement>();
 const observeMutations = true;
 
 function init() {
-	let timeout: ReturnType<typeof setTimeout> | null = null;
-
-	// Handle focus listeners for keyboard navigation accessibility
-	document.body.addEventListener(
-		"focusin",
-		(e) => {
-			if (e.target instanceof HTMLAnchorElement) {
-				handleHoverIn(e);
-			}
-		},
-		{ passive: true },
-	);
-	document.body.addEventListener("focusout", handleHoverOut, { passive: true });
-
-	// Attach hover listeners to all anchors
+	// Attach click listeners to all anchors
 	const attachListeners = () => {
 		const anchors = document.getElementsByTagName("a");
 		for (const anchor of anchors) {
 			if (listenedAnchors.has(anchor)) continue;
 
 			listenedAnchors.add(anchor);
-			anchor.addEventListener("mouseenter", handleHoverIn, { passive: true });
-			anchor.addEventListener("mouseleave", handleHoverOut, { passive: true });
+			anchor.addEventListener("click", handleClick, { passive: true });
 		}
 	};
 
-	function handleHoverIn(e: Event) {
+	document.addEventListener("DOMContentLoaded", attachListeners);
+
+	function handleClick(e: Event) {
 		const target = e.target as HTMLAnchorElement;
 
 		if (!target.href) {
 			return;
 		}
 
-		if (timeout !== null) {
-			clearTimeout(timeout);
-		}
-		timeout = setTimeout(() => {
-			prefetch(target.href);
-			timeout = null;
-		}, 80);
+		// Prefetch on click
+		prefetch(target.href);
 	}
-
-	function handleHoverOut() {
-		if (timeout !== null) {
-			clearTimeout(timeout);
-			timeout = null;
-		}
-	}
-
-	document.addEventListener("DOMContentLoaded", attachListeners);
 
 	if (observeMutations) {
 		// Re-attach listeners for dynamically added content

@@ -15,7 +15,9 @@ pub mod sitemap;
 
 // Exports for end-users
 pub use build::metadata::{BuildOutput, PageOutput, StaticAssetOutput};
-pub use build::options::{AssetHashingStrategy, AssetsOptions, BuildOptions};
+pub use build::options::{
+    AssetHashingStrategy, AssetsOptions, BuildOptions, PrefetchOptions, PrefetchStrategy,
+};
 pub use sitemap::{ChangeFreq, SitemapOptions};
 
 // Re-export FxHashMap so that macro-generated code can use it without requiring users to add it as a dependency.

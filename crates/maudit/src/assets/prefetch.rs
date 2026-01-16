@@ -19,6 +19,8 @@ impl PrefetchPlugin {
         match specifier {
             "maudit:prefetch" => Some(base_dir.join("prefetch.ts")),
             "maudit:prefetch:hover" => Some(base_dir.join("prefetch").join("hover.ts")),
+            "maudit:prefetch:tap" => Some(base_dir.join("prefetch").join("tap.ts")),
+            "maudit:prefetch:viewport" => Some(base_dir.join("prefetch").join("viewport.ts")),
             _ => None,
         }
     }

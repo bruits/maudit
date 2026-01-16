@@ -12,6 +12,7 @@ use crate::{
     BuildOptions, BuildOutput,
     assets::{self, PrefetchPlugin, RouteAssets, Script, TailwindPlugin, image_cache::ImageCache},
     build::images::process_image,
+    build::options::PrefetchStrategy,
     content::ContentSources,
     is_dev,
     logging::print_title,
@@ -132,9 +133,16 @@ pub async fn build(
 
     let mut default_scripts = vec![];
 
-    if options.prefetch {
+    let prefetch_path = match options.prefetch.strategy {
+        PrefetchStrategy::None => None,
+        PrefetchStrategy::Hover => Some("maudit:prefetch:hover"),
+        PrefetchStrategy::Tap => Some("maudit:prefetch:tap"),
+        PrefetchStrategy::Viewport => Some("maudit:prefetch:viewport"),
+    };
+
+    if let Some(prefetch_path) = prefetch_path {
         let prefetch_script = Script::new(
-            PathBuf::from("maudit:prefetch:hover"),
+            PathBuf::from(prefetch_path),
             true,
             {
                 use rapidhash::fast::RapidHasher;
