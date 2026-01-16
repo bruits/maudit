@@ -11,8 +11,8 @@ use std::{
 use crate::{
     BuildOptions, BuildOutput,
     assets::{
-        self, HashAssetType, HashConfig, RouteAssets, Script, TailwindPlugin, calculate_hash,
-        image_cache::ImageCache, prefetch,
+        self, HashAssetType, HashConfig, PrefetchPlugin, RouteAssets, Script, TailwindPlugin,
+        calculate_hash, image_cache::ImageCache, prefetch,
     },
     build::{images::process_image, options::PrefetchStrategy},
     content::ContentSources,
@@ -420,7 +420,7 @@ pub async fn build(
         fs::create_dir_all(&route_assets_options.output_assets_dir)?;
     }
 
-    if true {
+    if !build_pages_styles.is_empty() || !build_pages_scripts.is_empty() {
         let assets_start = Instant::now();
         print_title("generating assets");
 
@@ -453,7 +453,8 @@ pub async fn build(
             .chain(css_inputs.into_iter())
             .collect::<Vec<InputItem>>();
 
-        println!(
+        debug!(
+            target: "bundling",
             "Bundler inputs: {:?}",
             bundler_inputs
                 .iter()
@@ -479,19 +480,22 @@ pub async fn build(
                     module_types: Some(module_types_hashmap),
                     ..Default::default()
                 },
-                vec![Arc::new(TailwindPlugin {
-                    tailwind_path: options.assets.tailwind_binary_path.clone(),
-                    tailwind_entries: build_pages_styles
-                        .iter()
-                        .filter_map(|style| {
-                            if style.tailwind {
-                                Some(style.path().clone())
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<PathBuf>>(),
-                })],
+                vec![
+                    Arc::new(TailwindPlugin {
+                        tailwind_path: options.assets.tailwind_binary_path.clone(),
+                        tailwind_entries: build_pages_styles
+                            .iter()
+                            .filter_map(|style| {
+                                if style.tailwind {
+                                    Some(style.path().clone())
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect::<Vec<PathBuf>>(),
+                    }),
+                    Arc::new(PrefetchPlugin {}),
+                ],
             )?;
 
             let _result = bundler.write().await?;

@@ -6,6 +6,15 @@ pub const PREFETCH_TAP_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/js/pre
 pub const PREFETCH_VIEWPORT_PATH: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/js/prefetch/viewport.ts");
 
+// Built paths, we don't use any of those ourselves but they can be useful if someone wants to have a bundler-less Maudit
+pub const PREFETCH_BUILT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/js/dist/prefetch.js");
+pub const PREFETCH_HOVER_BUILT_PATH: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/js/dist/prefetch/hover.js");
+pub const PREFETCH_TAP_BUILT_PATH: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/js/dist/prefetch/tap.js");
+pub const PREFETCH_VIEWPORT_BUILT_PATH: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/js/dist/prefetch/viewport.js");
+
 /// Rolldown plugin to handle the maudit:prefetch specifier.
 /// Importing the actual prefetch.ts file from Maudit's crate is very cumbersome in JS, and TypeScript anyway won't enjoy finding the types there
 /// As such, this plugin resolves the maudit:prefetch specifier to the actual file path of prefetch.ts in the Maudit crate for the user.
