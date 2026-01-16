@@ -89,7 +89,7 @@ pub struct PrefetchOptions {
 impl Default for PrefetchOptions {
     fn default() -> Self {
         Self {
-            strategy: PrefetchStrategy::None,
+            strategy: PrefetchStrategy::Tap,
         }
     }
 }

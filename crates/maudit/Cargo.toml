@@ -29,7 +29,7 @@ pulldown-cmark = "0.12.2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 glob = "0.3.1"
 syntect = "5.0"
-lol_html = "2.1.0"
+lol_html = "2.7.1"
 slug = "0.1.6"
 image = "0.25.6"
 webp = "0.3.1"
