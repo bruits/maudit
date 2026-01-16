@@ -8,10 +8,13 @@ use std::{fs, path::PathBuf};
 
 mod image;
 pub mod image_cache;
+pub mod prefetch;
+mod sanitize_filename;
 mod script;
 mod style;
 mod tailwind;
 pub use image::{Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt, RenderedImage};
+pub use prefetch::PrefetchPlugin;
 pub use script::Script;
 pub use style::{Style, StyleOptions};
 pub use tailwind::TailwindPlugin;
@@ -57,6 +60,25 @@ impl RouteAssets {
             image_cache,
             ..Default::default()
         }
+    }
+
+    pub fn with_default_assets(
+        assets_options: &RouteAssetsOptions,
+        image_cache: Option<ImageCache>,
+        scripts: Vec<Script>,
+        styles: Vec<Style>,
+    ) -> Self {
+        let mut route_assets = Self::new(assets_options, image_cache);
+
+        for script in scripts {
+            route_assets.scripts.insert(script);
+        }
+
+        for style in styles {
+            route_assets.styles.insert(style);
+        }
+
+        route_assets
     }
 
     pub fn assets(&self) -> impl Iterator<Item = &dyn Asset> {
@@ -398,12 +420,12 @@ implement_asset_trait!(Image);
 implement_asset_trait!(Script);
 implement_asset_trait!(Style);
 
-struct HashConfig<'a> {
-    asset_type: HashAssetType<'a>,
-    hashing_strategy: &'a AssetHashingStrategy,
+pub struct HashConfig<'a> {
+    pub asset_type: HashAssetType<'a>,
+    pub hashing_strategy: &'a AssetHashingStrategy,
 }
 
-enum HashAssetType<'a> {
+pub enum HashAssetType<'a> {
     Image(&'a ImageOptions),
     Style(&'a StyleOptions),
     Script,
@@ -411,9 +433,10 @@ enum HashAssetType<'a> {
 
 fn make_filename(path: &Path, hash: &String, extension: Option<&str>) -> PathBuf {
     let file_stem = path.file_stem().unwrap();
+    let sanitized_stem = sanitize_filename::default_sanitize_file_name(file_stem.to_str().unwrap());
 
     let mut filename = PathBuf::new();
-    filename.push(format!("{}.{}", file_stem.to_str().unwrap(), hash));
+    filename.push(format!("{}.{}", sanitized_stem, hash));
 
     if let Some(extension) = extension {
         filename.set_extension(format!("{}.{}", hash, extension));
@@ -430,7 +453,7 @@ fn make_final_path(output_assets_dir: &Path, file_name: &Path) -> PathBuf {
     output_assets_dir.join(file_name)
 }
 
-fn calculate_hash(path: &Path, options: Option<&HashConfig>) -> Result<String, AssetError> {
+pub fn calculate_hash(path: &Path, options: Option<&HashConfig>) -> Result<String, AssetError> {
     let start_time = Instant::now();
     let content = if options
         .is_some_and(|cfg| *cfg.hashing_strategy == AssetHashingStrategy::FastImprecise)

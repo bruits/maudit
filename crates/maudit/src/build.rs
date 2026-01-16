@@ -10,8 +10,11 @@ use std::{
 
 use crate::{
     BuildOptions, BuildOutput,
-    assets::{self, RouteAssets, TailwindPlugin, image_cache::ImageCache},
-    build::images::process_image,
+    assets::{
+        self, HashAssetType, HashConfig, PrefetchPlugin, RouteAssets, Script, TailwindPlugin,
+        calculate_hash, image_cache::ImageCache, prefetch,
+    },
+    build::{images::process_image, options::PrefetchStrategy},
     content::ContentSources,
     is_dev,
     logging::print_title,
@@ -130,6 +133,31 @@ pub async fn build(
         .as_ref()
         .map(|url| url.trim_end_matches('/'));
 
+    let mut default_scripts = vec![];
+
+    let prefetch_path = match options.prefetch.strategy {
+        PrefetchStrategy::None => None,
+        PrefetchStrategy::Hover => Some(PathBuf::from(prefetch::PREFETCH_HOVER_PATH)),
+        PrefetchStrategy::Tap => Some(PathBuf::from(prefetch::PREFETCH_TAP_PATH)),
+        PrefetchStrategy::Viewport => Some(PathBuf::from(prefetch::PREFETCH_VIEWPORT_PATH)),
+    };
+
+    if let Some(prefetch_path) = prefetch_path {
+        let prefetch_script = Script::new(
+            prefetch_path.clone(),
+            true,
+            calculate_hash(
+                &prefetch_path,
+                Some(&HashConfig {
+                    asset_type: HashAssetType::Script,
+                    hashing_strategy: &options.assets.hashing_strategy,
+                }),
+            )?,
+            &route_assets_options,
+        );
+        default_scripts.push(prefetch_script);
+    }
+
     // This is fully serial. It is somewhat trivial to make it parallel, but it currently isn't because every time I've tried to
     // (uncommited, #25, #41, #46) it either made no difference or was slower. The overhead of parallelism is just too high for
     // how fast most sites build. Ideally, it'd be configurable and default to serial, but I haven't found an ergonomic way to do that yet.
@@ -154,8 +182,12 @@ pub async fn build(
 
             // Static base route
             if base_params.is_empty() {
-                let mut route_assets =
-                    RouteAssets::new(&route_assets_options, Some(image_cache.clone()));
+                let mut route_assets = RouteAssets::with_default_assets(
+                    &route_assets_options,
+                    Some(image_cache.clone()),
+                    default_scripts.clone(),
+                    vec![],
+                );
 
                 let params = PageParams::default();
                 let url = cached_route.url(&params);
@@ -196,8 +228,12 @@ pub async fn build(
                 page_count += 1;
             } else {
                 // Dynamic base route
-                let mut route_assets =
-                    RouteAssets::new(&route_assets_options, Some(image_cache.clone()));
+                let mut route_assets = RouteAssets::with_default_assets(
+                    &route_assets_options,
+                    Some(image_cache.clone()),
+                    default_scripts.clone(),
+                    vec![],
+                );
                 let pages = route.get_pages(&mut DynamicRouteContext {
                     content: content_sources,
                     assets: &mut route_assets,
@@ -262,8 +298,12 @@ pub async fn build(
 
             if variant_params.is_empty() {
                 // Static variant
-                let mut route_assets =
-                    RouteAssets::new(&route_assets_options, Some(image_cache.clone()));
+                let mut route_assets = RouteAssets::with_default_assets(
+                    &route_assets_options,
+                    Some(image_cache.clone()),
+                    default_scripts.clone(),
+                    vec![],
+                );
 
                 let params = PageParams::default();
                 let url = cached_route.variant_url(&params, &variant_id)?;
@@ -304,8 +344,12 @@ pub async fn build(
                 page_count += 1;
             } else {
                 // Dynamic variant
-                let mut route_assets =
-                    RouteAssets::new(&route_assets_options, Some(image_cache.clone()));
+                let mut route_assets = RouteAssets::with_default_assets(
+                    &route_assets_options,
+                    Some(image_cache.clone()),
+                    default_scripts.clone(),
+                    vec![],
+                );
                 let pages = route.get_pages(&mut DynamicRouteContext {
                     content: content_sources,
                     assets: &mut route_assets,
@@ -409,6 +453,15 @@ pub async fn build(
             .chain(css_inputs.into_iter())
             .collect::<Vec<InputItem>>();
 
+        debug!(
+            target: "bundling",
+            "Bundler inputs: {:?}",
+            bundler_inputs
+                .iter()
+                .map(|input| input.import.clone())
+                .collect::<Vec<String>>()
+        );
+
         if !bundler_inputs.is_empty() {
             let mut module_types_hashmap = FxHashMap::default();
             module_types_hashmap.insert("woff".to_string(), ModuleType::Asset);
@@ -427,19 +480,22 @@ pub async fn build(
                     module_types: Some(module_types_hashmap),
                     ..Default::default()
                 },
-                vec![Arc::new(TailwindPlugin {
-                    tailwind_path: options.assets.tailwind_binary_path.clone(),
-                    tailwind_entries: build_pages_styles
-                        .iter()
-                        .filter_map(|style| {
-                            if style.tailwind {
-                                Some(style.path().clone())
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<PathBuf>>(),
-                })],
+                vec![
+                    Arc::new(TailwindPlugin {
+                        tailwind_path: options.assets.tailwind_binary_path.clone(),
+                        tailwind_entries: build_pages_styles
+                            .iter()
+                            .filter_map(|style| {
+                                if style.tailwind {
+                                    Some(style.path().clone())
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect::<Vec<PathBuf>>(),
+                    }),
+                    Arc::new(PrefetchPlugin {}),
+                ],
             )?;
 
             let _result = bundler.write().await?;
