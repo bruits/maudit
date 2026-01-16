@@ -31,12 +31,13 @@ export function prefetch(url: string, config?: PreloadConfig) {
 }
 
 function canPrefetchUrl(url: URL, skipConnectionCheck: boolean): boolean {
-	if (!navigator.onLine) return false;
-	if (!skipConnectionCheck && hasLimitedBandwidth()) return false;
-
 	return (
-		(window.location.origin === url.origin && window.location.pathname !== url.pathname) ||
-		(window.location.search !== url.search && !preloadedUrls.has(url.href))
+		navigator.onLine && // 1. Don't prefetch if the browser is offline (duh)
+		(skipConnectionCheck || !hasLimitedBandwidth()) && // 2. Don't prefetch if the user has limited bandwidth, unless explicitely asked
+		window.location.origin === url.origin && // 3. Don't prefetch cross-origin URLs
+		!preloadedUrls.has(url.href) && // 4. Don't prefetch URLs we've already prefetched
+		(window.location.pathname !== url.pathname || // 5. Don't prefetch the current page (different path or query string)
+			window.location.search !== url.search)
 	);
 }
 

@@ -20,8 +20,8 @@ function init() {
 
 	document.addEventListener("DOMContentLoaded", attachListeners);
 
-	function handleTap(e: Event) {
-		const target = e.target as HTMLAnchorElement;
+	function handleTap(e: TouchEvent | MouseEvent) {
+		const target = e.currentTarget as HTMLAnchorElement;
 
 		if (!target.href) {
 			return;
