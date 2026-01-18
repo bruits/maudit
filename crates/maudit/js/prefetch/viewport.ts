@@ -68,8 +68,7 @@ function init() {
 		}
 	}
 
-	// This is always in a type="module" script, so, it'll always run after the DOM is ready
-	observeAnchors();
+	document.addEventListener("DOMContentLoaded", observeAnchors);
 
 	if (observeMutations) {
 		// Watch for dynamically added anchors
