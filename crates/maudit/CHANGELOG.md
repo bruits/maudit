@@ -1,5 +1,35 @@
 # maudit
 
+## 0.10.0 — 2026-01-18
+
+### Minor changes
+
+- [9aa0309](https://github.com/bruits/maudit/commit/9aa0309feec86e2fbd7c5c26c4c369f742e6bcb5) Added support for prefetching links. By default, Maudit will now automatically prefetch links your users press on in order to increase the performance of page navigations.
+  
+  Other, more aggressive strategies for prefetching are also available: Hover and Viewport, which respectively prefetch links on hover and all links in the viewport. — Thanks @Princesseuh!
+- [14931c9](https://github.com/bruits/maudit/commit/14931c9b5a3dfecd758aca5638a698fede7ac44d) Adds a new `redirect()` function that can used to generate redirects to other pages and websites. This function is exported from the route prelude.
+  
+  ```rs
+  use maudit::route::prelude::*;
+  
+  #[route("/redirect")]
+  pub struct Redirect;
+  
+  impl Route for Redirect {
+      fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+          redirect("https://example.com")
+  
+          // Use a page's url method to generate type safe links:
+          // redirect(&OtherPage.url(None))
+      }
+  }
+  ```
+   — Thanks @Princesseuh!
+
+### Patch changes
+
+- [9aa0309](https://github.com/bruits/maudit/commit/9aa0309feec86e2fbd7c5c26c4c369f742e6bcb5) Fixed assets using filenames with invalid characters for URLs resulting in broken links — Thanks @Princesseuh!
+
 ## 0.9.0 — 2026-01-10
 
 ### Minor changes
