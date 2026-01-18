@@ -1335,4 +1335,19 @@ mod tests {
 
         assert_eq!(page.file_path(&route_params, output_dir), expected);
     }
+
+    #[test]
+    fn test_redirect_simple_url() {
+        let result = redirect("https://example.com");
+
+        match result {
+            RenderResult::Text(html) => {
+                assert_eq!(
+                    html,
+                    r#"<meta http-equiv="refresh" content="0; url=https://example.com" />"#
+                );
+            }
+            _ => panic!("Expected RenderResult::Text variant"),
+        }
+    }
 }
