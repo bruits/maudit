@@ -230,6 +230,39 @@ where
     routes
 }
 
+/// Generates the required HTML for a redirect to the specified URL.
+///
+/// This function returns a RenderResult and as such can be used directly as a possible return value inside a page
+///
+/// ## Example
+/// ```rust
+/// use maudit::route::prelude::*;
+///
+/// # #[route("/other_page")]
+/// # pub struct OtherPage;
+/// # impl Route for OtherPage {
+/// # fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {""}
+/// # }
+///
+/// #[route("/redirect")]
+/// pub struct Redirect;
+///
+/// impl Route for Redirect {
+///     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+///         redirect("https://example.com")
+///
+///         // Use a page's url method to generate type safe links:
+///         // redirect(&OtherPage.url(None))
+///     }
+/// }
+/// ```
+pub fn redirect(url: &str) -> RenderResult {
+    RenderResult::Text(format!(
+        r#"<meta http-equiv="refresh" content="0; url={}" />"#,
+        url
+    ))
+}
+
 /// Allows to access various data and assets in a [`Route`] implementation.
 ///
 /// ## Example
@@ -926,7 +959,7 @@ pub mod prelude {
     //! ```
     pub use super::{
         CachedRoute, DynamicRouteContext, FullRoute, Page, PageContext, PageParams, Pages,
-        PaginatedContentPage, PaginationPage, RenderResult, Route, RouteExt, paginate,
+        PaginatedContentPage, PaginationPage, RenderResult, Route, RouteExt, paginate, redirect,
     };
     pub use crate::assets::{
         Asset, Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt, Script, Style,
@@ -1301,5 +1334,20 @@ mod tests {
         let expected = Path::new("/dist/articles/hello-world/index.html");
 
         assert_eq!(page.file_path(&route_params, output_dir), expected);
+    }
+
+    #[test]
+    fn test_redirect_simple_url() {
+        let result = redirect("https://example.com");
+
+        match result {
+            RenderResult::Text(html) => {
+                assert_eq!(
+                    html,
+                    r#"<meta http-equiv="refresh" content="0; url=https://example.com" />"#
+                );
+            }
+            _ => panic!("Expected RenderResult::Text variant"),
+        }
     }
 }
