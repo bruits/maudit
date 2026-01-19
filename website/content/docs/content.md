@@ -15,6 +15,7 @@ In Maudit, this concept is called Content Sources. A content source is a collect
 Content sources are defined in the coronate entry point through the `content_sources!` macro.
 
 ```rs
+use maudit::{coronate, routes, BuildOptions};
 use maudit::content::{content_sources, markdown_entry, glob_markdown};
 
 #[markdown_entry]
@@ -32,7 +33,7 @@ fn main() {
       "source_name" => loader(...),
       "another_source" => glob_markdown::<BlogPost>("path/to/files/*.md")
     ],
-    Default::default()
+    BuildOptions::default()
   );
 }
 ```

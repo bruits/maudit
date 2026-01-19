@@ -1,5 +1,5 @@
 use content::content_sources;
-use maudit::{AssetsOptions, BuildOptions, BuildOutput, coronate, routes};
+use maudit::{AssetsOptions, BuildOptions, BuildOutput, PrefetchOptions, coronate, routes};
 
 mod content;
 mod layout;
@@ -25,6 +25,9 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
             assets: AssetsOptions {
                 tailwind_binary_path: "../node_modules/.bin/tailwindcss".into(),
                 ..Default::default()
+            },
+            prefetch: PrefetchOptions {
+                strategy: maudit::PrefetchStrategy::Hover,
             },
             ..Default::default()
         },
