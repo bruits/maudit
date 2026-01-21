@@ -1,4 +1,5 @@
 use maud::{DOCTYPE, Markup, PreEscaped, html};
+use chrono::{Datelike, Utc};
 mod docs_sidebars;
 mod header;
 
@@ -141,6 +142,7 @@ pub fn layout(
         .include_style_with_options("assets/prin.css", StyleOptions { tailwind: true })?;
 
     let seo_data = seo.unwrap_or_default();
+    let current_year = Utc::now().year();
 
     Ok(html! {
         (DOCTYPE)
@@ -160,7 +162,7 @@ pub fn layout(
                         div.container.mx-auto.px-8.py-8.flex.justify-between.items-center.flex-col-reverse."sm:flex-row".gap-y-12 {
                             div.grow."basis-[0]" {
                                 a.text-md.font-bold href="https://bruits.org" {
-                                    "Copyright © 2025 Bruits."
+                                    "Copyright © " (current_year) " Bruits."
                                 }
                                 @if licenses {
                                     br;
