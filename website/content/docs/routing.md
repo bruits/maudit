@@ -172,22 +172,22 @@ To create these variants, specify the named `locales` attribute on your route, a
 use maudit::route::prelude::*;
 
 #[route(
-    "/contact",
-    locales(sv(prefix = "/sv"), de(path = "/de/kontakt"))
+  "/contact",
+  locales(sv(prefix = "/sv"), de(path = "/de/kontakt"))
 )]
 pub struct Contact;
 
 impl Route for Contact {
-    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-        match &ctx.variant {
-            Some(language) => match language.as_str() {
-                "sv" => "Kontakta oss.",
-                "de" => "Kontaktieren Sie uns.",
-                _ => unreachable!(),
-            },
-            _ => "Contact us.",
-        }
+  fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+    match &ctx.variant {
+      Some(language) => match language.as_str() {
+        "sv" => "Kontakta oss.",
+        "de" => "Kontaktieren Sie uns.",
+        _ => unreachable!(),
+      },
+      _ => "Contact us.",
     }
+  }
 }
 ```
 
@@ -210,12 +210,12 @@ use maudit::route::prelude::*;
 pub struct Redirect;
 
 impl Route for Redirect {
-    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-        redirect("https://example.com")
+  fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+    redirect("https://example.com")
 
-        // Use a page's url method to generate type safe links:
-        // redirect(&OtherPage.url(None))
-    }
+    // Use a page's url method to generate type safe links:
+    // redirect(&OtherPage.url(None))
+  }
 }
 ```
 
