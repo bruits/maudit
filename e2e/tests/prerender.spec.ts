@@ -15,7 +15,7 @@ test.describe("Prefetch - Speculation Rules (Prerender)", () => {
 
 		// Call prefetch with prerender
 		await page.evaluate(() => {
-			window.prefetch("/about", { prerender: true });
+			window.prefetch("/about/", { prerender: true });
 		});
 
 		// Check that a speculation rules script was created
@@ -44,7 +44,7 @@ test.describe("Prefetch - Speculation Rules (Prerender)", () => {
 
 		// Call prefetch with custom eagerness
 		await page.evaluate(() => {
-			window.prefetch("/about", { prerender: true, eagerness: "conservative" });
+			window.prefetch("/about/", { prerender: true, eagerness: "conservative" });
 		});
 
 		const speculationScript = page.locator('script[type="speculationrules"]').first();
@@ -70,7 +70,7 @@ test.describe("Prefetch - Speculation Rules (Prerender)", () => {
 
 		// Call prefetch with prerender (should fallback to link)
 		await page.evaluate(() => {
-			window.prefetch("/about", { prerender: true });
+			window.prefetch("/about/", { prerender: true });
 		});
 
 		// Should create link element instead
@@ -91,8 +91,8 @@ test.describe("Prefetch - Speculation Rules (Prerender)", () => {
 
 		// Call prefetch with prerender twice
 		await page.evaluate(() => {
-			window.prefetch("/about", { prerender: true });
-			window.prefetch("/about", { prerender: true });
+			window.prefetch("/about/", { prerender: true });
+			window.prefetch("/about/", { prerender: true });
 		});
 
 		// Should only have one speculation rules script
@@ -109,9 +109,9 @@ test.describe("Prefetch - Speculation Rules (Prerender)", () => {
 
 		// Prerender multiple URLs
 		await page.evaluate(() => {
-			window.prefetch("/about", { prerender: true });
-			window.prefetch("/contact", { prerender: true });
-			window.prefetch("/blog", { prerender: true });
+			window.prefetch("/about/", { prerender: true });
+			window.prefetch("/contact/", { prerender: true });
+			window.prefetch("/blog/", { prerender: true });
 		});
 
 		// Should have three separate scripts (one per URL)

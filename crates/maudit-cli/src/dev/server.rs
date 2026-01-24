@@ -134,7 +134,6 @@ pub async fn start_dev_web_server(
     let port = find_open_port(&addr, 1864).await;
     let socket = TcpSocket::new_v4().unwrap();
     let _ = socket.set_reuseaddr(true);
-    let _ = socket.set_reuseport(true);
 
     let socket_addr = SocketAddr::new(addr, port);
     socket.bind(socket_addr).unwrap();

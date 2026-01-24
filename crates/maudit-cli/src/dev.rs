@@ -12,6 +12,7 @@ use quanta::Instant;
 use server::WebSocketMessage;
 use std::{fs, path::Path};
 use tokio::{
+    signal,
     sync::{broadcast, mpsc::channel},
     task::JoinHandle,
 };
@@ -196,16 +197,23 @@ pub async fn start_dev_env(cwd: &str, host: bool) -> Result<(), Box<dyn std::err
         }
     });
 
-    // Wait for either the web server or the file watcher to finish
-    if let Some(web_server) = web_server_thread {
-        tokio::select! {
-            _ = web_server => {},
-            _ = file_watcher_task => {},
+    // Wait for either the web server, file watcher, or shutdown signal
+    tokio::select! {
+        _ = shutdown_signal() => {
+            info!(name: "dev", "Shutting down dev environment...");
         }
-    } else {
-        // No web server started yet, just wait for file watcher
-        // If it started the web server, it'll also close itself if the web server ends
-        file_watcher_task.await.unwrap();
+        _ = async {
+            if let Some(web_server) = web_server_thread {
+                tokio::select! {
+                    _ = web_server => {},
+                    _ = file_watcher_task => {},
+                }
+            } else {
+                // No web server started yet, just wait for file watcher
+                // If it started the web server, it'll also close itself if the web server ends
+                file_watcher_task.await.unwrap();
+            }
+        } => {}
     }
     Ok(())
 }
@@ -247,4 +255,28 @@ fn should_watch_path(path: &Path) -> bool {
     }
 
     true
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }

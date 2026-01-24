@@ -15,7 +15,7 @@ test.describe("Prefetch", () => {
 
 		// Check that a link element was created
 		const prefetchLink = page.locator('link[rel="prefetch"]').first();
-		await expect(prefetchLink).toHaveAttribute("href", "/about");
+		await expect(prefetchLink).toHaveAttribute("href", "/about/");
 	});
 
 	test("should not prefetch same URL twice", async ({ page }) => {
@@ -35,7 +35,7 @@ test.describe("Prefetch", () => {
 	});
 
 	test("should not prefetch current page", async ({ page }) => {
-		await page.goto("/about");
+		await page.goto("/about/");
 
 		await page.addScriptTag({ content: prefetchScript });
 
