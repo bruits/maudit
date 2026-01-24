@@ -1,6 +1,5 @@
 [workspace]
-members = ["crates/*", "benchmarks/*", "examples/*", "website", "xtask"]
-exclude = ["e2e/fixtures/*"]
+members = ["crates/*", "benchmarks/*", "examples/*", "website", "xtask", "e2e/fixtures/*"]
 resolver = "3"
 
 [workspace.dependencies]
