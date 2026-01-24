@@ -53,6 +53,7 @@ Images can be collocated next to your content, or anywhere else in your project 
 Images added to pages can be transformed by using [`ctx.assets.add_image_with_options()`](https://docs.rs/maudit/latest/maudit/assets/struct.RouteAssets.html#method.add_image_with_options), which takes an additional [`ImageOptions`](https://docs.rs/maudit/latest/maudit/assets/struct.ImageOptions.html) struct to specify how the image should be processed.
 
 ```rs
+use maud::html;
 use maudit::route::prelude::*;
 
 #[route("/image")]
@@ -63,13 +64,15 @@ impl Route for ImagePage {
     let image = ctx.assets.add_image_with_options(
       "path/to/image.jpg",
       ImageOptions {
-        width: Some(800),
-        height: None,
-        format: Some(ImageFormat::Png)
+          width: Some(800),
+          height: None,
+          format: Some(ImageFormat::Png),
       },
     )?;
 
-    Ok(format!("<img src=\"{}\" alt=\"Processed Image\" />", image.url))
+    Ok(html! {
+      (image.render("My 800 pixel wide PNG"))
+    })
   }
 }
 ```
