@@ -27,9 +27,9 @@ maudit init
 
 You can also use Maudit without the CLI tool, or integrate Maudit into an existing project. Check out our [Manual Installation](/docs/manual-install) guide.
 
-## Development
+## Commands
 
-Start a local server with live reloading:
+Start a local dev server with live reload:
 
 ```bash
 maudit dev
@@ -61,6 +61,6 @@ maudit preview
 
 Contributions are welcome! See our [Contributor Guide](https://github.com/bruits/maudit/blob/main/CONTRIBUTING.md) for help getting started.
 
-# License
+## License
 
 Maudit is licensed under the [MIT License](https://opensource.org/license/MIT). See [LICENSE](LICENSE) for details.
