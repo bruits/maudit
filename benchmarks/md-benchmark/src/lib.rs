@@ -15,6 +15,7 @@ pub fn build_website(markdown_count: usize) {
                 // is spent in bundling, including the script in pages, etc. instead of that. It's still neat to see how much overhead prefetching adds,
                 // but not really in this benchmark.
                 strategy: PrefetchStrategy::None,
+                ..Default::default()
             },
             ..Default::default()
         },

@@ -1,0 +1,10 @@
+[workspace]
+
+[package]
+name = "test-site"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+maudit = { path = "../../../crates/maudit" }
+maud = "0.27.0"

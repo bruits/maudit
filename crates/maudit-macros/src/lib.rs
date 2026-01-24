@@ -247,15 +247,14 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
                     }
                 }
                 LocaleKind::Prefix(prefix) => {
-                    if args.path.is_none() {
+                    if let Some(base_path) = args.path.as_ref() {
+                        quote! {
+                            (#locale_name.to_string(), format!("{}{}", #prefix, #base_path))
+                        }
+                    } else {
                         // Emit compile error if prefix is used without base path
                         quote! {
                             compile_error!("Cannot use locale prefix without a base route path")
-                        }
-                    } else {
-                        let base_path = args.path.as_ref().unwrap();
-                        quote! {
-                            (#locale_name.to_string(), format!("{}{}", #prefix, #base_path))
                         }
                     }
                 }
