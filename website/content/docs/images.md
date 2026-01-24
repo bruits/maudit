@@ -64,9 +64,9 @@ impl Route for ImagePage {
     let image = ctx.assets.add_image_with_options(
       "path/to/image.jpg",
       ImageOptions {
-          width: Some(800),
-          height: None,
-          format: Some(ImageFormat::Png),
+        width: Some(800),
+        height: None,
+        format: Some(ImageFormat::Png),
       },
     )?;
 
