@@ -172,22 +172,22 @@ To create these variants, specify the named `locales` attribute on your route, a
 use maudit::route::prelude::*;
 
 #[route(
-    "/contact",
-    locales(sv(prefix = "/sv"), de(path = "/de/kontakt"))
+  "/contact",
+  locales(sv(prefix = "/sv"), de(path = "/de/kontakt"))
 )]
 pub struct Contact;
 
 impl Route for Contact {
-    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-        match &ctx.variant {
-            Some(language) => match language.as_str() {
-                "sv" => "Kontakta oss.",
-                "de" => "Kontaktieren Sie uns.",
-                _ => unreachable!(),
-            },
-            _ => "Contact us.",
-        }
+  fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+    match &ctx.variant {
+      Some(language) => match language.as_str() {
+        "sv" => "Kontakta oss.",
+        "de" => "Kontaktieren Sie uns.",
+        _ => unreachable!(),
+      },
+      _ => "Contact us.",
     }
+  }
 }
 ```
 
@@ -198,3 +198,25 @@ For this example, Maudit will generate three pages:
 - `/de/kontakt`
 
 Calling `render()` three times with a different `ctx.variant` each time.
+
+## Redirects
+
+Maudit supports creating redirects to other pages using the [meta http-equiv](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/http-equiv#refresh) HTML tag, which can be built ergonomically using the [`redirect`](https://docs.rs/maudit/latest/maudit/route/fn.redirect.html) function.
+
+```rs
+use maudit::route::prelude::*;
+
+#[route("/redirect")]
+pub struct Redirect;
+
+impl Route for Redirect {
+  fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+    redirect("https://example.com")
+
+    // Use a page's url method to generate type safe links:
+    // redirect(&OtherPage.url(None))
+  }
+}
+```
+
+The platform you're deploying your website to might also support a native way to do redirects that could be better suited if your redirects do not need runtime logic (i.e. your redirect is static, for instance `/blog` became `/article`). For example, [Netlify](https://docs.netlify.com/manage/routing/redirects/overview/) and [Cloudflare](https://developers.cloudflare.com/workers/static-assets/redirects/#_top) supports adding `_redirects` files to your projects to configure redirects.

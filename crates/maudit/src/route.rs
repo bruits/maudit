@@ -237,7 +237,6 @@ where
 /// ## Example
 /// ```rust
 /// use maudit::route::prelude::*;
-///
 /// # #[route("/other_page")]
 /// # pub struct OtherPage;
 /// # impl Route for OtherPage {
