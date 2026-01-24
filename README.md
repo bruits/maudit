@@ -11,44 +11,37 @@
 
 [Maudit](https://maudit.org) is a library for generating static websites with Rust.
 
-## Install
+## Getting started
 
-The quickest way to get started is with the Maudit CLI.
-
-First, you will need to install Rust 1.89 or later. We recommend using [rustup](https://rustup.rs/).
-
-Then, install the Maudit CLI tool with:
+The quickest way to get started is with the Maudit CLI:
 
 ```bash
 cargo install maudit-cli
 ```
 
-You can now create a new project by running the following command:
+Create a new project by running:
 
 ```bash
 maudit init
 ```
 
-Maudit will ask you a series of questions and generate the project. Once it's done, navigate to the new directory and start the development server:
+You can also use Maudit without the CLI tool, or integrate Maudit into an existing project. Check out our [Manual Installation](/docs/manual-install) guide.
+
+## Development
+
+Start a local server with live reloading:
 
 ```bash
-cd my-website
 maudit dev
 ```
 
-The first build downloads and compiles dependencies, which will take some time. Subsequent builds will be much faster.
-
-If you wish to use Maudit without the CLI tool, or to integrate Maudit into an existing project, please refer to the [manual installation guide](/docs/manual-install).
-
-## Build
-
-Build your project to the `dist` directory with optimizations suited for production:
+Build your project to the `dist` directory:
 
 ```bash
 maudit build
 ```
 
-Preview your build on a local server before deploying:
+Preview your build before deploying:
 
 ```bash
 maudit preview
