@@ -39,9 +39,12 @@ export function prefetch(url: string, config?: PreloadConfig) {
 
 	preloadedUrls.add(urlObj.href);
 
+	// Calculate relative path once (pathname + search, no origin)
+	const path = urlObj.pathname + urlObj.search;
+
 	// Use Speculation Rules API for prerendering if enabled and supported
 	if (shouldPrerender && supportsSpeculationRules()) {
-		appendSpeculationRules(urlObj.href, eagerness);
+		appendSpeculationRules(path, eagerness);
 		return;
 	}
 
@@ -51,7 +54,7 @@ export function prefetch(url: string, config?: PreloadConfig) {
 
 	if (supportsPrefetch) {
 		linkElement.rel = "prefetch";
-		linkElement.href = url;
+		linkElement.href = path;
 		document.head.appendChild(linkElement);
 	}
 }
@@ -87,15 +90,19 @@ function supportsSpeculationRules(): boolean {
  *
  * Note: Each URL needs its own script element - modifying an existing
  * script won't trigger a new prerender.
+ * 
+ * @param path - The relative path (pathname + search) to prerender
+ * @param eagerness - How eagerly the browser should prerender
  */
-function appendSpeculationRules(url: string, eagerness: NonNullable<PreloadConfig["eagerness"]>) {
+function appendSpeculationRules(path: string, eagerness: NonNullable<PreloadConfig["eagerness"]>) {
 	const script = document.createElement("script");
 	script.type = "speculationrules";
+	
 	script.textContent = JSON.stringify({
 		prerender: [
 			{
 				source: "list",
-				urls: [url],
+				urls: [path],
 				eagerness,
 			},
 		],
@@ -104,7 +111,7 @@ function appendSpeculationRules(url: string, eagerness: NonNullable<PreloadConfi
 		prefetch: [
 			{
 				source: "list",
-				urls: [url],
+				urls: [path],
 				eagerness,
 			},
 		],

@@ -29,9 +29,9 @@ test.describe("Prefetch - Speculation Rules (Prerender)", () => {
 		if (scriptContent) {
 			const rules = JSON.parse(scriptContent);
 			expect(rules.prerender).toBeDefined();
-			expect(rules.prerender[0].urls).toContain("/about");
+			expect(rules.prerender[0].urls).toContain("/about/");
 			expect(rules.prefetch).toBeDefined(); // Fallback
-			expect(rules.prefetch[0].urls).toContain("/about");
+			expect(rules.prefetch[0].urls).toContain("/about/");
 		}
 	});
 
@@ -75,7 +75,7 @@ test.describe("Prefetch - Speculation Rules (Prerender)", () => {
 
 		// Should create link element instead
 		const prefetchLink = page.locator('link[rel="prefetch"]').first();
-		await expect(prefetchLink).toHaveAttribute("href", "/about");
+		await expect(prefetchLink).toHaveAttribute("href", "/about/");
 
 		// Should NOT create speculation rules script
 		const speculationScripts = await page.locator('script[type="speculationrules"]').all();

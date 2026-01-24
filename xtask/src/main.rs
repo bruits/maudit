@@ -49,7 +49,10 @@ fn build_cli_js() -> Result<(), DynError> {
 
     println!("Building JavaScript for maudit-cli...");
 
-    // Ensure the dist directory exists
+    // Remove and recreate the dist directory to clean old builds
+    if js_dist_dir.exists() {
+        fs::remove_dir_all(&js_dist_dir)?;
+    }
     fs::create_dir_all(&js_dist_dir)?;
 
     // Configure Rolldown bundler input
@@ -98,7 +101,10 @@ fn build_maudit_js() -> Result<(), DynError> {
 
     println!("Building JavaScript for maudit...");
 
-    // Ensure the dist directory exists
+    // Remove and recreate the dist directory to clean old builds
+    if js_dist_dir.exists() {
+        fs::remove_dir_all(&js_dist_dir)?;
+    }
     fs::create_dir_all(&js_dist_dir)?;
 
     // Configure Rolldown bundler input
