@@ -10,7 +10,7 @@ test.describe("Prefetch", () => {
 
 		// Call prefetch
 		await page.evaluate(() => {
-			window.prefetch("/about");
+			window.prefetch("/about/");
 		});
 
 		// Check that a link element was created
@@ -25,8 +25,8 @@ test.describe("Prefetch", () => {
 
 		// Call prefetch twice
 		await page.evaluate(() => {
-			window.prefetch("/about");
-			window.prefetch("/about");
+			window.prefetch("/about/");
+			window.prefetch("/about/");
 		});
 
 		// Should only have one link element
@@ -41,7 +41,7 @@ test.describe("Prefetch", () => {
 
 		// Try to prefetch current page
 		await page.evaluate(() => {
-			window.prefetch("/about");
+			window.prefetch("/about/");
 		});
 
 		// Should not create any link element
@@ -56,7 +56,7 @@ test.describe("Prefetch", () => {
 
 		// Try to prefetch cross-origin URL
 		await page.evaluate(() => {
-			window.prefetch("https://example.com/about");
+			window.prefetch("https://example.com/about/");
 		});
 
 		// Should not create any link element
