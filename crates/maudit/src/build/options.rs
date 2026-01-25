@@ -41,6 +41,7 @@ use crate::{assets::RouteAssetsOptions, is_dev, sitemap::SitemapOptions};
 ///       },
 ///       prefetch: PrefetchOptions {
 ///         strategy: PrefetchStrategy::Viewport,
+///         ..Default::default()
 ///       },
 ///       ..Default::default()
 ///     },
@@ -80,16 +81,35 @@ pub enum PrefetchStrategy {
     Viewport,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum PrerenderEagerness {
+    /// Prerender as soon as possible
+    Immediate,
+    /// Prerender eagerly but not immediately
+    Eager,
+    /// Prerender with moderate eagerness
+    Moderate,
+    /// Prerender conservatively
+    Conservative,
+}
+
 #[derive(Clone)]
 pub struct PrefetchOptions {
     /// The prefetch strategy to use
     pub strategy: PrefetchStrategy,
+    /// Enable prerendering using Speculation Rules API if supported.
+    pub prerender: bool,
+    /// Hint to the browser as to how eagerly it should prefetch/prerender.
+    /// Only works when prerender is enabled and browser supports Speculation Rules API.
+    pub eagerness: PrerenderEagerness,
 }
 
 impl Default for PrefetchOptions {
     fn default() -> Self {
         Self {
             strategy: PrefetchStrategy::Tap,
+            prerender: false,
+            eagerness: PrerenderEagerness::Immediate,
         }
     }
 }

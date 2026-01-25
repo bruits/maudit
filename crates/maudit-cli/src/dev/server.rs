@@ -29,6 +29,7 @@ use tower_http::{
 use axum::extract::connect_info::ConnectInfo;
 use futures::{SinkExt, stream::StreamExt};
 
+use crate::consts::PORT;
 use crate::server_utils::{CustomOnResponse, find_open_port, log_server_start};
 use axum::http::header;
 use local_ip_address::local_ip;
@@ -94,6 +95,7 @@ pub async fn start_dev_web_server(
     start_time: Instant,
     tx: broadcast::Sender<WebSocketMessage>,
     host: bool,
+    port: Option<u16>,
     initial_error: Option<String>,
     current_status: Arc<RwLock<Option<PersistentStatus>>>,
 ) {
@@ -131,10 +133,13 @@ pub async fn start_dev_web_server(
     } else {
         IpAddr::from([127, 0, 0, 1])
     };
-    let port = find_open_port(&addr, 1864).await;
+
+    // Use provided port or default to the constant PORT
+    let starting_port = port.unwrap_or(PORT);
+
+    let port = find_open_port(&addr, starting_port).await;
     let socket = TcpSocket::new_v4().unwrap();
     let _ = socket.set_reuseaddr(true);
-    let _ = socket.set_reuseport(true);
 
     let socket_addr = SocketAddr::new(addr, port);
     socket.bind(socket_addr).unwrap();

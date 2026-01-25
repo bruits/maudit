@@ -2,6 +2,22 @@ const preloadedUrls = new Set<string>();
 
 interface PreloadConfig {
 	skipConnectionCheck?: boolean;
+	/**
+	 * Enable prerendering using Speculation Rules API if supported.
+	 * Falls back to prefetch if not supported. (default: false)
+	 */
+	prerender?: boolean;
+	/**
+	 * Hint to the browser as to how eagerly it should prefetch/prerender.
+	 * Only works when browser supports Speculation Rules API.
+	 * (default: 'immediate')
+	 *
+	 * - 'immediate': Prefetch/prerender as soon as possible
+	 * - 'eager': Prefetch/prerender eagerly but not immediately
+	 * - 'moderate': Prefetch/prerender with moderate eagerness
+	 * - 'conservative': Prefetch/prerender conservatively
+	 */
+	eagerness?: "immediate" | "eager" | "moderate" | "conservative";
 }
 
 export function prefetch(url: string, config?: PreloadConfig) {
@@ -14,19 +30,32 @@ export function prefetch(url: string, config?: PreloadConfig) {
 	}
 
 	const skipConnectionCheck = config?.skipConnectionCheck ?? false;
+	const shouldPrerender = config?.prerender ?? false;
+	const eagerness = config?.eagerness ?? "immediate";
 
 	if (!canPrefetchUrl(urlObj, skipConnectionCheck)) {
 		return;
 	}
 
+	preloadedUrls.add(urlObj.href);
+
+	// Calculate relative path once (pathname + search, no origin)
+	const path = urlObj.pathname + urlObj.search;
+
+	// Use Speculation Rules API when supported
+	if (HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules")) {
+		appendSpeculationRules(path, eagerness, shouldPrerender);
+		return;
+	}
+
+	// Fallback to link prefetch for other browsers
 	const linkElement = document.createElement("link");
 	const supportsPrefetch = linkElement.relList?.supports?.("prefetch");
 
 	if (supportsPrefetch) {
 		linkElement.rel = "prefetch";
-		linkElement.href = url;
+		linkElement.href = path;
 		document.head.appendChild(linkElement);
-		preloadedUrls.add(urlObj.href);
 	}
 }
 
@@ -50,4 +79,47 @@ function hasLimitedBandwidth(): boolean {
 	}
 
 	return false;
+}
+
+/**
+ * Appends a <script type="speculationrules"> tag to prefetch or prerender the URL.
+ *
+ * Note: Each URL needs its own script element - modifying an existing
+ * script won't trigger a new prerender/prefetch.
+ *
+ * @param path - The relative path (pathname + search) to prefetch/prerender
+ * @param eagerness - How eagerly the browser should prefetch/prerender
+ * @param prerender - Whether to include a prerender rule
+ */
+function appendSpeculationRules(
+	path: string,
+	eagerness: NonNullable<PreloadConfig["eagerness"]>,
+	prerender: boolean,
+) {
+	const script = document.createElement("script");
+	script.type = "speculationrules";
+
+	// We always want the prefetch, even if prerendering as a fallback
+	const rules: any = {
+		prefetch: [
+			{
+				source: "list",
+				urls: [path],
+				eagerness,
+			},
+		],
+	};
+
+	if (prerender) {
+		rules.prerender = [
+			{
+				source: "list",
+				urls: [path],
+				eagerness,
+			},
+		];
+	}
+
+	script.textContent = JSON.stringify(rules);
+	document.head.appendChild(script);
 }

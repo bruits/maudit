@@ -1,5 +1,6 @@
 packages:
   - crates/*
+  - e2e
 
 onlyBuiltDependencies:
   - "@parcel/watcher"

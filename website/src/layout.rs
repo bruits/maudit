@@ -1,5 +1,5 @@
-use maud::{DOCTYPE, Markup, PreEscaped, html};
 use chrono::{Datelike, Utc};
+use maud::{DOCTYPE, Markup, PreEscaped, html};
 mod docs_sidebars;
 mod header;
 
@@ -152,7 +152,7 @@ pub fn layout(
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 (generator())
                 link rel="icon" href="/favicon.svg";
-                (seo_data.render(&ctx.base_url))
+                (seo_data.render(ctx.base_url))
             }
             body {
                 div.relative.bg-our-white {
