@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"pretest": "cd .. && cargo xtask build-maudit-js",
+		"build-js": "cargo xtask build-maudit-js",
 		"test": "playwright test",
 		"test:ui": "playwright test --ui",
 		"test:debug": "playwright test --debug",
