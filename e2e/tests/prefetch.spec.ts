@@ -1,9 +1,9 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./test-utils";
 import { prefetchScript } from "./utils";
 
 test.describe("Prefetch", () => {
-	test("should create link element for prefetch", async ({ page }) => {
-		await page.goto("/");
+	test("should create link element for prefetch", async ({ page, devServer }) => {
+		await page.goto(devServer.url);
 
 		// Inject prefetch function
 		await page.addScriptTag({ content: prefetchScript });
@@ -18,8 +18,8 @@ test.describe("Prefetch", () => {
 		await expect(prefetchLink).toHaveAttribute("href", "/about/");
 	});
 
-	test("should not prefetch same URL twice", async ({ page }) => {
-		await page.goto("/");
+	test("should not prefetch same URL twice", async ({ page, devServer }) => {
+		await page.goto(devServer.url);
 
 		await page.addScriptTag({ content: prefetchScript });
 
@@ -34,8 +34,8 @@ test.describe("Prefetch", () => {
 		expect(prefetchLinks.length).toBe(1);
 	});
 
-	test("should not prefetch current page", async ({ page }) => {
-		await page.goto("/about/");
+	test("should not prefetch current page", async ({ page, devServer }) => {
+		await page.goto(`${devServer.url}/about/`);
 
 		await page.addScriptTag({ content: prefetchScript });
 
@@ -49,8 +49,8 @@ test.describe("Prefetch", () => {
 		expect(prefetchLinks.length).toBe(0);
 	});
 
-	test("should not prefetch cross-origin URLs", async ({ page }) => {
-		await page.goto("/");
+	test("should not prefetch cross-origin URLs", async ({ page, devServer }) => {
+		await page.goto(devServer.url);
 
 		await page.addScriptTag({ content: prefetchScript });
 

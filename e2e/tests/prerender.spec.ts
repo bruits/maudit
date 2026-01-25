@@ -1,15 +1,16 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./test-utils";
 import { prefetchScript } from "./utils";
 
 test.describe("Prefetch - Speculation Rules (Prerender)", () => {
 	test("should create speculation rules script when prerender is enabled", async ({
 		page,
 		browserName,
+		devServer,
 	}) => {
 		// Skip on non-Chromium browsers (Speculation Rules only supported in Chrome/Edge)
 		test.skip(browserName !== "chromium", "Speculation Rules only supported in Chromium");
 
-		await page.goto("/");
+		await page.goto(devServer.url);
 
 		await page.addScriptTag({ content: prefetchScript });
 
@@ -35,10 +36,10 @@ test.describe("Prefetch - Speculation Rules (Prerender)", () => {
 		}
 	});
 
-	test("should use correct eagerness level", async ({ page, browserName }) => {
+	test("should use correct eagerness level", async ({ page, browserName, devServer }) => {
 		test.skip(browserName !== "chromium", "Speculation Rules only supported in Chromium");
 
-		await page.goto("/");
+		await page.goto(devServer.url);
 
 		await page.addScriptTag({ content: prefetchScript });
 
@@ -60,11 +61,12 @@ test.describe("Prefetch - Speculation Rules (Prerender)", () => {
 	test("should fallback to link prefetch when speculation rules not supported", async ({
 		page,
 		browserName,
+		devServer,
 	}) => {
 		// Run this test on Firefox/Safari where Speculation Rules is not supported
 		test.skip(browserName === "chromium", "Testing fallback behavior on non-Chromium browsers");
 
-		await page.goto("/");
+		await page.goto(devServer.url);
 
 		await page.addScriptTag({ content: prefetchScript });
 
@@ -82,10 +84,10 @@ test.describe("Prefetch - Speculation Rules (Prerender)", () => {
 		expect(speculationScripts.length).toBe(0);
 	});
 
-	test("should not prerender same URL twice", async ({ page, browserName }) => {
+	test("should not prerender same URL twice", async ({ page, browserName, devServer }) => {
 		test.skip(browserName !== "chromium", "Speculation Rules only supported in Chromium");
 
-		await page.goto("/");
+		await page.goto(devServer.url);
 
 		await page.addScriptTag({ content: prefetchScript });
 
@@ -100,10 +102,10 @@ test.describe("Prefetch - Speculation Rules (Prerender)", () => {
 		expect(speculationScripts.length).toBe(1);
 	});
 
-	test("should create separate scripts for different URLs", async ({ page, browserName }) => {
+	test("should create separate scripts for different URLs", async ({ page, browserName, devServer }) => {
 		test.skip(browserName !== "chromium", "Speculation Rules only supported in Chromium");
 
-		await page.goto("/");
+		await page.goto(devServer.url);
 
 		await page.addScriptTag({ content: prefetchScript });
 

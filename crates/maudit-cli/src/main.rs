@@ -3,6 +3,8 @@ mod dev;
 mod init;
 mod preview;
 
+mod consts;
+
 mod logging;
 mod server_utils;
 
@@ -33,6 +35,10 @@ enum Commands {
     Dev {
         #[clap(long)]
         host: bool,
+
+        /// Port to run the dev server on
+        #[clap(long, short, default_value_t = crate::consts::PORT)]
+        port: u16,
     },
     /// Preview the project
     Preview {
@@ -67,9 +73,9 @@ async fn main() {
 
             let _ = start_preview_web_server(PathBuf::from("dist"), *host).await;
         }
-        Commands::Dev { host } => {
+        Commands::Dev { host, port } => {
             // TODO: cwd should be configurable, ex: --root <path>
-            let _ = start_dev_env(".", *host).await;
+            let _ = start_dev_env(".", *host, Some(*port)).await;
         }
     }
 }
