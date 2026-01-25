@@ -9,13 +9,13 @@ interface PreloadConfig {
 	prerender?: boolean;
 	/**
 	 * Hint to the browser as to how eagerly it should prefetch/prerender.
-	 * Only works when prerender is enabled and browser supports Speculation Rules API.
+	 * Only works when browser supports Speculation Rules API.
 	 * (default: 'immediate')
 	 *
-	 * - 'immediate': Prerender as soon as possible
-	 * - 'eager': Prerender eagerly but not immediately
-	 * - 'moderate': Prerender with moderate eagerness
-	 * - 'conservative': Prerender conservatively
+	 * - 'immediate': Prefetch/prerender as soon as possible
+	 * - 'eager': Prefetch/prerender eagerly but not immediately
+	 * - 'moderate': Prefetch/prerender with moderate eagerness
+	 * - 'conservative': Prefetch/prerender conservatively
 	 */
 	eagerness?: "immediate" | "eager" | "moderate" | "conservative";
 }

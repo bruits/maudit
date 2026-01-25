@@ -41,6 +41,7 @@ use crate::{assets::RouteAssetsOptions, is_dev, sitemap::SitemapOptions};
 ///       },
 ///       prefetch: PrefetchOptions {
 ///         strategy: PrefetchStrategy::Viewport,
+///         ..Default::default()
 ///       },
 ///       ..Default::default()
 ///     },

@@ -2,14 +2,11 @@ import { test, expect } from "./test-utils";
 import { prefetchScript } from "./utils";
 
 test.describe("Prefetch - Speculation Rules (Prerender)", () => {
-	test("should create speculation rules script when prerender is enabled", async ({
+	test("should create speculation rules on Chromium or link prefetch elsewhere when prerender is enabled", async ({
 		page,
 		browserName,
 		devServer,
 	}) => {
-		// Skip on non-Chromium browsers (Speculation Rules only supported in Chrome/Edge)
-		test.skip(browserName !== "chromium", "Speculation Rules only supported in Chromium");
-
 		await page.goto(devServer.url);
 
 		await page.addScriptTag({ content: prefetchScript });
@@ -19,20 +16,33 @@ test.describe("Prefetch - Speculation Rules (Prerender)", () => {
 			window.prefetch("/about/", { prerender: true });
 		});
 
-		// Check that a speculation rules script was created
-		const speculationScript = page.locator('script[type="speculationrules"]').first();
-		expect(speculationScript).toBeDefined();
+		if (browserName === "chromium") {
+			// Chromium: should create speculation rules script including prerender and prefetch
+			const speculationScript = page.locator('script[type="speculationrules"]').first();
+			const scriptContent = await speculationScript.textContent();
+			expect(scriptContent).toBeTruthy();
 
-		// Check script content
-		const scriptContent = await speculationScript.textContent();
-		expect(scriptContent).toBeTruthy();
+			if (scriptContent) {
+				const rules = JSON.parse(scriptContent);
+				expect(rules.prerender).toBeDefined();
+				expect(rules.prerender[0].urls).toContain("/about/");
+				expect(rules.prefetch).toBeDefined(); // Fallback
+				expect(rules.prefetch[0].urls).toContain("/about/");
+			}
+		} else {
+			// Non-Chromium: If link prefetch is supported, assert link element; otherwise, ensure no speculation script
+			const supportsPrefetch = await page.evaluate(() => {
+				const link = document.createElement("link");
+				return !!(link.relList && link.relList.supports && link.relList.supports("prefetch"));
+			});
 
-		if (scriptContent) {
-			const rules = JSON.parse(scriptContent);
-			expect(rules.prerender).toBeDefined();
-			expect(rules.prerender[0].urls).toContain("/about/");
-			expect(rules.prefetch).toBeDefined(); // Fallback
-			expect(rules.prefetch[0].urls).toContain("/about/");
+			if (supportsPrefetch) {
+				const prefetchLink = page.locator('link[rel="prefetch"]').first();
+				await expect(prefetchLink).toHaveAttribute("href", "/about/");
+			} else {
+				const speculationScripts = await page.locator('script[type="speculationrules"]').all();
+				expect(speculationScripts.length).toBe(0);
+			}
 		}
 	});
 
@@ -75,9 +85,17 @@ test.describe("Prefetch - Speculation Rules (Prerender)", () => {
 			window.prefetch("/about/", { prerender: true });
 		});
 
-		// Should create link element instead
-		const prefetchLink = page.locator('link[rel="prefetch"]').first();
-		await expect(prefetchLink).toHaveAttribute("href", "/about/");
+		// Check if browser supports link prefetch
+		const supportsPrefetch = await page.evaluate(() => {
+			const link = document.createElement("link");
+			return !!(link.relList && link.relList.supports && link.relList.supports("prefetch"));
+		});
+
+		if (supportsPrefetch) {
+			// Should create link element instead
+			const prefetchLink = page.locator('link[rel="prefetch"]').first();
+			await expect(prefetchLink).toHaveAttribute("href", "/about/");
+		}
 
 		// Should NOT create speculation rules script
 		const speculationScripts = await page.locator('script[type="speculationrules"]').all();
@@ -102,7 +120,11 @@ test.describe("Prefetch - Speculation Rules (Prerender)", () => {
 		expect(speculationScripts.length).toBe(1);
 	});
 
-	test("should create separate scripts for different URLs", async ({ page, browserName, devServer }) => {
+	test("should create separate scripts for different URLs", async ({
+		page,
+		browserName,
+		devServer,
+	}) => {
 		test.skip(browserName !== "chromium", "Speculation Rules only supported in Chromium");
 
 		await page.goto(devServer.url);

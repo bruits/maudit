@@ -107,7 +107,7 @@ jobs:
 
       - name: Test
         working-directory: ./e2e
-        run: pnpm test
+        run: pnpm playwright install chromium && pnpm test
 
   test:
     name: Test
