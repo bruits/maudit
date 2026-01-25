@@ -97,7 +97,6 @@ pub struct PrefetchOptions {
     /// The prefetch strategy to use
     pub strategy: PrefetchStrategy,
     /// Enable prerendering using Speculation Rules API if supported.
-    /// Falls back to prefetch if not supported.
     pub prerender: bool,
     /// Hint to the browser as to how eagerly it should prefetch/prerender.
     /// Only works when prerender is enabled and browser supports Speculation Rules API.

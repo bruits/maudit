@@ -42,13 +42,13 @@ export function prefetch(url: string, config?: PreloadConfig) {
 	// Calculate relative path once (pathname + search, no origin)
 	const path = urlObj.pathname + urlObj.search;
 
-	// Use Speculation Rules API for prerendering if enabled and supported
-	if (shouldPrerender && supportsSpeculationRules()) {
-		appendSpeculationRules(path, eagerness);
+	// Use Speculation Rules API when supported
+	if (HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules")) {
+		appendSpeculationRules(path, eagerness, shouldPrerender);
 		return;
 	}
 
-	// Fallback to link prefetch
+	// Fallback to link prefetch for other browsers
 	const linkElement = document.createElement("link");
 	const supportsPrefetch = linkElement.relList?.supports?.("prefetch");
 
@@ -81,33 +81,26 @@ function hasLimitedBandwidth(): boolean {
 	return false;
 }
 
-function supportsSpeculationRules(): boolean {
-	return HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules");
-}
-
 /**
- * Appends a <script type="speculationrules"> tag to prerender the URL.
+ * Appends a <script type="speculationrules"> tag to prefetch or prerender the URL.
  *
  * Note: Each URL needs its own script element - modifying an existing
- * script won't trigger a new prerender.
- * 
- * @param path - The relative path (pathname + search) to prerender
- * @param eagerness - How eagerly the browser should prerender
+ * script won't trigger a new prerender/prefetch.
+ *
+ * @param path - The relative path (pathname + search) to prefetch/prerender
+ * @param eagerness - How eagerly the browser should prefetch/prerender
+ * @param prerender - Whether to include a prerender rule
  */
-function appendSpeculationRules(path: string, eagerness: NonNullable<PreloadConfig["eagerness"]>) {
+function appendSpeculationRules(
+	path: string,
+	eagerness: NonNullable<PreloadConfig["eagerness"]>,
+	prerender: boolean,
+) {
 	const script = document.createElement("script");
 	script.type = "speculationrules";
-	
-	script.textContent = JSON.stringify({
-		prerender: [
-			{
-				source: "list",
-				urls: [path],
-				eagerness,
-			},
-		],
-		// Include prefetch as fallback if prerender fails
-		// https://github.com/WICG/nav-speculation/issues/162#issuecomment-1977818473
+
+	// We always want the prefetch, even if prerendering as a fallback
+	const rules: any = {
 		prefetch: [
 			{
 				source: "list",
@@ -115,6 +108,18 @@ function appendSpeculationRules(path: string, eagerness: NonNullable<PreloadConf
 				eagerness,
 			},
 		],
-	});
+	};
+
+	if (prerender) {
+		rules.prerender = [
+			{
+				source: "list",
+				urls: [path],
+				eagerness,
+			},
+		];
+	}
+
+	script.textContent = JSON.stringify(rules);
 	document.head.appendChild(script);
 }
