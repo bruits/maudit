@@ -22,32 +22,33 @@ rustdoc-args = ["--cfg", "docsrs"]
 maud = { workspace = true, optional = true }
 
 # TODO: Allow making those optional
-rolldown = { package = "brk_rolldown", version = "0.2.3" }
+rolldown = { package = "brk_rolldown", version = "0.8.0" }
 serde = { workspace = true }
 serde_yaml = "0.9.34"
-pulldown-cmark = "0.12.2"
+pulldown-cmark = "0.13.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-glob = "0.3.1"
-syntect = "5.0"
+glob = "0.3.3"
+syntect = "5.3"
 lol_html = "2.7.1"
 slug = "0.1.6"
-image = "0.25.6"
+image = "0.25.9"
 webp = "0.3.1"
-oxipng = "9.1.5"
+oxipng = "10.0.0"
 thumbhash = "0.1.0"
 base64 = "0.22.1"
 
 maudit-macros = { path = "../maudit-macros", version = "0.7.0" }
 log = { version = "0.4", features = ["kv"] }
-env_logger = "0.11.5"
-chrono = "0.4.39"
-colored = "2.2.0"
+env_logger = "0.11.8"
+chrono = "0.4.43"
+colored = "3.1.1"
 rustc-hash = "2.1"
-thiserror = "2.0.9"
-oxc_sourcemap = "4.1.0"
+thiserror = "2.0.18"
+oxc_sourcemap = "6.0.1"
 rayon = "1.11.0"
-rapidhash = "4.1.1"
+rapidhash = "4.2.1"
 pathdiff = "0.2.3"
+rolldown_plugin_replace = {package = "brk_rolldown_plugin_replace", version = "0.8.0"}
 
 [dev-dependencies]
 tempfile = "3.24.0"

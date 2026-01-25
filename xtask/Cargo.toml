@@ -5,5 +5,5 @@ edition = "2024"
 publish = false
 
 [dependencies]
-rolldown = { package = "brk_rolldown", version = "0.2.3" }
+rolldown = { package = "brk_rolldown", version = "0.8.0" }
 tokio = { version = "1", features = ["rt"] }

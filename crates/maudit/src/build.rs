@@ -26,6 +26,7 @@ use colored::{ColoredString, Colorize};
 use log::{debug, info, trace, warn};
 use pathdiff::diff_paths;
 use rolldown::{Bundler, BundlerOptions, InputItem, ModuleType};
+use rolldown_plugin_replace::ReplacePlugin;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::assets::Asset;
@@ -495,6 +496,7 @@ pub async fn build(
                             .collect::<Vec<PathBuf>>(),
                     }),
                     Arc::new(PrefetchPlugin {}),
+                    Arc::new(ReplacePlugin::new(FxHashMap::default())?),
                 ],
             )?;
 

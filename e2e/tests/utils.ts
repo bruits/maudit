@@ -4,7 +4,7 @@ import { join } from "node:path";
 // Find the actual prefetch bundle file (hash changes on each build)
 const distDir = join(process.cwd(), "../crates/maudit/js/dist");
 const prefetchFile = readdirSync(distDir).find(
-	(f) => f.startsWith("prefetch-") && f.endsWith(".js"),
+	(f) => f.startsWith("prefetch") && f.endsWith(".js"),
 );
 if (!prefetchFile) throw new Error("Could not find prefetch bundle");
 

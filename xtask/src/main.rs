@@ -110,14 +110,30 @@ fn build_maudit_js() -> Result<(), DynError> {
     // Configure Rolldown bundler input
     let input_items = vec![
         InputItem {
-            name: Some("prefetch".to_string()),
+            name: None,
             import: js_src_dir.join("prefetch.ts").to_string_lossy().to_string(),
         },
         InputItem {
-            name: Some("hover".to_string()),
+            name: None,
             import: js_src_dir
                 .join("prefetch")
                 .join("hover.ts")
+                .to_string_lossy()
+                .to_string(),
+        },
+        InputItem {
+            name: None,
+            import: js_src_dir
+                .join("prefetch")
+                .join("tap.ts")
+                .to_string_lossy()
+                .to_string(),
+        },
+        InputItem {
+            name: None,
+            import: js_src_dir
+                .join("prefetch")
+                .join("viewport.ts")
                 .to_string_lossy()
                 .to_string(),
         },

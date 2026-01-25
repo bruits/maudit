@@ -48,6 +48,7 @@ pub enum LinkType {
     ShortcutUnknown,
     Autolink,
     Email,
+    WikiLink(bool),
 }
 
 impl From<pulldown_cmark::LinkType> for LinkType {
@@ -62,6 +63,7 @@ impl From<pulldown_cmark::LinkType> for LinkType {
             pulldown_cmark::LinkType::ShortcutUnknown => LinkType::ShortcutUnknown,
             pulldown_cmark::LinkType::Autolink => LinkType::Autolink,
             pulldown_cmark::LinkType::Email => LinkType::Email,
+            pulldown_cmark::LinkType::WikiLink { has_pothole } => LinkType::WikiLink(has_pothole),
         }
     }
 }
@@ -84,6 +86,7 @@ impl LinkType {
             LinkType::ShortcutUnknown => "shortcut_unknown",
             LinkType::Autolink => "autolink",
             LinkType::Email => "email",
+            LinkType::WikiLink(_) => "wikilink",
         }
     }
 }
