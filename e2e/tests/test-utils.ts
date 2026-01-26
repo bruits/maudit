@@ -1,5 +1,5 @@
-import { spawn, execFile, type ChildProcess } from "node:child_process";
-import { join, resolve, dirname } from "node:path";
+import { spawn } from "node:child_process";
+import { resolve, dirname } from "node:path";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { test as base } from "@playwright/test";
