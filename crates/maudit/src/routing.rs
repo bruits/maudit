@@ -56,7 +56,7 @@ pub fn guess_if_route_is_endpoint(raw_route: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::routing::{ParameterDef, extract_params_from_raw_route};
+    use crate::routing::{ParameterDef, extract_params_from_raw_route, guess_if_route_is_endpoint};
 
     #[test]
     fn test_extract_params() {
@@ -123,5 +123,21 @@ mod tests {
         }];
 
         assert_eq!(extract_params_from_raw_route(input), expected);
+    }
+
+    #[test]
+    fn test_guess_if_route_is_endpoint() {
+        // Routes with file extensions should be detected as endpoints
+        assert!(guess_if_route_is_endpoint("/api/data.json"));
+        assert!(guess_if_route_is_endpoint("/feed.xml"));
+        assert!(guess_if_route_is_endpoint("/sitemap.xml"));
+        assert!(guess_if_route_is_endpoint("/robots.txt"));
+        assert!(guess_if_route_is_endpoint("/path/to/file.tar.gz"));
+        assert!(guess_if_route_is_endpoint("/api/users/[id].json"));
+
+        assert!(!guess_if_route_is_endpoint("/"));
+        assert!(!guess_if_route_is_endpoint("/articles"));
+        assert!(!guess_if_route_is_endpoint("/articles/[slug]"));
+        assert!(!guess_if_route_is_endpoint("/blog/posts/[year]/[month]"));
     }
 }

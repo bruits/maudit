@@ -1,5 +1,7 @@
-import { test, expect } from "./test-utils";
+import { createTestWithFixture, expect } from "./test-utils";
 import { prefetchScript } from "./utils";
+
+const test = createTestWithFixture("prefetch-prerender");
 
 test.describe("Prefetch", () => {
 	test("should create prefetch via speculation rules on Chromium or link element elsewhere", async ({

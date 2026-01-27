@@ -154,7 +154,9 @@ impl Image {
     /// Get a placeholder for the image, which can be used for low-quality image placeholders (LQIP) or similar techniques.
     ///
     /// This uses the [ThumbHash](https://evanw.github.io/thumbhash/) algorithm to generate a very small placeholder image.
-    pub fn placeholder(&self) -> ImagePlaceholder {
+    ///
+    /// Returns an error if the image cannot be loaded.
+    pub fn placeholder(&self) -> Result<ImagePlaceholder, crate::errors::AssetError> {
         get_placeholder(&self.path, self.cache.as_ref())
     }
 
@@ -258,20 +260,23 @@ impl ImagePlaceholder {
     }
 }
 
-fn get_placeholder(path: &PathBuf, cache: Option<&ImageCache>) -> ImagePlaceholder {
+fn get_placeholder(path: &PathBuf, cache: Option<&ImageCache>) -> Result<ImagePlaceholder, crate::errors::AssetError> {
     // Check cache first if provided
     if let Some(cache) = cache
         && let Some(cached) = cache.get_placeholder(path)
     {
         debug!("Using cached placeholder for {}", path.display());
         let thumbhash_base64 = base64::engine::general_purpose::STANDARD.encode(&cached.thumbhash);
-        return ImagePlaceholder::new(cached.thumbhash, thumbhash_base64);
+        return Ok(ImagePlaceholder::new(cached.thumbhash, thumbhash_base64));
     }
 
     let total_start = Instant::now();
 
     let load_start = Instant::now();
-    let image = image::open(path).ok().unwrap();
+    let image = image::open(path).map_err(|e| crate::errors::AssetError::ImageLoadFailed {
+        path: path.clone(),
+        source: e,
+    })?;
     let (width, height) = image.dimensions();
     let (width, height) = (width as usize, height as usize);
     debug!(
@@ -329,7 +334,7 @@ fn get_placeholder(path: &PathBuf, cache: Option<&ImageCache>) -> ImagePlacehold
         cache.cache_placeholder(path, thumb_hash.clone());
     }
 
-    ImagePlaceholder::new(thumb_hash, thumbhash_base64)
+    Ok(ImagePlaceholder::new(thumb_hash, thumbhash_base64))
 }
 
 /// Port of https://github.com/evanw/thumbhash/blob/a652ce6ed691242f459f468f0a8756cda3b90a82/js/thumbhash.js#L234
@@ -514,5 +519,94 @@ impl RenderWithAlt for Image {
             height_attr = height_attr,
             alt = alt
         ).into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn setup_unique_temp_dir() -> tempfile::TempDir {
+        // Create a unique temporary directory that's automatically cleaned up
+        tempfile::tempdir().unwrap()
+    }
+
+    #[test]
+    fn test_placeholder_with_missing_file() {
+        let nonexistent_path = PathBuf::from("/this/file/does/not/exist.png");
+        
+        let result = get_placeholder(&nonexistent_path, None);
+        
+        // Should return an error, not panic
+        assert!(result.is_err());
+        
+        if let Err(crate::errors::AssetError::ImageLoadFailed { path, .. }) = result {
+            assert_eq!(path, nonexistent_path);
+        } else {
+            panic!("Expected ImageLoadFailed error");
+        }
+    }
+
+    #[test]
+    fn test_placeholder_with_invalid_image_data() {
+        let temp_dir = setup_unique_temp_dir();
+        
+        // Create a file with invalid image data
+        let invalid_image_path = temp_dir.path().join("invalid.png");
+        std::fs::write(&invalid_image_path, b"This is not a valid PNG file").unwrap();
+        
+        let result = get_placeholder(&invalid_image_path, None);
+        
+        // Should return an error, not panic
+        assert!(result.is_err());
+        
+        if let Err(crate::errors::AssetError::ImageLoadFailed { path, .. }) = result {
+            assert_eq!(path, invalid_image_path);
+        } else {
+            panic!("Expected ImageLoadFailed error");
+        }
+        
+        // Cleanup
+        std::fs::remove_file(&invalid_image_path).ok();
+    }
+
+    #[test]
+    fn test_placeholder_with_valid_image() {
+        use std::path::Path;
+        
+        // Try to find an existing image in the examples directory
+        let project_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().parent().unwrap();
+        let test_image = project_root.join("examples/image-processing/images/walrus.jpg");
+        
+        // Skip test if the image doesn't exist (e.g., in CI without examples)
+        if !test_image.exists() {
+            eprintln!("Skipping test: test image not found at {:?}", test_image);
+            return;
+        }
+        
+        let result = get_placeholder(&test_image, None);
+        
+        // Should succeed
+        assert!(result.is_ok());
+        
+        let placeholder = result.unwrap();
+        // Verify the placeholder has a thumbhash
+        assert!(!placeholder.thumbhash.is_empty());
+        assert!(!placeholder.thumbhash_base64.is_empty());
+    }
+
+    #[test]
+    fn test_placeholder_with_empty_file() {
+        let temp_dir = setup_unique_temp_dir();
+        
+        // Create an empty file
+        let empty_file_path = temp_dir.path().join("empty.png");
+        std::fs::write(&empty_file_path, b"").unwrap();
+        
+        let result = get_placeholder(&empty_file_path, None);
+        
+        // Should return an error for empty/invalid image
+        assert!(result.is_err());
     }
 }
