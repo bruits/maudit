@@ -260,7 +260,10 @@ impl ImagePlaceholder {
     }
 }
 
-fn get_placeholder(path: &PathBuf, cache: Option<&ImageCache>) -> Result<ImagePlaceholder, crate::errors::AssetError> {
+fn get_placeholder(
+    path: &PathBuf,
+    cache: Option<&ImageCache>,
+) -> Result<ImagePlaceholder, crate::errors::AssetError> {
     // Check cache first if provided
     if let Some(cache) = cache
         && let Some(cached) = cache.get_placeholder(path)
@@ -527,20 +530,15 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    fn setup_unique_temp_dir() -> tempfile::TempDir {
-        // Create a unique temporary directory that's automatically cleaned up
-        tempfile::tempdir().unwrap()
-    }
-
     #[test]
     fn test_placeholder_with_missing_file() {
         let nonexistent_path = PathBuf::from("/this/file/does/not/exist.png");
-        
+
         let result = get_placeholder(&nonexistent_path, None);
-        
+
         // Should return an error, not panic
         assert!(result.is_err());
-        
+
         if let Err(crate::errors::AssetError::ImageLoadFailed { path, .. }) = result {
             assert_eq!(path, nonexistent_path);
         } else {
@@ -550,23 +548,23 @@ mod tests {
 
     #[test]
     fn test_placeholder_with_invalid_image_data() {
-        let temp_dir = setup_unique_temp_dir();
-        
+        let temp_dir = tempfile::tempdir().unwrap();
+
         // Create a file with invalid image data
         let invalid_image_path = temp_dir.path().join("invalid.png");
         std::fs::write(&invalid_image_path, b"This is not a valid PNG file").unwrap();
-        
+
         let result = get_placeholder(&invalid_image_path, None);
-        
+
         // Should return an error, not panic
         assert!(result.is_err());
-        
+
         if let Err(crate::errors::AssetError::ImageLoadFailed { path, .. }) = result {
             assert_eq!(path, invalid_image_path);
         } else {
             panic!("Expected ImageLoadFailed error");
         }
-        
+
         // Cleanup
         std::fs::remove_file(&invalid_image_path).ok();
     }
@@ -574,22 +572,26 @@ mod tests {
     #[test]
     fn test_placeholder_with_valid_image() {
         use std::path::Path;
-        
+
         // Try to find an existing image in the examples directory
-        let project_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().parent().unwrap();
+        let project_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
         let test_image = project_root.join("examples/image-processing/images/walrus.jpg");
-        
+
         // Skip test if the image doesn't exist (e.g., in CI without examples)
         if !test_image.exists() {
             eprintln!("Skipping test: test image not found at {:?}", test_image);
             return;
         }
-        
+
         let result = get_placeholder(&test_image, None);
-        
+
         // Should succeed
         assert!(result.is_ok());
-        
+
         let placeholder = result.unwrap();
         // Verify the placeholder has a thumbhash
         assert!(!placeholder.thumbhash.is_empty());
@@ -598,14 +600,14 @@ mod tests {
 
     #[test]
     fn test_placeholder_with_empty_file() {
-        let temp_dir = setup_unique_temp_dir();
-        
+        let temp_dir = tempfile::tempdir().unwrap();
+
         // Create an empty file
         let empty_file_path = temp_dir.path().join("empty.png");
         std::fs::write(&empty_file_path, b"").unwrap();
-        
+
         let result = get_placeholder(&empty_file_path, None);
-        
+
         // Should return an error for empty/invalid image
         assert!(result.is_err());
     }
