@@ -136,33 +136,54 @@ export class DevServerPool {
 }
 
 // Worker-scoped server pool - one server per worker, shared across all tests in that worker
-const workerServers = new Map<number, DevServer>();
+// Key format: "workerIndex-fixtureName"
+const workerServers = new Map<string, DevServer>();
 
-// Extend Playwright's test with a devServer fixture
-export const test = base.extend<{ devServer: DevServer }>({
-	devServer: async ({}, use, testInfo) => {
-		// Use worker index to get or create a server for this worker
-		const workerIndex = testInfo.workerIndex;
+/**
+ * Create a test instance with a devServer fixture for a specific fixture.
+ * This allows each test file to use a different fixture while sharing the same pattern.
+ *
+ * @param fixtureName - Name of the fixture directory under e2e/fixtures/
+ * @param basePort - Starting port number (default: 1864). Each worker gets basePort + workerIndex
+ *
+ * @example
+ * ```ts
+ * import { createTestWithFixture } from "./test-utils";
+ * const test = createTestWithFixture("my-fixture");
+ *
+ * test("my test", async ({ devServer }) => {
+ *   // devServer is automatically started for "my-fixture"
+ * });
+ * ```
+ */
+export function createTestWithFixture(fixtureName: string, basePort = 1864) {
+	return base.extend<{ devServer: DevServer }>({
+		// oxlint-disable-next-line no-empty-pattern
+		devServer: async ({}, use, testInfo) => {
+			// Use worker index to get or create a server for this worker
+			const workerIndex = testInfo.workerIndex;
+			const serverKey = `${workerIndex}-${fixtureName}`;
 
-		let server = workerServers.get(workerIndex);
+			let server = workerServers.get(serverKey);
 
-		if (!server) {
-			// Assign unique port based on worker index
-			const port = 1864 + workerIndex;
+			if (!server) {
+				// Assign unique port based on worker index
+				const port = basePort + workerIndex;
 
-			server = await startDevServer({
-				fixture: "prefetch-prerender",
-				port,
-			});
+				server = await startDevServer({
+					fixture: fixtureName,
+					port,
+				});
 
-			workerServers.set(workerIndex, server);
-		}
+				workerServers.set(serverKey, server);
+			}
 
-		await use(server);
+			await use(server);
 
-		// Don't stop the server here - it stays alive for all tests in this worker
-		// Playwright will clean up when the worker exits
-	},
-});
+			// Don't stop the server here - it stays alive for all tests in this worker
+			// Playwright will clean up when the worker exits
+		},
+	});
+}
 
 export { expect } from "@playwright/test";

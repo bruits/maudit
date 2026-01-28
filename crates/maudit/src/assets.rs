@@ -432,8 +432,9 @@ pub enum HashAssetType<'a> {
 }
 
 fn make_filename(path: &Path, hash: &String, extension: Option<&str>) -> PathBuf {
-    let file_stem = path.file_stem().unwrap();
-    let sanitized_stem = sanitize_filename::default_sanitize_file_name(file_stem.to_str().unwrap());
+    let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("asset");
+
+    let sanitized_stem = sanitize_filename::default_sanitize_file_name(file_stem);
 
     let mut filename = PathBuf::new();
     filename.push(format!("{}.{}", sanitized_stem, hash));
@@ -532,17 +533,30 @@ pub fn calculate_hash(path: &Path, options: Option<&HashConfig>) -> Result<Strin
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::env;
+    use std::path::PathBuf;
 
-    fn setup_temp_dir() -> PathBuf {
-        // Create a temporary directory and test files
-        let temp_dir = env::temp_dir().join("maudit_test");
-        std::fs::create_dir_all(&temp_dir).unwrap();
+    use crate::{
+        AssetHashingStrategy,
+        assets::{
+            Asset, ImageFormat, ImageOptions, RouteAssets, RouteAssetsOptions, StyleOptions,
+            make_filename,
+        },
+    };
 
-        std::fs::write(temp_dir.join("style.css"), "body { background: red; }").unwrap();
-        std::fs::write(temp_dir.join("script.js"), "console.log('Hello, world!');").unwrap();
-        std::fs::write(temp_dir.join("image.png"), b"").unwrap();
+    fn setup_temp_dir() -> tempfile::TempDir {
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        std::fs::write(
+            temp_dir.path().join("style.css"),
+            "body { background: red; }",
+        )
+        .unwrap();
+        std::fs::write(
+            temp_dir.path().join("script.js"),
+            "console.log('Hello, world!');",
+        )
+        .unwrap();
+        std::fs::write(temp_dir.path().join("image.png"), b"").unwrap();
         temp_dir
     }
 
@@ -550,7 +564,9 @@ mod tests {
     fn test_add_style() {
         let temp_dir = setup_temp_dir();
         let mut page_assets = RouteAssets::default();
-        page_assets.add_style(temp_dir.join("style.css")).unwrap();
+        page_assets
+            .add_style(temp_dir.path().join("style.css"))
+            .unwrap();
 
         assert!(page_assets.styles.len() == 1);
     }
@@ -561,7 +577,7 @@ mod tests {
         let mut page_assets = RouteAssets::default();
 
         page_assets
-            .include_style(temp_dir.join("style.css"))
+            .include_style(temp_dir.path().join("style.css"))
             .unwrap();
 
         assert!(page_assets.styles.len() == 1);
@@ -573,7 +589,9 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = RouteAssets::default();
 
-        page_assets.add_script(temp_dir.join("script.js")).unwrap();
+        page_assets
+            .add_script(temp_dir.path().join("script.js"))
+            .unwrap();
         assert!(page_assets.scripts.len() == 1);
     }
 
@@ -583,7 +601,7 @@ mod tests {
         let mut page_assets = RouteAssets::default();
 
         page_assets
-            .include_script(temp_dir.join("script.js"))
+            .include_script(temp_dir.path().join("script.js"))
             .unwrap();
 
         assert!(page_assets.scripts.len() == 1);
@@ -595,7 +613,9 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = RouteAssets::default();
 
-        page_assets.add_image(temp_dir.join("image.png")).unwrap();
+        page_assets
+            .add_image(temp_dir.path().join("image.png"))
+            .unwrap();
         assert!(page_assets.images.len() == 1);
     }
 
@@ -604,13 +624,19 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = RouteAssets::default();
 
-        let image = page_assets.add_image(temp_dir.join("image.png")).unwrap();
+        let image = page_assets
+            .add_image(temp_dir.path().join("image.png"))
+            .unwrap();
         assert_eq!(image.url().chars().next(), Some('/'));
 
-        let script = page_assets.add_script(temp_dir.join("script.js")).unwrap();
+        let script = page_assets
+            .add_script(temp_dir.path().join("script.js"))
+            .unwrap();
         assert_eq!(script.url().chars().next(), Some('/'));
 
-        let style = page_assets.add_style(temp_dir.join("style.css")).unwrap();
+        let style = page_assets
+            .add_style(temp_dir.path().join("style.css"))
+            .unwrap();
         assert_eq!(style.url().chars().next(), Some('/'));
     }
 
@@ -619,13 +645,19 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = RouteAssets::default();
 
-        let image = page_assets.add_image(temp_dir.join("image.png")).unwrap();
+        let image = page_assets
+            .add_image(temp_dir.path().join("image.png"))
+            .unwrap();
         assert!(image.url().contains(&image.hash));
 
-        let script = page_assets.add_script(temp_dir.join("script.js")).unwrap();
+        let script = page_assets
+            .add_script(temp_dir.path().join("script.js"))
+            .unwrap();
         assert!(script.url().contains(&script.hash));
 
-        let style = page_assets.add_style(temp_dir.join("style.css")).unwrap();
+        let style = page_assets
+            .add_style(temp_dir.path().join("style.css"))
+            .unwrap();
         assert!(style.url().contains(&style.hash));
     }
 
@@ -634,32 +666,39 @@ mod tests {
         let temp_dir = setup_temp_dir();
         let mut page_assets = RouteAssets::default();
 
-        let image = page_assets.add_image(temp_dir.join("image.png")).unwrap();
+        let image = page_assets
+            .add_image(temp_dir.path().join("image.png"))
+            .unwrap();
         assert!(image.build_path().to_string_lossy().contains(&image.hash));
 
-        let script = page_assets.add_script(temp_dir.join("script.js")).unwrap();
+        let script = page_assets
+            .add_script(temp_dir.path().join("script.js"))
+            .unwrap();
         assert!(script.build_path().to_string_lossy().contains(&script.hash));
 
-        let style = page_assets.add_style(temp_dir.join("style.css")).unwrap();
+        let style = page_assets
+            .add_style(temp_dir.path().join("style.css"))
+            .unwrap();
         assert!(style.build_path().to_string_lossy().contains(&style.hash));
     }
 
     #[test]
     fn test_image_hash_different_options() {
         let temp_dir = setup_temp_dir();
-        let image_path = temp_dir.join("image.png");
+        let image_path = temp_dir.path().join("image.png");
 
-        // Create a simple test PNG (1x1 transparent pixel)
-        let png_data = [
-            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
-            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
-            0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0B, 0x49, 0x44, 0x41, 0x54, 0x78,
-            0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-            0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
-        ];
-        std::fs::write(&image_path, png_data).unwrap();
+        let img = image::ImageBuffer::<image::Rgba<u8>, _>::from_fn(1, 1, |_x, _y| {
+            image::Rgba([255, 0, 0, 255])
+        });
+        img.save(&image_path).unwrap();
 
-        let mut page_assets = RouteAssets::default();
+        let mut page_assets = RouteAssets::new(
+            &RouteAssetsOptions {
+                hashing_strategy: AssetHashingStrategy::Precise,
+                ..Default::default()
+            },
+            None,
+        );
 
         // Test that different options produce different hashes
         let image_default = page_assets.add_image(&image_path).unwrap();
@@ -716,7 +755,7 @@ mod tests {
     #[test]
     fn test_image_hash_same_options() {
         let temp_dir = setup_temp_dir();
-        let image_path = temp_dir.join("image.png");
+        let image_path = temp_dir.path().join("image.png");
 
         // Create a simple test PNG (1x1 transparent pixel)
         let png_data = [
@@ -728,7 +767,13 @@ mod tests {
         ];
         std::fs::write(&image_path, png_data).unwrap();
 
-        let mut page_assets = RouteAssets::default();
+        let mut page_assets = RouteAssets::new(
+            &RouteAssetsOptions {
+                hashing_strategy: AssetHashingStrategy::Precise,
+                ..Default::default()
+            },
+            None,
+        );
 
         // Same options should produce same hash
         let image1 = page_assets
@@ -762,9 +807,15 @@ mod tests {
     #[test]
     fn test_style_hash_different_options() {
         let temp_dir = setup_temp_dir();
-        let style_path = temp_dir.join("style.css");
+        let style_path = temp_dir.path().join("style.css");
 
-        let mut page_assets = RouteAssets::new(&RouteAssetsOptions::default(), None);
+        let mut page_assets = RouteAssets::new(
+            &RouteAssetsOptions {
+                hashing_strategy: AssetHashingStrategy::Precise,
+                ..Default::default()
+            },
+            None,
+        );
 
         // Test that different tailwind options produce different hashes
         let style_default = page_assets.add_style(&style_path).unwrap();
@@ -784,13 +835,19 @@ mod tests {
 
         // Create two identical files with different paths
         let content = "body { background: blue; }";
-        let style1_path = temp_dir.join("style1.css");
-        let style2_path = temp_dir.join("style2.css");
+        let style1_path = temp_dir.path().join("style1.css");
+        let style2_path = temp_dir.path().join("style2.css");
 
         std::fs::write(&style1_path, content).unwrap();
         std::fs::write(&style2_path, content).unwrap();
 
-        let mut page_assets = RouteAssets::new(&RouteAssetsOptions::default(), None);
+        let mut page_assets = RouteAssets::new(
+            &RouteAssetsOptions {
+                hashing_strategy: AssetHashingStrategy::Precise,
+                ..Default::default()
+            },
+            None,
+        );
 
         let style1 = page_assets.add_style(&style1_path).unwrap();
         let style2 = page_assets.add_style(&style2_path).unwrap();
@@ -804,10 +861,15 @@ mod tests {
     #[test]
     fn test_hash_includes_content() {
         let temp_dir = setup_temp_dir();
-        let style_path = temp_dir.join("dynamic_style.css");
+        let style_path = temp_dir.path().join("dynamic_style.css");
 
-        let assets_options = RouteAssetsOptions::default();
-        let mut page_assets = RouteAssets::new(&assets_options, None);
+        let mut page_assets = RouteAssets::new(
+            &RouteAssetsOptions {
+                hashing_strategy: AssetHashingStrategy::Precise,
+                ..Default::default()
+            },
+            None,
+        );
 
         // Write first content and get hash
         std::fs::write(&style_path, "body { background: red; }").unwrap();
@@ -823,5 +885,64 @@ mod tests {
             hash1, hash2,
             "Different content should produce different hashes"
         );
+    }
+
+    #[test]
+    fn test_make_filename_normal_path() {
+        let path = PathBuf::from("/foo/bar/test.png");
+        let hash = "abc12".to_string();
+
+        let filename = make_filename(&path, &hash, Some("png"));
+
+        // Format is: stem.hash with extension hash.ext
+        assert_eq!(filename.to_string_lossy(), "test.abc12.png");
+    }
+
+    #[test]
+    fn test_make_filename_no_extension() {
+        let path = PathBuf::from("/foo/bar/test");
+        let hash = "abc12".to_string();
+
+        let filename = make_filename(&path, &hash, None);
+
+        assert_eq!(filename.to_string_lossy(), "test.abc12");
+    }
+
+    #[test]
+    fn test_make_filename_fallback_for_root_path() {
+        // Root path has no file stem
+        let path = PathBuf::from("/");
+        let hash = "abc12".to_string();
+
+        let filename = make_filename(&path, &hash, Some("css"));
+
+        // Should fallback to "asset"
+        assert_eq!(filename.to_string_lossy(), "asset.abc12.css");
+    }
+
+    #[test]
+    fn test_make_filename_fallback_for_dotdot_path() {
+        // Path ending with ".." has no file stem
+        let path = PathBuf::from("/foo/..");
+        let hash = "xyz99".to_string();
+
+        let filename = make_filename(&path, &hash, Some("js"));
+
+        // Should fallback to "asset"
+        assert_eq!(filename.to_string_lossy(), "asset.xyz99.js");
+    }
+
+    #[test]
+    fn test_make_filename_with_special_characters() {
+        // Test that special characters get sanitized
+        let path = PathBuf::from("/foo/test:file*.txt");
+        let hash = "def45".to_string();
+
+        let filename = make_filename(&path, &hash, Some("txt"));
+
+        // Special characters should be replaced with underscores
+        let result = filename.to_string_lossy();
+        assert!(result.contains("test_file_"));
+        assert!(result.ends_with(".def45.txt"));
     }
 }

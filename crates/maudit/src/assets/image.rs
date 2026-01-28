@@ -154,7 +154,9 @@ impl Image {
     /// Get a placeholder for the image, which can be used for low-quality image placeholders (LQIP) or similar techniques.
     ///
     /// This uses the [ThumbHash](https://evanw.github.io/thumbhash/) algorithm to generate a very small placeholder image.
-    pub fn placeholder(&self) -> ImagePlaceholder {
+    ///
+    /// Returns an error if the image cannot be loaded.
+    pub fn placeholder(&self) -> Result<ImagePlaceholder, crate::errors::AssetError> {
         get_placeholder(&self.path, self.cache.as_ref())
     }
 
@@ -258,20 +260,26 @@ impl ImagePlaceholder {
     }
 }
 
-fn get_placeholder(path: &PathBuf, cache: Option<&ImageCache>) -> ImagePlaceholder {
+fn get_placeholder(
+    path: &PathBuf,
+    cache: Option<&ImageCache>,
+) -> Result<ImagePlaceholder, crate::errors::AssetError> {
     // Check cache first if provided
     if let Some(cache) = cache
         && let Some(cached) = cache.get_placeholder(path)
     {
         debug!("Using cached placeholder for {}", path.display());
         let thumbhash_base64 = base64::engine::general_purpose::STANDARD.encode(&cached.thumbhash);
-        return ImagePlaceholder::new(cached.thumbhash, thumbhash_base64);
+        return Ok(ImagePlaceholder::new(cached.thumbhash, thumbhash_base64));
     }
 
     let total_start = Instant::now();
 
     let load_start = Instant::now();
-    let image = image::open(path).ok().unwrap();
+    let image = image::open(path).map_err(|e| crate::errors::AssetError::ImageLoadFailed {
+        path: path.clone(),
+        source: e,
+    })?;
     let (width, height) = image.dimensions();
     let (width, height) = (width as usize, height as usize);
     debug!(
@@ -329,7 +337,7 @@ fn get_placeholder(path: &PathBuf, cache: Option<&ImageCache>) -> ImagePlacehold
         cache.cache_placeholder(path, thumb_hash.clone());
     }
 
-    ImagePlaceholder::new(thumb_hash, thumbhash_base64)
+    Ok(ImagePlaceholder::new(thumb_hash, thumbhash_base64))
 }
 
 /// Port of https://github.com/evanw/thumbhash/blob/a652ce6ed691242f459f468f0a8756cda3b90a82/js/thumbhash.js#L234
@@ -514,5 +522,50 @@ impl RenderWithAlt for Image {
             height_attr = height_attr,
             alt = alt
         ).into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::errors::AssetError;
+
+    use super::*;
+    use std::{error::Error, path::PathBuf};
+
+    #[test]
+    fn test_placeholder_with_missing_file() {
+        let nonexistent_path = PathBuf::from("/this/file/does/not/exist.png");
+
+        let result = get_placeholder(&nonexistent_path, None);
+
+        assert!(result.is_err());
+        if let Err(AssetError::ImageLoadFailed { path, .. }) = result {
+            assert_eq!(path, nonexistent_path);
+        } else {
+            panic!("Expected ImageLoadFailed error");
+        }
+    }
+
+    #[test]
+    fn test_placeholder_with_valid_image() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let image_path = temp_dir.path().join("test.png");
+
+        // Create a minimal valid 1x1 PNG file using the image crate to ensure correct CRCs
+        let img = image::ImageBuffer::<image::Rgba<u8>, _>::from_fn(1, 1, |_x, _y| {
+            image::Rgba([255, 0, 0, 255])
+        });
+        img.save(&image_path).unwrap();
+
+        let result = get_placeholder(&image_path, None);
+
+        if let Err(e) = &result {
+            eprintln!("get_placeholder failed: {:?}", e.source());
+        }
+
+        assert!(result.is_ok());
+        let placeholder = result.unwrap();
+        assert!(!placeholder.thumbhash.is_empty());
+        assert!(!placeholder.thumbhash_base64.is_empty());
     }
 }

@@ -53,6 +53,12 @@ pub enum AssetError {
         #[source]
         source: std::io::Error,
     },
+    #[error("Failed to load image for placeholder generation: {path}")]
+    ImageLoadFailed {
+        path: PathBuf,
+        #[source]
+        source: image::ImageError,
+    },
 }
 
 #[derive(Error, Debug)]
