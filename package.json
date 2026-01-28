@@ -12,7 +12,8 @@
 		"lint:fix": "oxlint --fix --type-aware && cargo clippy --fix --allow-dirty --allow-staged",
 		"format": "pnpm run format:ts && pnpm run format:rs",
 		"format:ts": "oxfmt",
-		"format:rs": "cargo fmt"
+		"format:rs": "cargo fmt",
+		"test:e2e": "cd e2e && pnpm run test"
 	},
 	"dependencies": {
 		"@tailwindcss/cli": "^4.1.18",

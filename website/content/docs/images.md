@@ -96,7 +96,7 @@ pub struct ImagePage;
 impl Route for ImagePage {
   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
     let image = ctx.assets.add_image("path/to/image.jpg")?;
-    let placeholder = image.placeholder();
+    let placeholder = image.placeholder()?;
 
     Ok(format!("<img src=\"{}\" alt=\"Image with placeholder\" style=\"background-image: url('{}'); background-size: cover;\" />", image.url(), placeholder.data_uri()))
   }

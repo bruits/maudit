@@ -1,0 +1,9 @@
+[package]
+name = "fixtures-hot-reload"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+maudit.workspace = true
+maud.workspace = true
