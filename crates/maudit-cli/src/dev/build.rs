@@ -46,17 +46,17 @@ impl BuildManager {
     /// Returns true if recompilation is needed, false if we can just rerun the binary
     pub async fn needs_recompile(&self, changed_paths: &[PathBuf]) -> bool {
         let dep_tracker = self.dep_tracker.read().await;
-        
-        if let Some(tracker) = dep_tracker.as_ref() {
-            if tracker.has_dependencies() {
-                let needs_recompile = tracker.needs_recompile(changed_paths);
-                if !needs_recompile {
-                    debug!(name: "build", "Changed files are not dependencies, rerun binary without recompile");
-                }
-                return needs_recompile;
+
+        if let Some(tracker) = dep_tracker.as_ref()
+            && tracker.has_dependencies()
+        {
+            let needs_recompile = tracker.needs_recompile(changed_paths);
+            if !needs_recompile {
+                debug!(name: "build", "Changed files are not dependencies, rerun binary without recompile");
             }
+            return needs_recompile;
         }
-        
+
         // If we don't have a dependency tracker yet, always recompile
         true
     }
@@ -64,7 +64,7 @@ impl BuildManager {
     /// Rerun the binary without recompiling
     pub async fn rerun_binary(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let binary_path = self.binary_path.read().await;
-        
+
         let Some(path) = binary_path.as_ref() else {
             warn!(name: "build", "No binary path available, falling back to full rebuild");
             return self.start_build().await;
@@ -76,7 +76,7 @@ impl BuildManager {
         }
 
         info!(name: "build", "Rerunning binary without recompilation...");
-        
+
         // Notify that build is starting (even though we're just rerunning)
         update_status(
             &self.websocket_tx,
@@ -87,24 +87,19 @@ impl BuildManager {
         .await;
 
         let build_start_time = Instant::now();
-        
+
         let child = Command::new(path)
-            .envs([
-                ("MAUDIT_DEV", "true"),
-                ("MAUDIT_QUIET", "true"),
-            ])
+            .envs([("MAUDIT_DEV", "true"), ("MAUDIT_QUIET", "true")])
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()?;
 
         // Wait for the process to complete
         let output = child.wait_with_output().await?;
-        
+
         let duration = build_start_time.elapsed();
-        let formatted_elapsed_time = format_elapsed_time(
-            duration,
-            &FormatElapsedTimeOptions::default_dev(),
-        );
+        let formatted_elapsed_time =
+            format_elapsed_time(duration, &FormatElapsedTimeOptions::default_dev());
 
         if output.status.success() {
             info!(name: "build", "Binary rerun finished {}", formatted_elapsed_time);
@@ -119,7 +114,7 @@ impl BuildManager {
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            error!(name: "build", "Binary rerun failed {}\nstdout: {}\nstderr: {}", 
+            error!(name: "build", "Binary rerun failed {}\nstdout: {}\nstderr: {}",
                 formatted_elapsed_time, stdout, stderr);
             update_status(
                 &self.websocket_tx,
@@ -282,10 +277,10 @@ impl BuildManager {
                                 let build_type = if is_initial { "Initial build" } else { "Rebuild" };
                                 info!(name: "build", "{} finished {}", build_type, formatted_elapsed_time);
                                 update_status(&websocket_tx, current_status.clone(), StatusType::Success, "Build finished successfully").await;
-                                
+
                                 // Update dependency tracker after successful build
                                 Self::update_dependency_tracker_after_build(dep_tracker_clone.clone(), binary_path_clone.clone()).await;
-                                
+
                                 true
                             } else {
                                 let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -380,14 +375,13 @@ impl BuildManager {
             .and_then(|n| n.as_str())
         {
             // Check if there's a [[bin]] section with a different name
-            if let Some(bins) = cargo_toml.get("bin").and_then(|b| b.as_array()) {
-                if let Some(first_bin) = bins.first() {
-                    if let Some(bin_name) = first_bin.get("name").and_then(|n| n.as_str()) {
-                        return Ok(bin_name.to_string());
-                    }
-                }
+            if let Some(bins) = cargo_toml.get("bin").and_then(|b| b.as_array())
+                && let Some(first_bin) = bins.first()
+                && let Some(bin_name) = first_bin.get("name").and_then(|n| n.as_str())
+            {
+                return Ok(bin_name.to_string());
             }
-            
+
             // No explicit bin name, use package name
             return Ok(package_name.to_string());
         }

@@ -1662,14 +1662,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
 
 [[package]]
-name = "fixtures-hot-reload"
-version = "0.1.0"
-dependencies = [
- "maud",
- "maudit",
-]
-
-[[package]]
 name = "fixtures-prefetch-prerender"
 version = "0.1.0"
 dependencies = [
@@ -2622,6 +2614,7 @@ dependencies = [
  "serde_json",
  "spinach",
  "tar",
+ "tempfile",
  "tokio",
  "tokio-util",
  "toml",

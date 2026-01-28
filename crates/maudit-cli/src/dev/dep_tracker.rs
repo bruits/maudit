@@ -55,17 +55,15 @@ pub fn find_target_dir() -> Result<PathBuf, std::io::Error> {
     let mut current = std::env::current_dir()?;
     loop {
         let cargo_toml = current.join("Cargo.toml");
-        if cargo_toml.exists() {
-            if let Ok(content) = fs::read_to_string(&cargo_toml) {
-                if content.contains("[workspace]") {
+        if cargo_toml.exists()
+            && let Ok(content) = fs::read_to_string(&cargo_toml)
+                && content.contains("[workspace]") {
                     let workspace_target = current.join("target").join("debug");
                     if workspace_target.exists() {
                         debug!("Using workspace target directory: {:?}", workspace_target);
                         return Ok(workspace_target);
                     }
                 }
-            }
-        }
 
         // Move up to parent directory
         if !current.pop() {
@@ -181,15 +179,14 @@ impl DependencyTracker {
                 if matches {
                     // Check if the file was modified after we last tracked it
                     if let Ok(metadata) = fs::metadata(changed_path) {
-                        if let Ok(current_modified) = metadata.modified() {
-                            if current_modified > *last_modified {
+                        if let Ok(current_modified) = metadata.modified()
+                            && current_modified > *last_modified {
                                 debug!(
                                     "Dependency {:?} was modified, recompile needed",
                                     changed_path
                                 );
                                 return true;
                             }
-                        }
                     } else {
                         // File was deleted or can't be read, assume recompile is needed
                         debug!(
