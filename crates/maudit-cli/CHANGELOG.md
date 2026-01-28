@@ -1,5 +1,15 @@
 # maudit-cli
 
+## 0.7.0 — 2026-01-28
+
+### Minor changes
+
+- [a5b49ad](https://github.com/bruits/maudit/commit/a5b49adacbbbc18506e3157ade0547b60e35348a) Adds support for passing a port to the dev using the `--port` option. — Thanks @Princesseuh!
+
+### Patch changes
+
+- [a5b49ad](https://github.com/bruits/maudit/commit/a5b49adacbbbc18506e3157ade0547b60e35348a) Fixed an issue where Maudit would not properly liberate the port when shutting down — Thanks @Princesseuh!
+
 ## 0.6.2 — 2025-10-21
 
 ### Patch changes

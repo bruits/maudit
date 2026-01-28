@@ -1,5 +1,15 @@
 # maudit
 
+## 0.11.0 — 2026-01-28
+
+### Minor changes
+
+- [a5b49ad](https://github.com/bruits/maudit/commit/a5b49adacbbbc18506e3157ade0547b60e35348a) Adds support for prefetching / prerendering pages using the Speculation Rules API — Thanks @Princesseuh!
+
+### Patch changes
+
+- [f759f36](https://github.com/bruits/maudit/commit/f759f36234bab9e38ad3718b8580a66580d6932a) Make placeholders function return Result so that errors can be handled, if need to — Thanks @Princesseuh!
+
 ## 0.10.0 — 2026-01-18
 
 ### Minor changes
