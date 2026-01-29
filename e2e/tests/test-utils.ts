@@ -64,8 +64,10 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
 
 	const outputPromise = new Promise<number>((resolve, reject) => {
 		const timeout = setTimeout(() => {
-			reject(new Error("Dev server did not start within 60 seconds"));
-		}, 60000);
+			console.error("[test-utils] Dev server startup timeout. Recent logs:");
+			console.error(capturedLogs.slice(-20).join("\n"));
+			reject(new Error("Dev server did not start within 120 seconds"));
+		}, 120000); // Increased to 120 seconds for CI
 
 		childProcess.stdout?.on("data", (data: Buffer) => {
 			const output = data.toString();

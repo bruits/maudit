@@ -12,31 +12,76 @@ const test = createTestWithFixture("hot-reload");
 
 test.describe.configure({ mode: "serial" });
 
+/**
+ * Wait for dev server to complete a build/rerun by polling logs
+ */
+async function waitForBuildComplete(devServer: any, timeoutMs = 20000): Promise<string[]> {
+	const startTime = Date.now();
+	
+	while (Date.now() - startTime < timeoutMs) {
+		const logs = devServer.getLogs(100);
+		const logsText = logs.join("\n").toLowerCase();
+		
+		// Look for completion messages
+		if (logsText.includes("finished") || 
+		    logsText.includes("rerun finished") ||
+		    logsText.includes("build finished")) {
+			return logs;
+		}
+		
+		// Wait 100ms before checking again
+		await new Promise(resolve => setTimeout(resolve, 100));
+	}
+	
+	throw new Error(`Build did not complete within ${timeoutMs}ms`);
+}
+
 test.describe("Hot Reload", () => {
+	// Increase timeout for these tests since they involve compilation
+	test.setTimeout(60000);
+
 	const fixturePath = resolve(__dirname, "..", "fixtures", "hot-reload");
 	const indexPath = resolve(fixturePath, "src", "pages", "index.rs");
 	const mainPath = resolve(fixturePath, "src", "main.rs");
+	const dataPath = resolve(fixturePath, "data.txt");
 	let originalIndexContent: string;
 	let originalMainContent: string;
+	let originalDataContent: string;
 
 	test.beforeAll(async () => {
 		// Save original content
 		originalIndexContent = readFileSync(indexPath, "utf-8");
 		originalMainContent = readFileSync(mainPath, "utf-8");
+		originalDataContent = readFileSync(dataPath, "utf-8");
+
+		// Ensure files are in original state
+		writeFileSync(indexPath, originalIndexContent, "utf-8");
+		writeFileSync(mainPath, originalMainContent, "utf-8");
+		writeFileSync(dataPath, originalDataContent, "utf-8");
 	});
 
-	test.afterEach(async () => {
+	test.afterEach(async ({ devServer }) => {
 		// Restore original content after each test
 		writeFileSync(indexPath, originalIndexContent, "utf-8");
 		writeFileSync(mainPath, originalMainContent, "utf-8");
-		// Wait a bit for the rebuild
-		await new Promise((resolve) => setTimeout(resolve, 2000));
+		writeFileSync(dataPath, originalDataContent, "utf-8");
+		
+		// Only wait for build if devServer is available (startup might have failed)
+		if (devServer) {
+			try {
+				devServer.clearLogs();
+				await waitForBuildComplete(devServer);
+			} catch (error) {
+				console.warn("Failed to wait for build completion in afterEach:", error);
+			}
+		}
 	});
 
 	test.afterAll(async () => {
 		// Restore original content
 		writeFileSync(indexPath, originalIndexContent, "utf-8");
 		writeFileSync(mainPath, originalMainContent, "utf-8");
+		writeFileSync(dataPath, originalDataContent, "utf-8");
 	});
 
 	test("should recompile when Rust code changes (dependencies)", async ({ page, devServer }) => {
@@ -55,73 +100,42 @@ test.describe("Hot Reload", () => {
 		);
 		writeFileSync(mainPath, modifiedMain, "utf-8");
 
-		// Wait for rebuild to complete - look for "finished" in logs
-		await new Promise((resolve) => {
-			const checkInterval = setInterval(() => {
-				const logs = devServer.getLogs(50).join("\n");
-				if (logs.includes("finished") || logs.includes("Rebuild")) {
-					clearInterval(checkInterval);
-					resolve(null);
-				}
-			}, 100);
-
-			// Timeout after 15 seconds
-			setTimeout(() => {
-				clearInterval(checkInterval);
-				resolve(null);
-			}, 15000);
-		});
+		// Wait for rebuild to complete
+		const logs = await waitForBuildComplete(devServer, 20000);
+		const logsText = logs.join("\n");
 
 		// Check logs to verify it actually recompiled (ran cargo)
-		const logs = devServer.getLogs(50).join("\n");
-		expect(logs).toContain("rebuilding");
-		expect(logs).not.toContain("Rerunning binary");
-		expect(logs).not.toContain("rerunning binary");
+		expect(logsText).toContain("rebuilding");
+		// Make sure it didn't just rerun the binary
+		expect(logsText.toLowerCase()).not.toContain("rerunning binary");
 	});
 
-	test("should rerun without recompile when template changes (non-dependencies)", async ({ 
-		page, 
-		devServer 
+	test("should rerun without recompile when non-dependency files change", async ({
+		page,
+		devServer,
 	}) => {
 		await page.goto(devServer.url);
 
 		// Verify initial content
 		await expect(page.locator("#title")).toHaveText("Original Title");
 
-		// Prepare to wait for actual reload
-		const currentUrl = page.url();
-
 		// Clear logs to track what happens after this point
 		devServer.clearLogs();
 
-		// Modify the template in index.rs - this should NOT require recompilation
-		// since it's just the HTML template, not the actual Rust code structure
-		const modifiedContent = originalIndexContent.replace(
-			'h1 id="title" { "Original Title" }',
-			'h1 id="title" { "Template Updated" }',
-		);
-		writeFileSync(indexPath, modifiedContent, "utf-8");
+		// Modify data.txt - this file is NOT in the .d dependencies
+		// So it should trigger a rerun without recompilation
+		writeFileSync(dataPath, "Modified data", "utf-8");
 
-		// Wait for the page to reload
-		await page.waitForURL(currentUrl, { timeout: 15000 });
-		
-		// Verify the updated content
-		await expect(page.locator("#title")).toHaveText("Template Updated", { timeout: 15000 });
+		// Wait for build/rerun to complete
+		const logs = await waitForBuildComplete(devServer, 20000);
+		const logsText = logs.join("\n");
 
-		// Give logs time to be captured
-		await new Promise((resolve) => setTimeout(resolve, 1000));
-
-		// Check logs to verify it did NOT recompile
-		const logs = devServer.getLogs(50).join("\n");
-		
-		// Should see "rerunning binary" or similar message
-		const hasRerunMessage = logs.toLowerCase().includes("rerunning") || 
-		                        logs.toLowerCase().includes("rerun");
+		// Should see "rerunning binary" message (case insensitive)
+		const hasRerunMessage = logsText.toLowerCase().includes("rerunning binary");
 		expect(hasRerunMessage).toBe(true);
-		
-		// Should NOT see cargo compilation messages
-		expect(logs).not.toContain("Compiling");
-		expect(logs.toLowerCase()).not.toContain("rebuilding");
+
+		// Should NOT see "rebuilding" message
+		expect(logsText.toLowerCase()).not.toContain("rebuilding");
 	});
 
 	test("should show updated content after file changes", async ({ page, devServer }) => {

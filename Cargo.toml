@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*", "benchmarks/*", "examples/*", "website", "xtask", "e2e/fixtures/prefetch-prerender"]
+members = ["crates/*", "benchmarks/*", "examples/*", "website", "xtask", "e2e/fixtures/*"]
 resolver = "3"
 
 [workspace.dependencies]
