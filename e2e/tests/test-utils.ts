@@ -23,6 +23,10 @@ export interface DevServer {
 	port: number;
 	/** Stop the dev server */
 	stop: () => Promise<void>;
+	/** Get recent log output (last N lines) */
+	getLogs: (lines?: number) => string[];
+	/** Clear captured logs */
+	clearLogs: () => void;
 }
 
 /**
@@ -56,6 +60,7 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
 
 	// Capture output to detect when server is ready
 	let serverReady = false;
+	const capturedLogs: string[] = [];
 
 	const outputPromise = new Promise<number>((resolve, reject) => {
 		const timeout = setTimeout(() => {
@@ -64,6 +69,10 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
 
 		childProcess.stdout?.on("data", (data: Buffer) => {
 			const output = data.toString();
+			// Capture all stdout logs
+			output.split("\n").filter(line => line.trim()).forEach(line => {
+				capturedLogs.push(line);
+			});
 
 			// Look for "waiting for requests" to know server is ready
 			if (output.includes("waiting for requests")) {
@@ -75,8 +84,13 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
 		});
 
 		childProcess.stderr?.on("data", (data: Buffer) => {
-			// Only log errors, not all stderr output
 			const output = data.toString();
+			// Capture all stderr logs
+			output.split("\n").filter(line => line.trim()).forEach(line => {
+				capturedLogs.push(line);
+			});
+			
+			// Only log errors to console, not all stderr output
 			if (output.toLowerCase().includes("error")) {
 				console.error(`[maudit dev] ${output}`);
 			}
@@ -112,6 +126,15 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
 					}
 				}, 5000);
 			});
+		},
+		getLogs: (lines?: number) => {
+			if (lines) {
+				return capturedLogs.slice(-lines);
+			}
+			return [...capturedLogs];
+		},
+		clearLogs: () => {
+			capturedLogs.length = 0;
 		},
 	};
 }
