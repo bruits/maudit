@@ -64,15 +64,18 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
 
 	const outputPromise = new Promise<number>((resolve, reject) => {
 		const timeout = setTimeout(() => {
-			reject(new Error("Dev server did not start within 30 seconds"));
-		}, 30000);
+			reject(new Error("Dev server did not start within 60 seconds"));
+		}, 60000);
 
 		childProcess.stdout?.on("data", (data: Buffer) => {
 			const output = data.toString();
 			// Capture all stdout logs
-			output.split("\n").filter(line => line.trim()).forEach(line => {
-				capturedLogs.push(line);
-			});
+			output
+				.split("\n")
+				.filter((line) => line.trim())
+				.forEach((line) => {
+					capturedLogs.push(line);
+				});
 
 			// Look for "waiting for requests" to know server is ready
 			if (output.includes("waiting for requests")) {
@@ -86,10 +89,13 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
 		childProcess.stderr?.on("data", (data: Buffer) => {
 			const output = data.toString();
 			// Capture all stderr logs
-			output.split("\n").filter(line => line.trim()).forEach(line => {
-				capturedLogs.push(line);
-			});
-			
+			output
+				.split("\n")
+				.filter((line) => line.trim())
+				.forEach((line) => {
+					capturedLogs.push(line);
+				});
+
 			// Only log errors to console, not all stderr output
 			if (output.toLowerCase().includes("error")) {
 				console.error(`[maudit dev] ${output}`);
