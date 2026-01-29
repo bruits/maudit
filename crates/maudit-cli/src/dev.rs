@@ -1,6 +1,7 @@
 pub(crate) mod server;
 
 mod build;
+mod dep_tracker;
 mod filterer;
 
 use notify::{
@@ -10,7 +11,7 @@ use notify::{
 use notify_debouncer_full::{DebounceEventResult, DebouncedEvent, new_debouncer};
 use quanta::Instant;
 use server::WebSocketMessage;
-use std::{fs, path::Path};
+use std::{fs, path::{Path, PathBuf}};
 use tokio::{
     signal,
     sync::{broadcast, mpsc::channel},
@@ -162,19 +163,42 @@ pub async fn start_dev_env(cwd: &str, host: bool, port: Option<u16>) -> Result<(
                                         }
                                     }
                                 } else {
-                                    // Normal rebuild - spawn in background so file watcher can continue
-                                    info!(name: "watch", "Files changed, rebuilding...");
-                                    let build_manager_clone = build_manager_watcher.clone();
-                                    tokio::spawn(async move {
-                                        match build_manager_clone.start_build().await {
-                                            Ok(_) => {
-                                                // Build completed (success or failure already logged)
+                                    // Normal rebuild - check if we need full recompilation or just rerun
+                                    let changed_paths: Vec<PathBuf> = events.iter()
+                                        .flat_map(|e| e.paths.iter().cloned())
+                                        .collect();
+                                    
+                                    let needs_recompile = build_manager_watcher.needs_recompile(&changed_paths).await;
+                                    
+                                    if needs_recompile {
+                                        // Need to recompile - spawn in background so file watcher can continue
+                                        info!(name: "watch", "Files changed, rebuilding...");
+                                        let build_manager_clone = build_manager_watcher.clone();
+                                        tokio::spawn(async move {
+                                            match build_manager_clone.start_build().await {
+                                                Ok(_) => {
+                                                    // Build completed (success or failure already logged)
+                                                }
+                                                Err(e) => {
+                                                    error!(name: "build", "Failed to start build: {}", e);
+                                                }
                                             }
-                                            Err(e) => {
-                                                error!(name: "build", "Failed to start build: {}", e);
+                                        });
+                                    } else {
+                                        // Just rerun the binary without recompiling
+                                        info!(name: "watch", "Non-dependency files changed, rerunning binary...");
+                                        let build_manager_clone = build_manager_watcher.clone();
+                                        tokio::spawn(async move {
+                                            match build_manager_clone.rerun_binary().await {
+                                                Ok(_) => {
+                                                    // Rerun completed (success or failure already logged)
+                                                }
+                                                Err(e) => {
+                                                    error!(name: "build", "Failed to rerun binary: {}", e);
+                                                }
                                             }
-                                        }
-                                    });
+                                        });
+                                    }
                                 }
                             }
                         }

@@ -28,9 +28,13 @@ spinach = "3"
 ureq = "3.1.4"
 tar = "0.4.44"
 toml_edit = "0.24.0"
+toml = "0.8"
 local-ip-address = "0.6.9"
 flate2 = "1.1.8"
 quanta = "0.12.6"
 serde_json = "1.0"
 tokio-util = "0.7"
 cargo_metadata = "0.23.1"
+
+[dev-dependencies]
+tempfile = "3.24.0"
