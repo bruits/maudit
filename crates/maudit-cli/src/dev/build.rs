@@ -23,10 +23,24 @@ pub struct BuildManager {
     current_status: Arc<tokio::sync::RwLock<Option<server::PersistentStatus>>>,
     dep_tracker: Arc<tokio::sync::RwLock<Option<DependencyTracker>>>,
     binary_path: Arc<tokio::sync::RwLock<Option<PathBuf>>>,
+    // Cached values computed once at startup
+    target_dir: Arc<Option<PathBuf>>,
+    binary_name: Arc<Option<String>>,
 }
 
 impl BuildManager {
     pub fn new(websocket_tx: broadcast::Sender<WebSocketMessage>) -> Self {
+        // Try to determine target directory and binary name at startup
+        let target_dir = find_target_dir().ok();
+        let binary_name = Self::get_binary_name_from_cargo_toml().ok();
+
+        if let Some(ref name) = binary_name {
+            debug!(name: "build", "Detected binary name at startup: {}", name);
+        }
+        if let Some(ref dir) = target_dir {
+            debug!(name: "build", "Using target directory: {:?}", dir);
+        }
+
         Self {
             current_cancel: Arc::new(tokio::sync::RwLock::new(None)),
             build_semaphore: Arc::new(tokio::sync::Semaphore::new(1)), // Only one build at a time
@@ -34,6 +48,8 @@ impl BuildManager {
             current_status: Arc::new(tokio::sync::RwLock::new(None)),
             dep_tracker: Arc::new(tokio::sync::RwLock::new(None)),
             binary_path: Arc::new(tokio::sync::RwLock::new(None)),
+            target_dir: Arc::new(target_dir),
+            binary_name: Arc::new(binary_name),
         }
     }
 
@@ -185,6 +201,8 @@ impl BuildManager {
         let current_status = self.current_status.clone();
         let dep_tracker_clone = self.dep_tracker.clone();
         let binary_path_clone = self.binary_path.clone();
+        let target_dir_clone = self.target_dir.clone();
+        let binary_name_clone = self.binary_name.clone();
         let build_start_time = Instant::now();
 
         // Create a channel to get the build result back
@@ -279,7 +297,12 @@ impl BuildManager {
                                 update_status(&websocket_tx, current_status.clone(), StatusType::Success, "Build finished successfully").await;
 
                                 // Update dependency tracker after successful build
-                                Self::update_dependency_tracker_after_build(dep_tracker_clone.clone(), binary_path_clone.clone()).await;
+                                Self::update_dependency_tracker_after_build(
+                                    dep_tracker_clone.clone(),
+                                    binary_path_clone.clone(),
+                                    target_dir_clone.clone(),
+                                    binary_name_clone.clone(),
+                                ).await;
 
                                 true
                             } else {
@@ -316,29 +339,23 @@ impl BuildManager {
     async fn update_dependency_tracker_after_build(
         dep_tracker: Arc<tokio::sync::RwLock<Option<DependencyTracker>>>,
         binary_path: Arc<tokio::sync::RwLock<Option<PathBuf>>>,
+        target_dir: Arc<Option<PathBuf>>,
+        binary_name: Arc<Option<String>>,
     ) {
-        // Try to get the binary name from Cargo.toml in the current directory
-        let binary_name = match Self::get_binary_name_from_cargo_toml() {
-            Ok(name) => name,
-            Err(e) => {
-                debug!(name: "build", "Could not determine binary name: {}", e);
-                return;
-            }
+        // Use cached binary name (computed once at startup)
+        let Some(name) = binary_name.as_ref() else {
+            debug!(name: "build", "No binary name available, skipping dependency tracker update");
+            return;
         };
 
-        debug!(name: "build", "Detected binary name: {}", binary_name);
-
-        // Find the target directory
-        let target_dir = match find_target_dir() {
-            Ok(dir) => dir,
-            Err(e) => {
-                debug!(name: "build", "Could not find target directory: {}", e);
-                return;
-            }
+        // Use cached target directory (computed once at startup)
+        let Some(target) = target_dir.as_ref() else {
+            debug!(name: "build", "No target directory available, skipping dependency tracker update");
+            return;
         };
 
-        // Update binary path
-        let bin_path = target_dir.join(&binary_name);
+        // Update binary path using cached values
+        let bin_path = target.join(name);
         if bin_path.exists() {
             *binary_path.write().await = Some(bin_path.clone());
             debug!(name: "build", "Binary path set to: {:?}", bin_path);
@@ -346,8 +363,9 @@ impl BuildManager {
             debug!(name: "build", "Binary not found at expected path: {:?}", bin_path);
         }
 
-        // Try to load the dependency tracker
-        match DependencyTracker::load_from_binary_name(&binary_name) {
+        // Reload the dependency tracker from the .d file
+        // This MUST be done after each build since dependencies can change
+        match DependencyTracker::load_from_binary_name(name) {
             Ok(tracker) => {
                 debug!(name: "build", "Loaded {} dependencies for tracking", tracker.get_dependencies().len());
                 *dep_tracker.write().await = Some(tracker);
