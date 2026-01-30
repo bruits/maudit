@@ -105,14 +105,12 @@ pub async fn build(
     // Create a directory for the output
     trace!(target: "build", "Setting up required directories...");
 
-    // Determine build cache directory
-    let build_cache_dir = options.assets.image_cache_dir.parent()
-        .unwrap_or(Path::new("target/maudit_cache"))
-        .to_path_buf();
+    // Use cache directory from options
+    let build_cache_dir = &options.cache_dir;
 
-    // Load build state for incremental builds
-    let mut build_state = if is_dev() {
-        BuildState::load(&build_cache_dir).unwrap_or_else(|e| {
+    // Load build state for incremental builds (only if incremental is enabled)
+    let mut build_state = if options.incremental {
+        BuildState::load(build_cache_dir).unwrap_or_else(|e| {
             debug!(target: "build", "Failed to load build state: {}", e);
             BuildState::new()
         })
@@ -121,7 +119,7 @@ pub async fn build(
     };
 
     // Determine if this is an incremental build
-    let is_incremental = is_dev() && changed_files.is_some() && !build_state.asset_to_routes.is_empty();
+    let is_incremental = options.incremental && changed_files.is_some() && !build_state.asset_to_routes.is_empty();
     
     let routes_to_rebuild = if is_incremental {
         let changed = changed_files.unwrap();
@@ -192,7 +190,7 @@ pub async fn build(
     };
 
     // Create the image cache early so it can be shared across routes
-    let image_cache = ImageCache::with_cache_dir(&options.assets.image_cache_dir);
+    let image_cache = ImageCache::with_cache_dir(&options.assets_cache_dir());
     let _ = fs::create_dir_all(image_cache.get_cache_dir());
 
     // Create route_assets_options with the image cache
@@ -660,7 +658,7 @@ pub async fn build(
         );
 
         // Store bundler inputs in build state for next incremental build
-        if is_dev() {
+        if options.incremental {
             build_state.bundler_inputs = bundler_inputs
                 .iter()
                 .map(|input| input.import.clone())
@@ -802,9 +800,9 @@ pub async fn build(
     info!(target: "SKIP_FORMAT", "{}", "");
     info!(target: "build", "{}", format!("Build completed in {}", format_elapsed_time(build_start.elapsed(), &section_format_options)).bold());
 
-    // Save build state for next incremental build
-    if is_dev() {
-        if let Err(e) = build_state.save(&build_cache_dir) {
+    // Save build state for next incremental build (only if incremental is enabled)
+    if options.incremental {
+        if let Err(e) = build_state.save(build_cache_dir) {
             warn!(target: "build", "Failed to save build state: {}", e);
         } else {
             debug!(target: "build", "Build state saved to {}", build_cache_dir.join("build_state.json").display());

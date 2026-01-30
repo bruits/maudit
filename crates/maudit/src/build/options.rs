@@ -36,7 +36,6 @@ use crate::{assets::RouteAssetsOptions, is_dev, sitemap::SitemapOptions};
 ///       assets: AssetsOptions {
 ///         assets_dir: "_assets".into(),
 ///         tailwind_binary_path: "./node_modules/.bin/tailwindcss".into(),
-///         image_cache_dir: ".cache/maudit/images".into(),
 ///         ..Default::default()
 ///       },
 ///       prefetch: PrefetchOptions {
@@ -60,6 +59,26 @@ pub struct BuildOptions {
     ///
     /// At the speed Maudit operates at, not cleaning the output directory may offer a significant performance improvement at the cost of potentially serving stale content.
     pub clean_output_dir: bool,
+
+    /// Whether to enable incremental builds.
+    ///
+    /// When enabled, Maudit tracks which assets are used by which routes and only rebuilds
+    /// routes affected by changed files. This can significantly speed up rebuilds when only
+    /// a few files have changed.
+    ///
+    /// Defaults to `true` in dev mode (`maudit dev`) and `false` in production builds.
+    pub incremental: bool,
+
+    /// Directory for build cache storage (incremental build state, etc.).
+    ///
+    /// Defaults to `target/maudit_cache/{package_name}` where `{package_name}` is derived
+    /// from the current directory name.
+    pub cache_dir: PathBuf,
+
+    /// Directory for caching processed assets (images, etc.).
+    ///
+    /// If `None`, defaults to `{cache_dir}/assets`.
+    pub assets_cache_dir: Option<PathBuf>,
 
     pub assets: AssetsOptions,
 
@@ -124,6 +143,14 @@ impl BuildOptions {
             hashing_strategy: self.assets.hashing_strategy,
         }
     }
+
+    /// Returns the directory for caching processed assets (images, etc.).
+    /// Uses `assets_cache_dir` if set, otherwise defaults to `{cache_dir}/assets`.
+    pub fn assets_cache_dir(&self) -> PathBuf {
+        self.assets_cache_dir
+            .clone()
+            .unwrap_or_else(|| self.cache_dir.join("assets"))
+    }
 }
 
 #[derive(Clone)]
@@ -138,12 +165,6 @@ pub struct AssetsOptions {
     ///
     /// Note that this value is not automatically joined with the `output_dir` in `BuildOptions`. Use [`BuildOptions::route_assets_options()`] to get a `RouteAssetsOptions` with the correct final path.
     pub assets_dir: PathBuf,
-
-    /// Directory to use for image cache storage.
-    /// Defaults to `target/maudit_cache/images`.
-    ///
-    /// This cache is used to store processed images and their placeholders to speed up subsequent builds.
-    pub image_cache_dir: PathBuf,
 
     /// Strategy to use when hashing assets for fingerprinting.
     ///
@@ -164,11 +185,6 @@ impl Default for AssetsOptions {
         Self {
             tailwind_binary_path: "tailwindcss".into(),
             assets_dir: "_maudit".into(),
-            image_cache_dir: {
-                find_target_dir()
-                    .unwrap_or_else(|_| PathBuf::from("target"))
-                    .join("maudit_cache/images")
-            },
             hashing_strategy: if is_dev() {
                 AssetHashingStrategy::FastImprecise
             } else {
@@ -196,16 +212,60 @@ impl Default for AssetsOptions {
 /// ```
 impl Default for BuildOptions {
     fn default() -> Self {
+        let site_name = get_site_name();
+        let cache_dir = find_target_dir()
+            .unwrap_or_else(|_| PathBuf::from("target"))
+            .join("maudit_cache")
+            .join(&site_name);
+
         Self {
             base_url: None,
             output_dir: "dist".into(),
             static_dir: "static".into(),
             clean_output_dir: true,
+            incremental: is_dev(),
+            cache_dir,
+            assets_cache_dir: None,
             prefetch: PrefetchOptions::default(),
             assets: AssetsOptions::default(),
             sitemap: SitemapOptions::default(),
         }
     }
+}
+
+/// Get the site name for cache directory purposes.
+///
+/// Tries to read the package name from Cargo.toml in the current directory,
+/// falling back to the current directory name.
+fn get_site_name() -> String {
+    // Try to read package name from Cargo.toml
+    if let Ok(cargo_toml) = fs::read_to_string("Cargo.toml") {
+        // Simple parsing - look for name = "..." in [package] section
+        let mut in_package = false;
+        for line in cargo_toml.lines() {
+            let trimmed = line.trim();
+            if trimmed == "[package]" {
+                in_package = true;
+            } else if trimmed.starts_with('[') {
+                in_package = false;
+            } else if in_package && trimmed.starts_with("name") {
+                // Parse: name = "package-name" or name = 'package-name'
+                if let Some(eq_pos) = trimmed.find('=') {
+                    let value = trimmed[eq_pos + 1..].trim();
+                    let value = value.trim_matches('"').trim_matches('\'');
+                    if !value.is_empty() {
+                        return value.to_string();
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback to current directory name
+    std::env::current_dir()
+        .ok()
+        .and_then(|p| p.file_name().map(|s| s.to_string_lossy().to_string()))
+        .unwrap_or_else(|| "default".to_string())
 }
 
 /// Find the target directory using multiple strategies
@@ -238,12 +298,13 @@ fn find_target_dir() -> Result<PathBuf, std::io::Error> {
         let cargo_toml = current.join("Cargo.toml");
         if cargo_toml.exists()
             && let Ok(content) = fs::read_to_string(&cargo_toml)
-                && content.contains("[workspace]") {
-                    let workspace_target = current.join("target");
-                    if workspace_target.exists() {
-                        return Ok(workspace_target);
-                    }
-                }
+            && content.contains("[workspace]")
+        {
+            let workspace_target = current.join("target");
+            if workspace_target.exists() {
+                return Ok(workspace_target);
+            }
+        }
 
         // Move up to parent directory
         if !current.pop() {

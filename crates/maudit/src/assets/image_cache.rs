@@ -338,23 +338,20 @@ mod tests {
 
     #[test]
     fn test_build_options_integration() {
-        use crate::build::options::{AssetsOptions, BuildOptions};
+        use crate::build::options::BuildOptions;
 
         // Test that BuildOptions can configure the cache directory
         let custom_cache = PathBuf::from("/tmp/custom_maudit_cache");
         let build_options = BuildOptions {
-            assets: AssetsOptions {
-                image_cache_dir: custom_cache.clone(),
-                ..Default::default()
-            },
+            cache_dir: custom_cache.clone(),
             ..Default::default()
         };
 
         // Create cache with build options
-        let cache = ImageCache::with_cache_dir(&build_options.assets.image_cache_dir);
+        let cache = ImageCache::with_cache_dir(&build_options.assets_cache_dir());
 
         // Verify it uses the configured directory
-        assert_eq!(cache.get_cache_dir(), custom_cache);
+        assert_eq!(cache.get_cache_dir(), custom_cache.join("assets"));
     }
 
     #[test]
