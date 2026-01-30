@@ -131,6 +131,17 @@ impl BuildManager {
             format_elapsed_time(duration, &FormatElapsedTimeOptions::default_dev());
 
         if output.status.success() {
+            // Optionally log output from the binary (includes incremental build info)
+            // Enable with MAUDIT_SHOW_BINARY_OUTPUT=1 for debugging
+            if std::env::var("MAUDIT_SHOW_BINARY_OUTPUT").is_ok() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                for line in stdout.lines().chain(stderr.lines()) {
+                    if !line.trim().is_empty() {
+                        info!(name: "build", "{}", line);
+                    }
+                }
+            }
             info!(name: "build", "Binary rerun finished {}", formatted_elapsed_time);
             update_status(
                 &self.websocket_tx,

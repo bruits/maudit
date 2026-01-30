@@ -56,6 +56,11 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
 	const childProcess = spawn(command, args, {
 		cwd: fixturePath,
 		stdio: ["ignore", "pipe", "pipe"],
+		env: {
+			...process.env,
+			// Show binary output for tests so we can verify incremental build logs
+			MAUDIT_SHOW_BINARY_OUTPUT: "1",
+		},
 	});
 
 	// Capture output to detect when server is ready
