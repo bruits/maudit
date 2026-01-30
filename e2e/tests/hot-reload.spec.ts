@@ -134,8 +134,10 @@ test.describe("Hot Reload", () => {
 		const hasRerunMessage = logsText.toLowerCase().includes("rerunning binary");
 		expect(hasRerunMessage).toBe(true);
 
-		// Should NOT see "rebuilding" message
-		expect(logsText.toLowerCase()).not.toContain("rebuilding");
+		// Should NOT see cargo-related rebuild messages (compiling, building crate)
+		// Note: "Rebuilding N affected routes" is fine - that's the incremental build system
+		expect(logsText.toLowerCase()).not.toContain("compiling");
+		expect(logsText.toLowerCase()).not.toContain("cargo build");
 	});
 
 	test("should show updated content after file changes", async ({ page, devServer }) => {
