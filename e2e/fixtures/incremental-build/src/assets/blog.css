@@ -1,10 +1,10 @@
 /* Blog styles */
 .blog-post {
-    margin: 20px;
+	margin: 20px;
 }
 
 /* Background image referenced via url() - tests CSS asset dependency tracking */
 .blog-header {
-    background-image: url('./bg.png');
-    background-size: cover;
+	background-image: url("./bg.png");
+	background-size: cover;
 }

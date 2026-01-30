@@ -346,11 +346,7 @@ async fn ws_handler(
     ws.on_upgrade(move |socket| handle_socket(socket, addr, state.status_manager))
 }
 
-async fn handle_socket(
-    socket: WebSocket,
-    who: SocketAddr,
-    status_manager: StatusManager,
-) {
+async fn handle_socket(socket: WebSocket, who: SocketAddr, status_manager: StatusManager) {
     let (mut sender, mut receiver) = socket.split();
 
     // Send current persistent status to new connection if there is one
@@ -424,7 +420,9 @@ mod tests {
     async fn test_status_manager_update_error_persists() {
         let manager = StatusManager::new();
 
-        manager.update(StatusType::Error, "Something went wrong").await;
+        manager
+            .update(StatusType::Error, "Something went wrong")
+            .await;
 
         let status = manager.get_current().await;
         assert!(status.is_some());
@@ -521,7 +519,9 @@ mod tests {
         let manager2 = manager1.clone();
 
         // Update via one clone
-        manager1.update(StatusType::Error, "Error from clone 1").await;
+        manager1
+            .update(StatusType::Error, "Error from clone 1")
+            .await;
 
         // Should be visible via the other clone
         let status = manager2.get_current().await;

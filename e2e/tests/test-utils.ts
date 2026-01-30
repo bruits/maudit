@@ -188,7 +188,7 @@ function getFixturePortOffset(fixtureName: string): number {
 	let hash = 0;
 	for (let i = 0; i < fixtureName.length; i++) {
 		const char = fixtureName.charCodeAt(i);
-		hash = ((hash << 5) - hash) + char;
+		hash = (hash << 5) - hash + char;
 		hash = hash & hash; // Convert to 32bit integer
 	}
 	// Use modulo to keep the offset reasonable (0-99)
@@ -237,7 +237,7 @@ export function createTestWithFixture(fixtureName: string, basePort = 1864) {
 			if (!server) {
 				// Calculate port based on fixture name hash + worker index to avoid collisions
 				const fixtureOffset = getFixturePortOffset(fixtureName);
-				const preferredPort = basePort + (workerIndex * 100) + fixtureOffset;
+				const preferredPort = basePort + workerIndex * 100 + fixtureOffset;
 				const port = findAvailablePort(preferredPort);
 
 				server = await startDevServer({

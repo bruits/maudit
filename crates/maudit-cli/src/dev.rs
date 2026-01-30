@@ -15,11 +15,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-use tokio::{
-    signal,
-    sync::mpsc::channel,
-    task::JoinHandle,
-};
+use tokio::{signal, sync::mpsc::channel, task::JoinHandle};
 use tracing::{error, info};
 
 use crate::dev::build::BuildManager;
@@ -107,7 +103,6 @@ pub async fn start_dev_env(
 
                     match result {
                         Ok(events) => {
-                            info!(name: "watch", "Received {} events: {:?}", events.len(), events);
                             // TODO: Handle rescan events, I don't fully understand the implication of them yet
                             // some issues:
                             // - https://github.com/notify-rs/notify/issues/434
@@ -176,6 +171,10 @@ pub async fn start_dev_env(
                                         .filter(|e| should_rebuild_for_event(e))
                                         .flat_map(|e| e.paths.iter().cloned())
                                         .collect();
+
+                                    // Expand directory paths to include files inside them
+                                    // This is needed because folder renames only report the folder, not contents
+                                    changed_paths = expand_directory_paths(changed_paths);
 
                                     // Deduplicate paths
                                     changed_paths.sort();
@@ -300,6 +299,40 @@ fn should_watch_path(path: &Path) -> bool {
     }
 
     true
+}
+
+/// Expand directory paths to include all files within them recursively.
+/// This is needed because file watcher events for folder renames only include
+/// the folder path, not the files inside.
+fn expand_directory_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut expanded = Vec::new();
+
+    for path in paths {
+        if path.is_dir() {
+            // Recursively collect all files in the directory
+            collect_files_recursive(&path, &mut expanded);
+            // Also keep the directory itself for cases where we need to know a dir changed
+            expanded.push(path);
+        } else {
+            expanded.push(path);
+        }
+    }
+
+    expanded
+}
+
+/// Recursively collect all files in a directory.
+fn collect_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                collect_files_recursive(&path, files);
+            } else if path.is_file() {
+                files.push(path);
+            }
+        }
+    }
 }
 
 async fn shutdown_signal() {

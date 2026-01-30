@@ -17,22 +17,24 @@ test.describe.configure({ mode: "serial" });
  */
 async function waitForBuildComplete(devServer: any, timeoutMs = 20000): Promise<string[]> {
 	const startTime = Date.now();
-	
+
 	while (Date.now() - startTime < timeoutMs) {
 		const logs = devServer.getLogs(100);
 		const logsText = logs.join("\n").toLowerCase();
-		
+
 		// Look for completion messages
-		if (logsText.includes("finished") || 
-		    logsText.includes("rerun finished") ||
-		    logsText.includes("build finished")) {
+		if (
+			logsText.includes("finished") ||
+			logsText.includes("rerun finished") ||
+			logsText.includes("build finished")
+		) {
 			return logs;
 		}
-		
+
 		// Wait 100ms before checking again
-		await new Promise(resolve => setTimeout(resolve, 100));
+		await new Promise((resolve) => setTimeout(resolve, 100));
 	}
-	
+
 	throw new Error(`Build did not complete within ${timeoutMs}ms`);
 }
 
@@ -65,7 +67,7 @@ test.describe("Hot Reload", () => {
 		writeFileSync(indexPath, originalIndexContent, "utf-8");
 		writeFileSync(mainPath, originalMainContent, "utf-8");
 		writeFileSync(dataPath, originalDataContent, "utf-8");
-		
+
 		// Only wait for build if devServer is available (startup might have failed)
 		if (devServer) {
 			try {

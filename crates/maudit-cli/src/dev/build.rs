@@ -101,7 +101,7 @@ impl BuildManager {
 
         // Log that we're doing an incremental build
         info!(name: "build", "Incremental build: {} files changed", changed_paths.len());
-        info!(name: "build", "Changed files: {:?}", changed_paths);
+        debug!(name: "build", "Changed files: {:?}", changed_paths);
         info!(name: "build", "Rerunning binary without recompilation...");
 
         self.state
@@ -172,7 +172,10 @@ impl BuildManager {
         self.internal_build(false).await
     }
 
-    async fn internal_build(&self, is_initial: bool) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    async fn internal_build(
+        &self,
+        is_initial: bool,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         // Cancel any existing build immediately
         let cancel = CancellationToken::new();
         {
@@ -276,15 +279,20 @@ impl BuildManager {
         let stderr_bytes = stderr_task.await.unwrap_or_default();
 
         let duration = build_start_time.elapsed();
-        let formatted_elapsed_time = format_elapsed_time(
-            duration,
-            &FormatElapsedTimeOptions::default_dev(),
-        );
+        let formatted_elapsed_time =
+            format_elapsed_time(duration, &FormatElapsedTimeOptions::default_dev());
 
         if status.success() {
-            let build_type = if is_initial { "Initial build" } else { "Rebuild" };
+            let build_type = if is_initial {
+                "Initial build"
+            } else {
+                "Rebuild"
+            };
             info!(name: "build", "{} finished {}", build_type, formatted_elapsed_time);
-            self.state.status_manager.update(StatusType::Success, "Build finished successfully").await;
+            self.state
+                .status_manager
+                .update(StatusType::Success, "Build finished successfully")
+                .await;
 
             self.update_dependency_tracker().await;
 
@@ -294,14 +302,27 @@ impl BuildManager {
             // Raw stderr sometimes has something to say whenever cargo fails
             println!("{}", stderr_str);
 
-            let build_type = if is_initial { "Initial build" } else { "Rebuild" };
+            let build_type = if is_initial {
+                "Initial build"
+            } else {
+                "Rebuild"
+            };
             error!(name: "build", "{} failed with errors {}", build_type, formatted_elapsed_time);
 
             if is_initial {
                 error!(name: "build", "Initial build needs to succeed before we can start the dev server");
-                self.state.status_manager.update(StatusType::Error, "Initial build failed - fix errors and save to retry").await;
+                self.state
+                    .status_manager
+                    .update(
+                        StatusType::Error,
+                        "Initial build failed - fix errors and save to retry",
+                    )
+                    .await;
             } else {
-                self.state.status_manager.update(StatusType::Error, &rendered_messages.join("\n")).await;
+                self.state
+                    .status_manager
+                    .update(StatusType::Error, &rendered_messages.join("\n"))
+                    .await;
             }
 
             Ok(false)
@@ -341,7 +362,8 @@ impl BuildManager {
         }
     }
 
-    fn get_binary_name_from_cargo_toml() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    fn get_binary_name_from_cargo_toml() -> Result<String, Box<dyn std::error::Error + Send + Sync>>
+    {
         let cargo_toml_path = PathBuf::from("Cargo.toml");
         if !cargo_toml_path.exists() {
             return Err("Cargo.toml not found in current directory".into());

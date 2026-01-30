@@ -49,7 +49,7 @@ BuildOptions {
 
 Note that prerendering, unlike prefetching, may require rethinking how the JavaScript on your pages works, as it'll run JavaScript from pages that the user hasn't visited yet. For example, this might result in analytics reporting incorrect page views.
 
-## Possible risks 
+## Possible risks
 
 Prefetching pages in static websites is typically always safe. In more traditional apps, an issue can arise if your pages cause side effects to happen on the server. For instance, if you were to prefetch `/logout`, your user might get disconnected on hover, or worse as soon as the log out link appear in the viewport. In modern times, it is typically not recommended to have links cause such side effects anyway, reducing the risk of this happening.
 

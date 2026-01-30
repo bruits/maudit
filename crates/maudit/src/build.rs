@@ -800,10 +800,8 @@ pub async fn build(
                                 let asset_path = PathBuf::from(original_file);
                                 if let Ok(canonical_asset) = asset_path.canonicalize() {
                                     for route in &all_bundler_routes {
-                                        build_state.track_asset(
-                                            canonical_asset.clone(),
-                                            route.clone(),
-                                        );
+                                        build_state
+                                            .track_asset(canonical_asset.clone(), route.clone());
                                     }
                                     asset_count += 1;
                                 }

@@ -13,6 +13,7 @@ npx playwright install
 ## Running Tests
 
 The tests will automatically:
+
 1. Build the prefetch.js bundle (via `cargo xtask build-maudit-js`)
 2. Start the Maudit dev server on the test fixture site
 3. Run the tests
@@ -46,12 +47,14 @@ pnpm report
 ## Features Tested
 
 ### Basic Prefetch
+
 - Creating link elements with `rel="prefetch"`
 - Preventing duplicate prefetches
 - Skipping current page prefetch
 - Blocking cross-origin prefetches
 
 ### Prerendering (Chromium only)
+
 - Creating `<script type="speculationrules">` elements
 - Different eagerness levels (immediate, eager, moderate, conservative)
 - Fallback to link prefetch on non-Chromium browsers

@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test";
 import { createTestWithFixture } from "./test-utils";
-import { readFileSync, writeFileSync, copyFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, renameSync, rmSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,37 +19,41 @@ test.describe.configure({ mode: "serial", retries: 2 });
  */
 async function waitForBuildComplete(devServer: any, timeoutMs = 30000): Promise<string[]> {
 	const startTime = Date.now();
-	
+
 	// Phase 1: Wait for build to start
 	while (Date.now() - startTime < timeoutMs) {
 		const logs = devServer.getLogs(200);
 		const logsText = logs.join("\n").toLowerCase();
-		
-		if (logsText.includes("rerunning") || 
-		    logsText.includes("rebuilding") ||
-		    logsText.includes("files changed")) {
+
+		if (
+			logsText.includes("rerunning") ||
+			logsText.includes("rebuilding") ||
+			logsText.includes("files changed")
+		) {
 			break;
 		}
-		
-		await new Promise(resolve => setTimeout(resolve, 50));
+
+		await new Promise((resolve) => setTimeout(resolve, 50));
 	}
-	
+
 	// Phase 2: Wait for build to finish
 	while (Date.now() - startTime < timeoutMs) {
 		const logs = devServer.getLogs(200);
 		const logsText = logs.join("\n").toLowerCase();
-		
-		if (logsText.includes("finished") || 
-		    logsText.includes("rerun finished") ||
-		    logsText.includes("build finished")) {
+
+		if (
+			logsText.includes("finished") ||
+			logsText.includes("rerun finished") ||
+			logsText.includes("build finished")
+		) {
 			// Wait for filesystem to fully sync
-			await new Promise(resolve => setTimeout(resolve, 500));
+			await new Promise((resolve) => setTimeout(resolve, 500));
 			return devServer.getLogs(200);
 		}
-		
-		await new Promise(resolve => setTimeout(resolve, 100));
+
+		await new Promise((resolve) => setTimeout(resolve, 100));
 	}
-	
+
 	throw new Error(`Build did not complete within ${timeoutMs}ms`);
 }
 
@@ -87,16 +91,16 @@ function getAffectedRouteCount(logs: string[]): number {
  */
 async function setupIncrementalState(
 	devServer: any,
-	triggerChange: (suffix: string) => Promise<string[]>
+	triggerChange: (suffix: string) => Promise<string[]>,
 ): Promise<void> {
 	// First change triggers a full build (no previous state)
 	await triggerChange("init");
-	await new Promise(resolve => setTimeout(resolve, 500));
-	
+	await new Promise((resolve) => setTimeout(resolve, 500));
+
 	// Second change should be incremental (state now exists)
 	const logs = await triggerChange("setup");
 	expect(isIncrementalBuild(logs)).toBe(true);
-	await new Promise(resolve => setTimeout(resolve, 500));
+	await new Promise((resolve) => setTimeout(resolve, 500));
 }
 
 /**
@@ -114,7 +118,7 @@ test.describe("Incremental Build", () => {
 	test.setTimeout(180000);
 
 	const fixturePath = resolve(__dirname, "..", "fixtures", "incremental-build");
-	
+
 	// Asset paths
 	const assets = {
 		blogCss: resolve(fixturePath, "src", "assets", "blog.css"),
@@ -126,14 +130,14 @@ test.describe("Incremental Build", () => {
 		teamPng: resolve(fixturePath, "src", "assets", "team.png"),
 		bgPng: resolve(fixturePath, "src", "assets", "bg.png"),
 	};
-	
+
 	// Output HTML paths
 	const htmlPaths = {
 		index: resolve(fixturePath, "dist", "index.html"),
 		about: resolve(fixturePath, "dist", "about", "index.html"),
 		blog: resolve(fixturePath, "dist", "blog", "index.html"),
 	};
-	
+
 	// Original content storage
 	const originals: Record<string, string | Buffer> = {};
 
@@ -166,14 +170,14 @@ test.describe("Incremental Build", () => {
 	// ============================================================
 	test("CSS file change rebuilds only routes using it", async ({ devServer }) => {
 		let testCounter = 0;
-		
+
 		async function triggerChange(suffix: string) {
 			testCounter++;
 			devServer.clearLogs();
 			writeFileSync(assets.blogCss, originals.blogCss + `\n/* test-${testCounter}-${suffix} */`);
 			return await waitForBuildComplete(devServer, 30000);
 		}
-		
+
 		await setupIncrementalState(devServer, triggerChange);
 
 		// Record build IDs before
@@ -181,16 +185,16 @@ test.describe("Incremental Build", () => {
 		expect(before.index).not.toBeNull();
 		expect(before.about).not.toBeNull();
 		expect(before.blog).not.toBeNull();
-		
-		await new Promise(resolve => setTimeout(resolve, 500));
-		
+
+		await new Promise((resolve) => setTimeout(resolve, 500));
+
 		// Trigger the change
 		const logs = await triggerChange("final");
-		
+
 		// Verify incremental build with 1 route
 		expect(isIncrementalBuild(logs)).toBe(true);
 		expect(getAffectedRouteCount(logs)).toBe(1);
-		
+
 		// Verify only blog was rebuilt
 		const after = recordBuildIds(htmlPaths);
 		expect(after.index).toBe(before.index);
@@ -203,27 +207,27 @@ test.describe("Incremental Build", () => {
 	// ============================================================
 	test("transitive JS dependency change rebuilds affected routes", async ({ devServer }) => {
 		let testCounter = 0;
-		
+
 		async function triggerChange(suffix: string) {
 			testCounter++;
 			devServer.clearLogs();
 			writeFileSync(assets.utilsJs, originals.utilsJs + `\n// test-${testCounter}-${suffix}`);
 			return await waitForBuildComplete(devServer, 30000);
 		}
-		
+
 		await setupIncrementalState(devServer, triggerChange);
 
 		const before = recordBuildIds(htmlPaths);
 		expect(before.index).not.toBeNull();
-		
-		await new Promise(resolve => setTimeout(resolve, 500));
-		
+
+		await new Promise((resolve) => setTimeout(resolve, 500));
+
 		const logs = await triggerChange("final");
-		
+
 		// Verify incremental build with 1 route
 		expect(isIncrementalBuild(logs)).toBe(true);
 		expect(getAffectedRouteCount(logs)).toBe(1);
-		
+
 		// Only index should be rebuilt (uses main.js which imports utils.js)
 		const after = recordBuildIds(htmlPaths);
 		expect(after.about).toBe(before.about);
@@ -236,27 +240,27 @@ test.describe("Incremental Build", () => {
 	// ============================================================
 	test("direct JS entry point change rebuilds only routes using it", async ({ devServer }) => {
 		let testCounter = 0;
-		
+
 		async function triggerChange(suffix: string) {
 			testCounter++;
 			devServer.clearLogs();
 			writeFileSync(assets.aboutJs, originals.aboutJs + `\n// test-${testCounter}-${suffix}`);
 			return await waitForBuildComplete(devServer, 30000);
 		}
-		
+
 		await setupIncrementalState(devServer, triggerChange);
 
 		const before = recordBuildIds(htmlPaths);
 		expect(before.about).not.toBeNull();
-		
-		await new Promise(resolve => setTimeout(resolve, 500));
-		
+
+		await new Promise((resolve) => setTimeout(resolve, 500));
+
 		const logs = await triggerChange("final");
-		
+
 		// Verify incremental build with 1 route
 		expect(isIncrementalBuild(logs)).toBe(true);
 		expect(getAffectedRouteCount(logs)).toBe(1);
-		
+
 		// Only about should be rebuilt
 		const after = recordBuildIds(htmlPaths);
 		expect(after.index).toBe(before.index);
@@ -269,28 +273,31 @@ test.describe("Incremental Build", () => {
 	// ============================================================
 	test("shared asset change rebuilds all routes using it", async ({ devServer }) => {
 		let testCounter = 0;
-		
+
 		async function triggerChange(suffix: string) {
 			testCounter++;
 			devServer.clearLogs();
-			writeFileSync(assets.stylesCss, originals.stylesCss + `\n/* test-${testCounter}-${suffix} */`);
+			writeFileSync(
+				assets.stylesCss,
+				originals.stylesCss + `\n/* test-${testCounter}-${suffix} */`,
+			);
 			return await waitForBuildComplete(devServer, 30000);
 		}
-		
+
 		await setupIncrementalState(devServer, triggerChange);
 
 		const before = recordBuildIds(htmlPaths);
 		expect(before.index).not.toBeNull();
 		expect(before.about).not.toBeNull();
-		
-		await new Promise(resolve => setTimeout(resolve, 500));
-		
+
+		await new Promise((resolve) => setTimeout(resolve, 500));
+
 		const logs = await triggerChange("final");
-		
+
 		// Verify incremental build with 2 routes (/ and /about both use styles.css)
 		expect(isIncrementalBuild(logs)).toBe(true);
 		expect(getAffectedRouteCount(logs)).toBe(2);
-		
+
 		// Index and about should be rebuilt, blog should not
 		const after = recordBuildIds(htmlPaths);
 		expect(after.blog).toBe(before.blog);
@@ -303,7 +310,7 @@ test.describe("Incremental Build", () => {
 	// ============================================================
 	test("image change rebuilds only routes using it", async ({ devServer }) => {
 		let testCounter = 0;
-		
+
 		async function triggerChange(suffix: string) {
 			testCounter++;
 			devServer.clearLogs();
@@ -311,25 +318,25 @@ test.describe("Incremental Build", () => {
 			// This simulates modifying an image file
 			const modified = Buffer.concat([
 				originals.logoPng as Buffer,
-				Buffer.from(`<!-- test-${testCounter}-${suffix} -->`)
+				Buffer.from(`<!-- test-${testCounter}-${suffix} -->`),
 			]);
 			writeFileSync(assets.logoPng, modified);
 			return await waitForBuildComplete(devServer, 30000);
 		}
-		
+
 		await setupIncrementalState(devServer, triggerChange);
 
 		const before = recordBuildIds(htmlPaths);
 		expect(before.index).not.toBeNull();
-		
-		await new Promise(resolve => setTimeout(resolve, 500));
-		
+
+		await new Promise((resolve) => setTimeout(resolve, 500));
+
 		const logs = await triggerChange("final");
-		
+
 		// Verify incremental build with 1 route
 		expect(isIncrementalBuild(logs)).toBe(true);
 		expect(getAffectedRouteCount(logs)).toBe(1);
-		
+
 		// Only index should be rebuilt (uses logo.png)
 		const after = recordBuildIds(htmlPaths);
 		expect(after.about).toBe(before.about);
@@ -342,7 +349,7 @@ test.describe("Incremental Build", () => {
 	// ============================================================
 	test("multiple file changes rebuild union of affected routes", async ({ devServer }) => {
 		let testCounter = 0;
-		
+
 		async function triggerChange(suffix: string) {
 			testCounter++;
 			devServer.clearLogs();
@@ -351,21 +358,21 @@ test.describe("Incremental Build", () => {
 			writeFileSync(assets.aboutJs, originals.aboutJs + `\n// test-${testCounter}-${suffix}`);
 			return await waitForBuildComplete(devServer, 30000);
 		}
-		
+
 		await setupIncrementalState(devServer, triggerChange);
 
 		const before = recordBuildIds(htmlPaths);
 		expect(before.about).not.toBeNull();
 		expect(before.blog).not.toBeNull();
-		
-		await new Promise(resolve => setTimeout(resolve, 500));
-		
+
+		await new Promise((resolve) => setTimeout(resolve, 500));
+
 		const logs = await triggerChange("final");
-		
+
 		// Verify incremental build with 2 routes (/about and /blog)
 		expect(isIncrementalBuild(logs)).toBe(true);
 		expect(getAffectedRouteCount(logs)).toBe(2);
-		
+
 		// About and blog should be rebuilt, index should not
 		const after = recordBuildIds(htmlPaths);
 		expect(after.index).toBe(before.index);
@@ -376,9 +383,11 @@ test.describe("Incremental Build", () => {
 	// ============================================================
 	// TEST 7: CSS url() asset dependency (bg.png via blog.css → /blog)
 	// ============================================================
-	test("CSS url() asset change triggers rebundling and rebuilds affected routes", async ({ devServer }) => {
+	test("CSS url() asset change triggers rebundling and rebuilds affected routes", async ({
+		devServer,
+	}) => {
 		let testCounter = 0;
-		
+
 		async function triggerChange(suffix: string) {
 			testCounter++;
 			devServer.clearLogs();
@@ -386,27 +395,97 @@ test.describe("Incremental Build", () => {
 			// Changing it should trigger rebundling and rebuild /blog
 			const modified = Buffer.concat([
 				originals.bgPng as Buffer,
-				Buffer.from(`<!-- test-${testCounter}-${suffix} -->`)
+				Buffer.from(`<!-- test-${testCounter}-${suffix} -->`),
 			]);
 			writeFileSync(assets.bgPng, modified);
 			return await waitForBuildComplete(devServer, 30000);
 		}
-		
+
 		await setupIncrementalState(devServer, triggerChange);
 
 		const before = recordBuildIds(htmlPaths);
 		expect(before.blog).not.toBeNull();
-		
-		await new Promise(resolve => setTimeout(resolve, 500));
-		
+
+		await new Promise((resolve) => setTimeout(resolve, 500));
+
 		const logs = await triggerChange("final");
-		
+
 		// Verify incremental build triggered
 		expect(isIncrementalBuild(logs)).toBe(true);
-		
+
 		// Blog should be rebuilt (uses blog.css which references bg.png via url())
 		// The bundler should have been re-run to update the hashed asset reference
 		const after = recordBuildIds(htmlPaths);
 		expect(after.blog).not.toBe(before.blog);
+	});
+
+	// ============================================================
+	// TEST 8: Folder rename handling
+	// ============================================================
+	test("folder rename triggers rebuild with correct changed paths", async ({ devServer }) => {
+		// Create a test folder structure that we can rename
+		const testFolder = resolve(fixturePath, "src", "assets", "test-icons");
+		const renamedFolder = resolve(fixturePath, "src", "assets", "test-icons-renamed");
+		const testFile = resolve(testFolder, "test-icon.css");
+
+		// Clean up any leftover folders from previous test runs
+		if (existsSync(testFolder)) {
+			rmSync(testFolder, { recursive: true });
+		}
+		if (existsSync(renamedFolder)) {
+			rmSync(renamedFolder, { recursive: true });
+		}
+
+		try {
+			// Step 1: Create the test folder and file
+			mkdirSync(testFolder, { recursive: true });
+			writeFileSync(testFile, "/* test icon styles */\n.icon { width: 16px; }");
+
+			// Wait for initial detection
+			devServer.clearLogs();
+			await new Promise((resolve) => setTimeout(resolve, 1000));
+
+			// Step 2: Rename the folder
+			devServer.clearLogs();
+			renameSync(testFolder, renamedFolder);
+
+			// Wait for the file watcher to detect the rename and process it
+			const startTime = Date.now();
+			const timeoutMs = 10000;
+			let logsAfterRename: string[] = [];
+
+			while (Date.now() - startTime < timeoutMs) {
+				logsAfterRename = devServer.getLogs(100);
+				const logsText = logsAfterRename.join("\n");
+
+				// Wait for the build to complete (indicates paths were processed)
+				if (logsText.includes("rerun finished") || logsText.includes("Build completed")) {
+					break;
+				}
+
+				await new Promise((resolve) => setTimeout(resolve, 100));
+			}
+
+			// Log what we received for debugging
+			console.log("Logs after folder rename:", logsAfterRename.slice(-20));
+
+			const logsText = logsAfterRename.join("\n");
+
+			// Verify that events were received
+			expect(logsText).toContain("Received");
+
+			// The key assertion: the changed files should include the FILE inside the folder,
+			// not just the folder path itself
+			// After expanding directory paths, we should see the CSS file
+			expect(logsText).toContain("test-icon.css");
+		} finally {
+			// Cleanup: remove test folders
+			if (existsSync(testFolder)) {
+				rmSync(testFolder, { recursive: true });
+			}
+			if (existsSync(renamedFolder)) {
+				rmSync(renamedFolder, { recursive: true });
+			}
+		}
 	});
 });

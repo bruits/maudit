@@ -1,2 +1,2 @@
 // About script
-console.log('About script loaded');
+console.log("About script loaded");
