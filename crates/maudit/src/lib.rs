@@ -54,6 +54,7 @@ pub mod maud {
 // Internal modules
 mod logging;
 
+use std::sync::LazyLock;
 use std::{env, path::PathBuf};
 
 use build::execute_build;
@@ -61,12 +62,18 @@ use content::ContentSources;
 use logging::init_logging;
 use route::FullRoute;
 
+static IS_DEV: LazyLock<bool> = LazyLock::new(|| {
+    std::env::var("MAUDIT_DEV")
+        .map(|v| v == "true")
+        .unwrap_or(false)
+});
+
 /// Returns whether Maudit is running in development mode (through `maudit dev`).
 ///
 /// This can be useful to conditionally enable features or logging that should only be active during development.
 /// Oftentimes, this is used to disable some expensive operations that would slow down build times during development.
 pub fn is_dev() -> bool {
-    env::var("MAUDIT_DEV").map(|v| v == "true").unwrap_or(false)
+    *IS_DEV
 }
 
 #[macro_export]
