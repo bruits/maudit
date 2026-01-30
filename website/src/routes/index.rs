@@ -23,7 +23,6 @@ pub struct Index;
 
 impl Route for Index {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-        let walrus = ctx.assets.add_image("assets/walrus.svg").unwrap();
         let features = [
             ("Performant", "Generate a site with thousands of pages in less than a second using minimal resources."),
             ("Content", "Bring your content to life with built-in support for Markdown, custom components, syntax highlighting, and more."),
@@ -44,7 +43,6 @@ impl Route for Index {
                 div.w-full {
                     div."lg:container".mx-auto.relative {
                         div."px-4"."sm:py-8"."sm:mx-6"."sm:my-26"."my-14"."mb-20".flex.flex-col.justify-center.items-center.text-center {
-                            (walrus.render("A walrus"))
                             h2."sm:text-6xl"."text-5xl"."sm:w-[22ch]"."xl:w-[30ch]"."mb-2"."leading-[1.15]" {
                                 "Lo, " span.text-brand-red { "the still scrolls of the web"} ", unchanging and steadfast, at last!"
                             }
