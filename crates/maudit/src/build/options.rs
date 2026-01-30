@@ -1,4 +1,4 @@
-use std::{env, path::PathBuf};
+use std::{fs, path::PathBuf};
 
 use crate::{assets::RouteAssetsOptions, is_dev, sitemap::SitemapOptions};
 
@@ -165,9 +165,9 @@ impl Default for AssetsOptions {
             tailwind_binary_path: "tailwindcss".into(),
             assets_dir: "_maudit".into(),
             image_cache_dir: {
-                let target_dir =
-                    env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string());
-                PathBuf::from(target_dir).join("maudit_cache/images")
+                find_target_dir()
+                    .unwrap_or_else(|_| PathBuf::from("target"))
+                    .join("maudit_cache/images")
             },
             hashing_strategy: if is_dev() {
                 AssetHashingStrategy::FastImprecise
@@ -206,4 +206,51 @@ impl Default for BuildOptions {
             sitemap: SitemapOptions::default(),
         }
     }
+}
+
+/// Find the target directory using multiple strategies
+///
+/// This function tries multiple approaches to locate the target directory:
+/// 1. CARGO_TARGET_DIR / CARGO_BUILD_TARGET_DIR environment variables
+/// 2. Local ./target directory
+/// 3. Workspace root target directory (walking up to find [workspace])
+/// 4. Fallback to relative "target" path
+fn find_target_dir() -> Result<PathBuf, std::io::Error> {
+    // 1. Check CARGO_TARGET_DIR and CARGO_BUILD_TARGET_DIR environment variables
+    for env_var in ["CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR"] {
+        if let Ok(target_dir) = std::env::var(env_var) {
+            let path = PathBuf::from(&target_dir);
+            if path.exists() {
+                return Ok(path);
+            }
+        }
+    }
+
+    // 2. Look for target directory in current directory
+    let local_target = PathBuf::from("target");
+    if local_target.exists() {
+        return Ok(local_target);
+    }
+
+    // 3. Try to find workspace root by looking for Cargo.toml with [workspace]
+    let mut current = std::env::current_dir()?;
+    loop {
+        let cargo_toml = current.join("Cargo.toml");
+        if cargo_toml.exists()
+            && let Ok(content) = fs::read_to_string(&cargo_toml)
+                && content.contains("[workspace]") {
+                    let workspace_target = current.join("target");
+                    if workspace_target.exists() {
+                        return Ok(workspace_target);
+                    }
+                }
+
+        // Move up to parent directory
+        if !current.pop() {
+            break;
+        }
+    }
+
+    // 4. Final fallback to relative path
+    Ok(PathBuf::from("target"))
 }
