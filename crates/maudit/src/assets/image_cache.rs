@@ -347,8 +347,7 @@ mod tests {
             ..Default::default()
         };
 
-        // Create cache with build options
-        let cache = ImageCache::with_cache_dir(&build_options.assets_cache_dir());
+        let cache = ImageCache::with_cache_dir(build_options.assets_cache_dir());
 
         // Verify it uses the configured directory
         assert_eq!(cache.get_cache_dir(), custom_cache.join("assets"));

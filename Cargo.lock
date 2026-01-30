@@ -2582,6 +2582,7 @@ version = "0.10.0"
 dependencies = [
  "base64",
  "brk_rolldown",
+ "brk_rolldown_common",
  "brk_rolldown_plugin_replace",
  "chrono",
  "colored 3.1.1",

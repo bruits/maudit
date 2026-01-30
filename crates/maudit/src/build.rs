@@ -26,6 +26,7 @@ use colored::{ColoredString, Colorize};
 use log::{debug, info, trace, warn};
 use pathdiff::diff_paths;
 use rolldown::{Bundler, BundlerOptions, InputItem, ModuleType};
+use rolldown_common::Output;
 use rolldown_plugin_replace::ReplacePlugin;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -118,6 +119,9 @@ pub async fn build(
         BuildState::new()
     };
 
+    debug!(target: "build", "Loaded build state with {} asset mappings", build_state.asset_to_routes.len());
+    debug!(target: "build", "options.incremental: {}, changed_files.is_some(): {}", options.incremental, changed_files.is_some());
+
     // Determine if this is an incremental build
     let is_incremental = options.incremental && changed_files.is_some() && !build_state.asset_to_routes.is_empty();
     
@@ -143,13 +147,14 @@ pub async fn build(
     };
     
     // Check if we should rebundle during incremental builds
-    // Only rebundle if a changed file is in the bundler inputs
+    // Rebundle if a changed file is either:
+    // 1. A direct bundler input (entry point)
+    // 2. A transitive dependency tracked in asset_to_routes (JS/CSS/TS files)
     let should_rebundle = if is_incremental && !build_state.bundler_inputs.is_empty() {
         let changed = changed_files.unwrap();
         let should = changed.iter().any(|changed_file| {
-            build_state.bundler_inputs.iter().any(|bundler_input| {
-                // Check if the changed file matches any bundler input
-                // Canonicalize both paths for comparison
+            // Check if it's a direct bundler input
+            let is_bundler_input = build_state.bundler_inputs.iter().any(|bundler_input| {
                 if let (Ok(changed_canonical), Ok(bundler_canonical)) = (
                     changed_file.canonicalize(),
                     PathBuf::from(bundler_input).canonicalize()
@@ -158,13 +163,28 @@ pub async fn build(
                 } else {
                     false
                 }
-            })
+            });
+            
+            if is_bundler_input {
+                return true;
+            }
+            
+            // Check if it's a transitive dependency (JS/CSS/TS file in asset_to_routes)
+            if let Some(ext) = changed_file.extension().and_then(|e| e.to_str()) {
+                let is_bundleable = matches!(ext.to_lowercase().as_str(), "js" | "ts" | "jsx" | "tsx" | "css");
+                if is_bundleable
+                    && let Ok(canonical) = changed_file.canonicalize() {
+                        return build_state.asset_to_routes.contains_key(&canonical);
+                    }
+            }
+            
+            false
         });
         
         if should {
-            info!(target: "build", "Rebundling needed: changed file matches bundler input");
+            info!(target: "build", "Rebundling needed: changed file affects bundled assets");
         } else {
-            info!(target: "build", "Skipping bundler: no changed files match bundler inputs");
+            info!(target: "build", "Skipping bundler: no changed files affect bundled assets");
         }
         
         should
@@ -190,7 +210,7 @@ pub async fn build(
     };
 
     // Create the image cache early so it can be shared across routes
-    let image_cache = ImageCache::with_cache_dir(&options.assets_cache_dir());
+    let image_cache = ImageCache::with_cache_dir(options.assets_cache_dir());
     let _ = fs::create_dir_all(image_cache.get_cache_dir());
 
     // Create route_assets_options with the image cache
@@ -702,9 +722,48 @@ pub async fn build(
                 ],
             )?;
 
-            let _result = bundler.write().await?;
+            let result = bundler.write().await?;
 
-            // TODO: Add outputted chunks to build_metadata
+            // Track transitive dependencies from bundler output
+            // For each chunk, map all its modules to the routes that use the entry point
+            if options.incremental {
+                for output in &result.assets {
+                    if let Output::Chunk(chunk) = output {
+                        // Get the entry point for this chunk
+                        if let Some(facade_module_id) = &chunk.facade_module_id {
+                            // Try to find routes using this entry point
+                            let entry_path = PathBuf::from(facade_module_id.as_str());
+                            let canonical_entry = entry_path.canonicalize().ok();
+                            
+                            // Look up routes for this entry point
+                            let routes = canonical_entry
+                                .as_ref()
+                                .and_then(|p| build_state.asset_to_routes.get(p))
+                                .cloned();
+                            
+                            if let Some(routes) = routes {
+                                // Register all modules in this chunk as dependencies for those routes
+                                let mut transitive_count = 0;
+                                for module_id in &chunk.module_ids {
+                                    let module_path = PathBuf::from(module_id.as_str());
+                                    if let Ok(canonical_module) = module_path.canonicalize() {
+                                        // Skip the entry point itself (already tracked)
+                                        if Some(&canonical_module) != canonical_entry.as_ref() {
+                                            for route in &routes {
+                                                build_state.track_asset(canonical_module.clone(), route.clone());
+                                            }
+                                            transitive_count += 1;
+                                        }
+                                    }
+                                }
+                                if transitive_count > 0 {
+                                    debug!(target: "build", "Tracked {} transitive dependencies for {}", transitive_count, facade_module_id);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         info!(target: "build", "{}", format!("Assets generated in {}", format_elapsed_time(assets_start.elapsed(), &section_format_options)).bold());

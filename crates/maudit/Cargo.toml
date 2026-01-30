@@ -23,6 +23,7 @@ maud = { workspace = true, optional = true }
 
 # TODO: Allow making those optional
 rolldown = { package = "brk_rolldown", version = "0.8.0" }
+rolldown_common = { package = "brk_rolldown_common", version = "0.8.0" }
 serde = { workspace = true }
 serde_json = "1.0"
 serde_yaml = "0.9.34"

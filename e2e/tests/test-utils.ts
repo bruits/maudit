@@ -170,12 +170,44 @@ export class DevServerPool {
 // Key format: "workerIndex-fixtureName"
 const workerServers = new Map<string, DevServer>();
 
+// Track used ports to avoid collisions
+const usedPorts = new Set<number>();
+
+/**
+ * Generate a deterministic port offset based on fixture name.
+ * This ensures each fixture gets a unique port range, avoiding collisions
+ * when multiple fixtures run on the same worker.
+ */
+function getFixturePortOffset(fixtureName: string): number {
+	// Simple hash function to get a number from the fixture name
+	let hash = 0;
+	for (let i = 0; i < fixtureName.length; i++) {
+		const char = fixtureName.charCodeAt(i);
+		hash = ((hash << 5) - hash) + char;
+		hash = hash & hash; // Convert to 32bit integer
+	}
+	// Use modulo to keep the offset reasonable (0-99)
+	return Math.abs(hash) % 100;
+}
+
+/**
+ * Find an available port starting from the preferred port.
+ */
+function findAvailablePort(preferredPort: number): number {
+	let port = preferredPort;
+	while (usedPorts.has(port)) {
+		port++;
+	}
+	usedPorts.add(port);
+	return port;
+}
+
 /**
  * Create a test instance with a devServer fixture for a specific fixture.
  * This allows each test file to use a different fixture while sharing the same pattern.
  *
  * @param fixtureName - Name of the fixture directory under e2e/fixtures/
- * @param basePort - Starting port number (default: 1864). Each worker gets basePort + workerIndex
+ * @param basePort - Starting port number (default: 1864). Each fixture gets a unique port based on its name.
  *
  * @example
  * ```ts
@@ -198,8 +230,10 @@ export function createTestWithFixture(fixtureName: string, basePort = 1864) {
 			let server = workerServers.get(serverKey);
 
 			if (!server) {
-				// Assign unique port based on worker index
-				const port = basePort + workerIndex;
+				// Calculate port based on fixture name hash + worker index to avoid collisions
+				const fixtureOffset = getFixturePortOffset(fixtureName);
+				const preferredPort = basePort + (workerIndex * 100) + fixtureOffset;
+				const port = findAvailablePort(preferredPort);
 
 				server = await startDevServer({
 					fixture: fixtureName,

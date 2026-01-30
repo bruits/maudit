@@ -9,6 +9,8 @@ impl Route for About {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let _image = ctx.assets.add_image("src/assets/team.png");
         let _script = ctx.assets.add_script("src/assets/about.js");
+        // Shared style with index page (for testing shared assets)
+        let _style = ctx.assets.add_style("src/assets/styles.css");
 
         // Generate a unique build ID - uses nanoseconds for uniqueness
         let build_id = SystemTime::now()
