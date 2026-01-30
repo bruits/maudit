@@ -14,7 +14,7 @@ use crate::{
         self, HashAssetType, HashConfig, PrefetchPlugin, RouteAssets, Script, TailwindPlugin,
         calculate_hash, image_cache::ImageCache, prefetch,
     },
-    build::{images::process_image, options::PrefetchStrategy},
+    build::{images::process_image, options::PrefetchStrategy, state::{BuildState, RouteIdentifier}},
     content::ContentSources,
     is_dev,
     logging::print_title,
@@ -36,20 +36,68 @@ use rayon::prelude::*;
 pub mod images;
 pub mod metadata;
 pub mod options;
+pub mod state;
+
+/// Helper to check if a route should be rebuilt during incremental builds
+fn should_rebuild_route(
+    route_id: &RouteIdentifier,
+    routes_to_rebuild: &Option<FxHashSet<RouteIdentifier>>,
+) -> bool {
+    let result = match routes_to_rebuild {
+        Some(set) => set.contains(route_id),
+        None => true, // Full build
+    };
+    
+    if !result {
+        trace!(target: "build", "Skipping route {:?} (not in rebuild set)", route_id);
+    }
+    
+    result
+}
+
+/// Helper to track all assets used by a route
+fn track_route_assets(
+    build_state: &mut BuildState,
+    route_id: &RouteIdentifier,
+    route_assets: &RouteAssets,
+) {
+    // Track images
+    for image in &route_assets.images {
+        if let Ok(canonical) = image.path().canonicalize() {
+            build_state.track_asset(canonical, route_id.clone());
+        }
+    }
+    
+    // Track scripts
+    for script in &route_assets.scripts {
+        if let Ok(canonical) = script.path().canonicalize() {
+            build_state.track_asset(canonical, route_id.clone());
+        }
+    }
+    
+    // Track styles
+    for style in &route_assets.styles {
+        if let Ok(canonical) = style.path().canonicalize() {
+            build_state.track_asset(canonical, route_id.clone());
+        }
+    }
+}
 
 pub fn execute_build(
     routes: &[&dyn FullRoute],
     content_sources: &mut ContentSources,
     options: &BuildOptions,
+    changed_files: Option<&[PathBuf]>,
     async_runtime: &tokio::runtime::Runtime,
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
-    async_runtime.block_on(async { build(routes, content_sources, options).await })
+    async_runtime.block_on(async { build(routes, content_sources, options, changed_files).await })
 }
 
 pub async fn build(
     routes: &[&dyn FullRoute],
     content_sources: &mut ContentSources,
     options: &BuildOptions,
+    changed_files: Option<&[PathBuf]>,
 ) -> Result<BuildOutput, Box<dyn std::error::Error>> {
     let build_start = Instant::now();
     let mut build_metadata = BuildOutput::new(build_start);
@@ -57,7 +105,77 @@ pub async fn build(
     // Create a directory for the output
     trace!(target: "build", "Setting up required directories...");
 
-    let clean_up_handle = if options.clean_output_dir {
+    // Determine build cache directory
+    let build_cache_dir = options.assets.image_cache_dir.parent()
+        .unwrap_or(Path::new("target/maudit_cache"))
+        .to_path_buf();
+
+    // Load build state for incremental builds
+    let mut build_state = if is_dev() {
+        BuildState::load(&build_cache_dir).unwrap_or_else(|e| {
+            debug!(target: "build", "Failed to load build state: {}", e);
+            BuildState::new()
+        })
+    } else {
+        BuildState::new()
+    };
+
+    // Determine if this is an incremental build
+    let is_incremental = is_dev() && changed_files.is_some() && !build_state.asset_to_routes.is_empty();
+    
+    let routes_to_rebuild = if is_incremental {
+        let changed = changed_files.unwrap();
+        info!(target: "build", "Incremental build: {} files changed", changed.len());
+        info!(target: "build", "Changed files: {:?}", changed);
+        
+        info!(target: "build", "Build state has {} asset mappings", build_state.asset_to_routes.len());
+        
+        let affected = build_state.get_affected_routes(changed);
+        info!(target: "build", "Rebuilding {} affected routes", affected.len());
+        info!(target: "build", "Affected routes: {:?}", affected);
+        
+        Some(affected)
+    } else {
+        if changed_files.is_some() {
+            info!(target: "build", "Full build (first run after recompilation)");
+        }
+        // Full build - clear old state
+        build_state.clear();
+        None
+    };
+    
+    // Check if we should rebundle during incremental builds
+    // Only rebundle if a changed file is in the bundler inputs
+    let should_rebundle = if is_incremental && !build_state.bundler_inputs.is_empty() {
+        let changed = changed_files.unwrap();
+        let should = changed.iter().any(|changed_file| {
+            build_state.bundler_inputs.iter().any(|bundler_input| {
+                // Check if the changed file matches any bundler input
+                // Canonicalize both paths for comparison
+                if let (Ok(changed_canonical), Ok(bundler_canonical)) = (
+                    changed_file.canonicalize(),
+                    PathBuf::from(bundler_input).canonicalize()
+                ) {
+                    changed_canonical == bundler_canonical
+                } else {
+                    false
+                }
+            })
+        });
+        
+        if should {
+            info!(target: "build", "Rebundling needed: changed file matches bundler input");
+        } else {
+            info!(target: "build", "Skipping bundler: no changed files match bundler inputs");
+        }
+        
+        should
+    } else {
+        // Not incremental or no previous bundler inputs
+        false
+    };
+
+    let clean_up_handle = if options.clean_output_dir && !is_incremental {
         let old_dist_tmp_dir = {
             let duration = SystemTime::now().duration_since(UNIX_EPOCH)?;
             let num = (duration.as_secs() + duration.subsec_nanos() as u64) % 100000;
@@ -183,50 +301,60 @@ pub async fn build(
 
             // Static base route
             if base_params.is_empty() {
-                let mut route_assets = RouteAssets::with_default_assets(
-                    &route_assets_options,
-                    Some(image_cache.clone()),
-                    default_scripts.clone(),
-                    vec![],
-                );
+                let route_id = RouteIdentifier::base(base_path.clone(), None);
+                
+                // Check if we need to rebuild this route
+                if should_rebuild_route(&route_id, &routes_to_rebuild) {
+                    let mut route_assets = RouteAssets::with_default_assets(
+                        &route_assets_options,
+                        Some(image_cache.clone()),
+                        default_scripts.clone(),
+                        vec![],
+                    );
 
-                let params = PageParams::default();
-                let url = cached_route.url(&params);
+                    let params = PageParams::default();
+                    let url = cached_route.url(&params);
 
-                let result = route.build(&mut PageContext::from_static_route(
-                    content_sources,
-                    &mut route_assets,
-                    &url,
-                    &options.base_url,
-                    None,
-                ))?;
+                    let result = route.build(&mut PageContext::from_static_route(
+                        content_sources,
+                        &mut route_assets,
+                        &url,
+                        &options.base_url,
+                        None,
+                    ))?;
 
-                let file_path = cached_route.file_path(&params, &options.output_dir);
+                    let file_path = cached_route.file_path(&params, &options.output_dir);
 
-                write_route_file(&result, &file_path)?;
+                    write_route_file(&result, &file_path)?;
 
-                info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
+                    info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
-                build_pages_images.extend(route_assets.images);
-                build_pages_scripts.extend(route_assets.scripts);
-                build_pages_styles.extend(route_assets.styles);
+                    // Track assets for this route
+                    track_route_assets(&mut build_state, &route_id, &route_assets);
 
-                build_metadata.add_page(
-                    base_path.clone(),
-                    file_path.to_string_lossy().to_string(),
-                    None,
-                );
+                    build_pages_images.extend(route_assets.images);
+                    build_pages_scripts.extend(route_assets.scripts);
+                    build_pages_styles.extend(route_assets.styles);
 
-                add_sitemap_entry(
-                    &mut sitemap_entries,
-                    normalized_base_url,
-                    &url,
-                    base_path,
-                    &route.sitemap_metadata(),
-                    &options.sitemap,
-                );
+                    build_metadata.add_page(
+                        base_path.clone(),
+                        file_path.to_string_lossy().to_string(),
+                        None,
+                    );
 
-                page_count += 1;
+                    add_sitemap_entry(
+                        &mut sitemap_entries,
+                        normalized_base_url,
+                        &url,
+                        base_path,
+                        &route.sitemap_metadata(),
+                        &options.sitemap,
+                    );
+
+                    page_count += 1;
+                } else {
+                    trace!(target: "build", "Skipping unchanged route: {}", base_path);
+                }
             } else {
                 // Dynamic base route
                 let mut route_assets = RouteAssets::with_default_assets(
@@ -250,39 +378,52 @@ pub async fn build(
 
                     // Build all pages for this route
                     for page in pages {
-                        let page_start = Instant::now();
-                        let url = cached_route.url(&page.0);
-                        let file_path = cached_route.file_path(&page.0, &options.output_dir);
-
-                        let content = route.build(&mut PageContext::from_dynamic_route(
-                            &page,
-                            content_sources,
-                            &mut route_assets,
-                            &url,
-                            &options.base_url,
-                            None,
-                        ))?;
-
-                        write_route_file(&content, &file_path)?;
-
-                        info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), &route_format_options));
-
-                        build_metadata.add_page(
+                        let route_id = RouteIdentifier::base(
                             base_path.clone(),
-                            file_path.to_string_lossy().to_string(),
                             Some(page.0.0.clone()),
                         );
+                        
+                        // Check if we need to rebuild this specific page
+                        if should_rebuild_route(&route_id, &routes_to_rebuild) {
+                            let page_start = Instant::now();
+                            let url = cached_route.url(&page.0);
+                            let file_path = cached_route.file_path(&page.0, &options.output_dir);
 
-                        add_sitemap_entry(
-                            &mut sitemap_entries,
-                            normalized_base_url,
-                            &url,
-                            base_path,
-                            &route.sitemap_metadata(),
-                            &options.sitemap,
-                        );
+                            let content = route.build(&mut PageContext::from_dynamic_route(
+                                &page,
+                                content_sources,
+                                &mut route_assets,
+                                &url,
+                                &options.base_url,
+                                None,
+                            ))?;
 
-                        page_count += 1;
+                            write_route_file(&content, &file_path)?;
+
+                            info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), &route_format_options));
+
+                            // Track assets for this page
+                            track_route_assets(&mut build_state, &route_id, &route_assets);
+
+                            build_metadata.add_page(
+                                base_path.clone(),
+                                file_path.to_string_lossy().to_string(),
+                                Some(page.0.0.clone()),
+                            );
+
+                            add_sitemap_entry(
+                                &mut sitemap_entries,
+                                normalized_base_url,
+                                &url,
+                                base_path,
+                                &route.sitemap_metadata(),
+                                &options.sitemap,
+                            );
+
+                            page_count += 1;
+                        } else {
+                            trace!(target: "build", "Skipping unchanged page: {} with params {:?}", base_path, page.0.0);
+                        }
                     }
                 }
 
@@ -299,50 +440,64 @@ pub async fn build(
 
             if variant_params.is_empty() {
                 // Static variant
-                let mut route_assets = RouteAssets::with_default_assets(
-                    &route_assets_options,
-                    Some(image_cache.clone()),
-                    default_scripts.clone(),
-                    vec![],
-                );
-
-                let params = PageParams::default();
-                let url = cached_route.variant_url(&params, &variant_id)?;
-                let file_path =
-                    cached_route.variant_file_path(&params, &options.output_dir, &variant_id)?;
-
-                let result = route.build(&mut PageContext::from_static_route(
-                    content_sources,
-                    &mut route_assets,
-                    &url,
-                    &options.base_url,
-                    Some(variant_id.clone()),
-                ))?;
-
-                write_route_file(&result, &file_path)?;
-
-                info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_start.elapsed(), &route_format_options));
-
-                build_pages_images.extend(route_assets.images);
-                build_pages_scripts.extend(route_assets.scripts);
-                build_pages_styles.extend(route_assets.styles);
-
-                build_metadata.add_page(
+                let route_id = RouteIdentifier::variant(
+                    variant_id.clone(),
                     variant_path.clone(),
-                    file_path.to_string_lossy().to_string(),
                     None,
                 );
+                
+                // Check if we need to rebuild this variant
+                if should_rebuild_route(&route_id, &routes_to_rebuild) {
+                    let mut route_assets = RouteAssets::with_default_assets(
+                        &route_assets_options,
+                        Some(image_cache.clone()),
+                        default_scripts.clone(),
+                        vec![],
+                    );
 
-                add_sitemap_entry(
-                    &mut sitemap_entries,
-                    normalized_base_url,
-                    &url,
-                    &variant_path,
-                    &route.sitemap_metadata(),
-                    &options.sitemap,
-                );
+                    let params = PageParams::default();
+                    let url = cached_route.variant_url(&params, &variant_id)?;
+                    let file_path =
+                        cached_route.variant_file_path(&params, &options.output_dir, &variant_id)?;
 
-                page_count += 1;
+                    let result = route.build(&mut PageContext::from_static_route(
+                        content_sources,
+                        &mut route_assets,
+                        &url,
+                        &options.base_url,
+                        Some(variant_id.clone()),
+                    ))?;
+
+                    write_route_file(&result, &file_path)?;
+
+                    info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_start.elapsed(), &route_format_options));
+
+                    // Track assets for this variant
+                    track_route_assets(&mut build_state, &route_id, &route_assets);
+
+                    build_pages_images.extend(route_assets.images);
+                    build_pages_scripts.extend(route_assets.scripts);
+                    build_pages_styles.extend(route_assets.styles);
+
+                    build_metadata.add_page(
+                        variant_path.clone(),
+                        file_path.to_string_lossy().to_string(),
+                        None,
+                    );
+
+                    add_sitemap_entry(
+                        &mut sitemap_entries,
+                        normalized_base_url,
+                        &url,
+                        &variant_path,
+                        &route.sitemap_metadata(),
+                        &options.sitemap,
+                    );
+
+                    page_count += 1;
+                } else {
+                    trace!(target: "build", "Skipping unchanged variant: {}", variant_path);
+                }
             } else {
                 // Dynamic variant
                 let mut route_assets = RouteAssets::with_default_assets(
@@ -365,43 +520,57 @@ pub async fn build(
 
                     // Build all pages for this variant group
                     for page in pages {
-                        let variant_page_start = Instant::now();
-                        let url = cached_route.variant_url(&page.0, &variant_id)?;
-                        let file_path = cached_route.variant_file_path(
-                            &page.0,
-                            &options.output_dir,
-                            &variant_id,
-                        )?;
-
-                        let content = route.build(&mut PageContext::from_dynamic_route(
-                            &page,
-                            content_sources,
-                            &mut route_assets,
-                            &url,
-                            &options.base_url,
-                            Some(variant_id.clone()),
-                        ))?;
-
-                        write_route_file(&content, &file_path)?;
-
-                        info!(target: "pages", "│  ├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_page_start.elapsed(), &route_format_options));
-
-                        build_metadata.add_page(
+                        let route_id = RouteIdentifier::variant(
+                            variant_id.clone(),
                             variant_path.clone(),
-                            file_path.to_string_lossy().to_string(),
                             Some(page.0.0.clone()),
                         );
+                        
+                        // Check if we need to rebuild this specific variant page
+                        if should_rebuild_route(&route_id, &routes_to_rebuild) {
+                            let variant_page_start = Instant::now();
+                            let url = cached_route.variant_url(&page.0, &variant_id)?;
+                            let file_path = cached_route.variant_file_path(
+                                &page.0,
+                                &options.output_dir,
+                                &variant_id,
+                            )?;
 
-                        add_sitemap_entry(
-                            &mut sitemap_entries,
-                            normalized_base_url,
-                            &url,
-                            &variant_path,
-                            &route.sitemap_metadata(),
-                            &options.sitemap,
-                        );
+                            let content = route.build(&mut PageContext::from_dynamic_route(
+                                &page,
+                                content_sources,
+                                &mut route_assets,
+                                &url,
+                                &options.base_url,
+                                Some(variant_id.clone()),
+                            ))?;
 
-                        page_count += 1;
+                            write_route_file(&content, &file_path)?;
+
+                            info!(target: "pages", "│  ├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_page_start.elapsed(), &route_format_options));
+
+                            // Track assets for this variant page
+                            track_route_assets(&mut build_state, &route_id, &route_assets);
+
+                            build_metadata.add_page(
+                                variant_path.clone(),
+                                file_path.to_string_lossy().to_string(),
+                                Some(page.0.0.clone()),
+                            );
+
+                            add_sitemap_entry(
+                                &mut sitemap_entries,
+                                normalized_base_url,
+                                &url,
+                                &variant_path,
+                                &route.sitemap_metadata(),
+                                &options.sitemap,
+                            );
+
+                            page_count += 1;
+                        } else {
+                            trace!(target: "build", "Skipping unchanged variant page: {} with params {:?}", variant_path, page.0.0);
+                        }
                     }
                 }
 
@@ -421,7 +590,7 @@ pub async fn build(
         fs::create_dir_all(&route_assets_options.output_assets_dir)?;
     }
 
-    if !build_pages_styles.is_empty() || !build_pages_scripts.is_empty() {
+    if !build_pages_styles.is_empty() || !build_pages_scripts.is_empty() || (is_incremental && should_rebundle) {
         let assets_start = Instant::now();
         print_title("generating assets");
 
@@ -439,7 +608,7 @@ pub async fn build(
             })
             .collect::<Vec<InputItem>>();
 
-        let bundler_inputs = build_pages_scripts
+        let mut bundler_inputs = build_pages_scripts
             .iter()
             .map(|script| InputItem {
                 import: script.path().to_string_lossy().to_string(),
@@ -454,6 +623,33 @@ pub async fn build(
             .chain(css_inputs.into_iter())
             .collect::<Vec<InputItem>>();
 
+        // During incremental builds, merge with previous bundler inputs
+        // to ensure we bundle all assets, not just from rebuilt routes
+        if is_incremental && !build_state.bundler_inputs.is_empty() {
+            debug!(target: "bundling", "Merging with {} previous bundler inputs", build_state.bundler_inputs.len());
+            
+            let current_imports: FxHashSet<String> = bundler_inputs
+                .iter()
+                .map(|input| input.import.clone())
+                .collect();
+            
+            // Add previous inputs that aren't in the current set
+            for prev_input in &build_state.bundler_inputs {
+                if !current_imports.contains(prev_input) {
+                    bundler_inputs.push(InputItem {
+                        import: prev_input.clone(),
+                        name: Some(
+                            PathBuf::from(prev_input)
+                                .file_stem()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .to_string(),
+                        ),
+                    });
+                }
+            }
+        }
+
         debug!(
             target: "bundling",
             "Bundler inputs: {:?}",
@@ -462,6 +658,14 @@ pub async fn build(
                 .map(|input| input.import.clone())
                 .collect::<Vec<String>>()
         );
+
+        // Store bundler inputs in build state for next incremental build
+        if is_dev() {
+            build_state.bundler_inputs = bundler_inputs
+                .iter()
+                .map(|input| input.import.clone())
+                .collect();
+        }
 
         if !bundler_inputs.is_empty() {
             let mut module_types_hashmap = FxHashMap::default();
@@ -598,6 +802,15 @@ pub async fn build(
     info!(target: "SKIP_FORMAT", "{}", "");
     info!(target: "build", "{}", format!("Build completed in {}", format_elapsed_time(build_start.elapsed(), &section_format_options)).bold());
 
+    // Save build state for next incremental build
+    if is_dev() {
+        if let Err(e) = build_state.save(&build_cache_dir) {
+            warn!(target: "build", "Failed to save build state: {}", e);
+        } else {
+            debug!(target: "build", "Build state saved to {}", build_cache_dir.join("build_state.json").display());
+        }
+    }
+
     if let Some(clean_up_handle) = clean_up_handle {
         clean_up_handle.await?;
     }
@@ -680,6 +893,7 @@ fn write_route_file(content: &[u8], file_path: &PathBuf) -> Result<(), io::Error
         fs::create_dir_all(parent_dir)?
     }
 
+    trace!(target: "build", "Writing HTML file: {}", file_path.display());
     fs::write(file_path, content)?;
 
     Ok(())

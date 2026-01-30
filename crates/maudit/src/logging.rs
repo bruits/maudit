@@ -29,8 +29,12 @@ pub fn init_logging() {
 
     let _ = Builder::from_env(logging_env)
         .format(|buf, record| {
-            if std::env::args().any(|arg| arg == "--quiet") || std::env::var("MAUDIT_QUIET").is_ok()
-            {
+            if std::env::args().any(|arg| arg == "--quiet") {
+                return Ok(());
+            }
+
+            // In quiet mode, only show build target logs (for debugging incremental builds)
+            if std::env::var("MAUDIT_QUIET").is_ok() && record.target() != "build" {
                 return Ok(());
             }
 

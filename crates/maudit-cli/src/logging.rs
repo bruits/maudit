@@ -2,7 +2,7 @@ use colored::{ColoredString, Colorize};
 use std::{fmt, time::Duration};
 use tracing::{Event, Subscriber};
 use tracing_subscriber::{
-    fmt::{FmtContext, FormatEvent, FormatFields, format},
+    fmt::{format, FmtContext, FormatEvent, FormatFields},
     layer::SubscriberExt,
     registry::LookupSpan,
     util::SubscriberInitExt,
@@ -135,7 +135,11 @@ pub fn init_logging() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                format!("{}=info,tower_http=info", env!("CARGO_CRATE_NAME")).into()
+                format!(
+                    "{}=info,maudit=info,tower_http=info",
+                    env!("CARGO_CRATE_NAME")
+                )
+                .into()
             }),
         )
         .with(tracing_formatter)

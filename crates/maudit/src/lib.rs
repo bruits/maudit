@@ -54,7 +54,7 @@ pub mod maud {
 // Internal modules
 mod logging;
 
-use std::env;
+use std::{env, path::PathBuf};
 
 use build::execute_build;
 use content::ContentSources;
@@ -212,5 +212,17 @@ pub fn coronate(
         .enable_all()
         .build()?;
 
-    execute_build(routes, &mut content_sources, &options, &async_runtime)
+    // Check for changed files from environment variable (set by CLI in dev mode)
+    let changed_files = env::var("MAUDIT_CHANGED_FILES")
+        .ok()
+        .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+        .map(|paths| paths.into_iter().map(PathBuf::from).collect::<Vec<_>>());
+
+    execute_build(
+        routes,
+        &mut content_sources,
+        &options,
+        changed_files.as_deref(),
+        &async_runtime,
+    )
 }

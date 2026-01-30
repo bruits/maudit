@@ -49,7 +49,7 @@ pub async fn start_dev_env(cwd: &str, host: bool, port: Option<u16>) -> Result<(
         .collect::<Vec<_>>();
 
     let mut debouncer = new_debouncer(
-        std::time::Duration::from_millis(100),
+        std::time::Duration::from_millis(200), // Longer debounce to better batch rapid file changes
         None,
         move |result: DebounceEventResult| {
             tx.blocking_send(result).unwrap_or(());
@@ -164,9 +164,31 @@ pub async fn start_dev_env(cwd: &str, host: bool, port: Option<u16>) -> Result<(
                                     }
                                 } else {
                                     // Normal rebuild - check if we need full recompilation or just rerun
-                                    let changed_paths: Vec<PathBuf> = events.iter()
+                                    let mut changed_paths: Vec<PathBuf> = events.iter()
                                         .flat_map(|e| e.paths.iter().cloned())
+                                        .filter(|p| {
+                                            // Only keep files with known asset extensions
+                                            if let Some(ext) = p.extension() {
+                                                let ext_str = ext.to_string_lossy().to_lowercase();
+                                                matches!(ext_str.as_str(), 
+                                                    "rs" | "toml" | "css" | "js" | "ts" | "jsx" | "tsx" | 
+                                                    "html" | "md" | "txt" | "json" | "yaml" | "yml" |
+                                                    "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "ico" |
+                                                    "woff" | "woff2" | "ttf" | "eot" | "otf")
+                                            } else {
+                                                false
+                                            }
+                                        })
                                         .collect();
+                                    
+                                    // Deduplicate paths
+                                    changed_paths.sort();
+                                    changed_paths.dedup();
+                                    
+                                    if changed_paths.is_empty() {
+                                        // No file changes, only directory changes - skip rebuild
+                                        continue;
+                                    }
                                     
                                     let needs_recompile = build_manager_watcher.needs_recompile(&changed_paths).await;
                                     
@@ -188,8 +210,9 @@ pub async fn start_dev_env(cwd: &str, host: bool, port: Option<u16>) -> Result<(
                                         // Just rerun the binary without recompiling
                                         info!(name: "watch", "Non-dependency files changed, rerunning binary...");
                                         let build_manager_clone = build_manager_watcher.clone();
+                                        let changed_paths_clone = changed_paths.clone();
                                         tokio::spawn(async move {
-                                            match build_manager_clone.rerun_binary().await {
+                                            match build_manager_clone.rerun_binary(&changed_paths_clone).await {
                                                 Ok(_) => {
                                                     // Rerun completed (success or failure already logged)
                                                 }

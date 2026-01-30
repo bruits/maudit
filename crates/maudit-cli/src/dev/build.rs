@@ -78,7 +78,10 @@ impl BuildManager {
     }
 
     /// Rerun the binary without recompiling
-    pub async fn rerun_binary(&self) -> Result<bool, Box<dyn std::error::Error>> {
+    pub async fn rerun_binary(
+        &self,
+        changed_paths: &[PathBuf],
+    ) -> Result<bool, Box<dyn std::error::Error>> {
         let binary_path = self.binary_path.read().await;
 
         let Some(path) = binary_path.as_ref() else {
@@ -91,6 +94,9 @@ impl BuildManager {
             return self.start_build().await;
         }
 
+        // Log that we're doing an incremental build
+        info!(name: "build", "Incremental build: {} files changed", changed_paths.len());
+        debug!(name: "build", "Changed files: {:?}", changed_paths);
         info!(name: "build", "Rerunning binary without recompilation...");
 
         // Notify that build is starting (even though we're just rerunning)
@@ -104,8 +110,14 @@ impl BuildManager {
 
         let build_start_time = Instant::now();
 
+        // Serialize changed paths to JSON for the binary
+        let changed_files_json = serde_json::to_string(changed_paths)?;
+
         let child = Command::new(path)
-            .envs([("MAUDIT_DEV", "true"), ("MAUDIT_QUIET", "true")])
+            .envs([
+                ("MAUDIT_DEV", "true"),
+                ("MAUDIT_CHANGED_FILES", changed_files_json.as_str()),
+            ])
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()?;
@@ -118,6 +130,12 @@ impl BuildManager {
             format_elapsed_time(duration, &FormatElapsedTimeOptions::default_dev());
 
         if output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            println!("{}", stdout);
+            if !stderr.is_empty() {
+                println!("{}", stderr);
+            }
             info!(name: "build", "Binary rerun finished {}", formatted_elapsed_time);
             update_status(
                 &self.websocket_tx,
@@ -186,7 +204,6 @@ impl BuildManager {
             ])
             .envs([
                 ("MAUDIT_DEV", "true"),
-                ("MAUDIT_QUIET", "true"),
                 ("CARGO_TERM_COLOR", "always"),
             ])
             .stdout(std::process::Stdio::piped())
@@ -197,13 +214,13 @@ impl BuildManager {
         let mut stdout = child.stdout.take().unwrap();
         let mut stderr = child.stderr.take().unwrap();
 
+        let build_start_time = Instant::now();
         let websocket_tx = self.websocket_tx.clone();
         let current_status = self.current_status.clone();
         let dep_tracker_clone = self.dep_tracker.clone();
         let binary_path_clone = self.binary_path.clone();
         let target_dir_clone = self.target_dir.clone();
         let binary_name_clone = self.binary_name.clone();
-        let build_start_time = Instant::now();
 
         // Create a channel to get the build result back
         let (result_tx, mut result_rx) = tokio::sync::mpsc::channel::<bool>(1);
