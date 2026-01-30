@@ -235,37 +235,20 @@ impl Default for BuildOptions {
 
 /// Get the site name for cache directory purposes.
 ///
-/// Tries to read the package name from Cargo.toml in the current directory,
+/// Uses the current executable's name (which matches the package/binary name),
 /// falling back to the current directory name.
 fn get_site_name() -> String {
-    // Try to read package name from Cargo.toml
-    if let Ok(cargo_toml) = fs::read_to_string("Cargo.toml") {
-        // Simple parsing - look for name = "..." in [package] section
-        let mut in_package = false;
-        for line in cargo_toml.lines() {
-            let trimmed = line.trim();
-            if trimmed == "[package]" {
-                in_package = true;
-            } else if trimmed.starts_with('[') {
-                in_package = false;
-            } else if in_package && trimmed.starts_with("name") {
-                // Parse: name = "package-name" or name = 'package-name'
-                if let Some(eq_pos) = trimmed.find('=') {
-                    let value = trimmed[eq_pos + 1..].trim();
-                    let value = value.trim_matches('"').trim_matches('\'');
-                    if !value.is_empty() {
-                        return value.to_string();
-                    }
-                }
-            }
-        }
-    }
-
-    // Fallback to current directory name
-    std::env::current_dir()
+    // Get the binary name from the current executable
+    std::env::current_exe()
         .ok()
         .and_then(|p| p.file_name().map(|s| s.to_string_lossy().to_string()))
-        .unwrap_or_else(|| "default".to_string())
+        .unwrap_or_else(|| {
+            // Fallback to current directory name
+            std::env::current_dir()
+                .ok()
+                .and_then(|p| p.file_name().map(|s| s.to_string_lossy().to_string()))
+                .unwrap_or_else(|| "default".to_string())
+        })
 }
 
 /// Find the target directory using multiple strategies

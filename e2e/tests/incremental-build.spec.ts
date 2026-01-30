@@ -124,6 +124,7 @@ test.describe("Incremental Build", () => {
 		stylesCss: resolve(fixturePath, "src", "assets", "styles.css"),
 		logoPng: resolve(fixturePath, "src", "assets", "logo.png"),
 		teamPng: resolve(fixturePath, "src", "assets", "team.png"),
+		bgPng: resolve(fixturePath, "src", "assets", "bg.png"),
 	};
 	
 	// Output HTML paths
@@ -145,6 +146,7 @@ test.describe("Incremental Build", () => {
 		originals.stylesCss = readFileSync(assets.stylesCss, "utf-8");
 		originals.logoPng = readFileSync(assets.logoPng); // binary
 		originals.teamPng = readFileSync(assets.teamPng); // binary
+		originals.bgPng = readFileSync(assets.bgPng); // binary
 	});
 
 	test.afterAll(async () => {
@@ -156,6 +158,7 @@ test.describe("Incremental Build", () => {
 		writeFileSync(assets.stylesCss, originals.stylesCss);
 		writeFileSync(assets.logoPng, originals.logoPng);
 		writeFileSync(assets.teamPng, originals.teamPng);
+		writeFileSync(assets.bgPng, originals.bgPng);
 	});
 
 	// ============================================================
@@ -367,6 +370,43 @@ test.describe("Incremental Build", () => {
 		const after = recordBuildIds(htmlPaths);
 		expect(after.index).toBe(before.index);
 		expect(after.about).not.toBe(before.about);
+		expect(after.blog).not.toBe(before.blog);
+	});
+
+	// ============================================================
+	// TEST 7: CSS url() asset dependency (bg.png via blog.css → /blog)
+	// ============================================================
+	test("CSS url() asset change triggers rebundling and rebuilds affected routes", async ({ devServer }) => {
+		let testCounter = 0;
+		
+		async function triggerChange(suffix: string) {
+			testCounter++;
+			devServer.clearLogs();
+			// Modify bg.png - this is referenced via url() in blog.css
+			// Changing it should trigger rebundling and rebuild /blog
+			const modified = Buffer.concat([
+				originals.bgPng as Buffer,
+				Buffer.from(`<!-- test-${testCounter}-${suffix} -->`)
+			]);
+			writeFileSync(assets.bgPng, modified);
+			return await waitForBuildComplete(devServer, 30000);
+		}
+		
+		await setupIncrementalState(devServer, triggerChange);
+
+		const before = recordBuildIds(htmlPaths);
+		expect(before.blog).not.toBeNull();
+		
+		await new Promise(resolve => setTimeout(resolve, 500));
+		
+		const logs = await triggerChange("final");
+		
+		// Verify incremental build triggered
+		expect(isIncrementalBuild(logs)).toBe(true);
+		
+		// Blog should be rebuilt (uses blog.css which references bg.png via url())
+		// The bundler should have been re-run to update the hashed asset reference
+		const after = recordBuildIds(htmlPaths);
 		expect(after.blog).not.toBe(before.blog);
 	});
 });

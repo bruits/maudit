@@ -116,6 +116,7 @@ impl BuildManager {
         let child = Command::new(path)
             .envs([
                 ("MAUDIT_DEV", "true"),
+                ("MAUDIT_QUIET", "true"),
                 ("MAUDIT_CHANGED_FILES", changed_files_json.as_str()),
             ])
             .stdout(std::process::Stdio::piped())
@@ -130,12 +131,6 @@ impl BuildManager {
             format_elapsed_time(duration, &FormatElapsedTimeOptions::default_dev());
 
         if output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            println!("{}", stdout);
-            if !stderr.is_empty() {
-                println!("{}", stderr);
-            }
             info!(name: "build", "Binary rerun finished {}", formatted_elapsed_time);
             update_status(
                 &self.websocket_tx,
@@ -204,6 +199,7 @@ impl BuildManager {
             ])
             .envs([
                 ("MAUDIT_DEV", "true"),
+                ("MAUDIT_QUIET", "true"),
                 ("CARGO_TERM_COLOR", "always"),
             ])
             .stdout(std::process::Stdio::piped())

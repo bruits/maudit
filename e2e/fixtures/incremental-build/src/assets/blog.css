@@ -2,19 +2,9 @@
 .blog-post {
     margin: 20px;
 }
-/* test */
-/* test2 */
-/* test5 */
-/* test6 */
-/* test */
-/* test3 */
-/* test5 */
-/* changed */
-/* change2 */
-/* change */
-/* change */
-/* change2 */
-/* change2 */
-/* change2 */
-/* change2 */
-/* change2 */
+
+/* Background image referenced via url() - tests CSS asset dependency tracking */
+.blog-header {
+    background-image: url('./bg.png');
+    background-size: cover;
+}

@@ -14,7 +14,11 @@ use crate::{
         self, HashAssetType, HashConfig, PrefetchPlugin, RouteAssets, Script, TailwindPlugin,
         calculate_hash, image_cache::ImageCache, prefetch,
     },
-    build::{images::process_image, options::PrefetchStrategy, state::{BuildState, RouteIdentifier}},
+    build::{
+        images::process_image,
+        options::PrefetchStrategy,
+        state::{BuildState, RouteIdentifier},
+    },
     content::ContentSources,
     is_dev,
     logging::print_title,
@@ -48,11 +52,11 @@ fn should_rebuild_route(
         Some(set) => set.contains(route_id),
         None => true, // Full build
     };
-    
+
     if !result {
         trace!(target: "build", "Skipping route {:?} (not in rebuild set)", route_id);
     }
-    
+
     result
 }
 
@@ -68,14 +72,14 @@ fn track_route_assets(
             build_state.track_asset(canonical, route_id.clone());
         }
     }
-    
+
     // Track scripts
     for script in &route_assets.scripts {
         if let Ok(canonical) = script.path().canonicalize() {
             build_state.track_asset(canonical, route_id.clone());
         }
     }
-    
+
     // Track styles
     for style in &route_assets.styles {
         if let Ok(canonical) = style.path().canonicalize() {
@@ -123,19 +127,20 @@ pub async fn build(
     debug!(target: "build", "options.incremental: {}, changed_files.is_some(): {}", options.incremental, changed_files.is_some());
 
     // Determine if this is an incremental build
-    let is_incremental = options.incremental && changed_files.is_some() && !build_state.asset_to_routes.is_empty();
-    
+    let is_incremental =
+        options.incremental && changed_files.is_some() && !build_state.asset_to_routes.is_empty();
+
     let routes_to_rebuild = if is_incremental {
         let changed = changed_files.unwrap();
         info!(target: "build", "Incremental build: {} files changed", changed.len());
         info!(target: "build", "Changed files: {:?}", changed);
-        
+
         info!(target: "build", "Build state has {} asset mappings", build_state.asset_to_routes.len());
-        
+
         let affected = build_state.get_affected_routes(changed);
         info!(target: "build", "Rebuilding {} affected routes", affected.len());
         info!(target: "build", "Affected routes: {:?}", affected);
-        
+
         Some(affected)
     } else {
         if changed_files.is_some() {
@@ -145,11 +150,11 @@ pub async fn build(
         build_state.clear();
         None
     };
-    
+
     // Check if we should rebundle during incremental builds
     // Rebundle if a changed file is either:
     // 1. A direct bundler input (entry point)
-    // 2. A transitive dependency tracked in asset_to_routes (JS/CSS/TS files)
+    // 2. A transitive dependency tracked in asset_to_routes (any file the bundler processed)
     let should_rebundle = if is_incremental && !build_state.bundler_inputs.is_empty() {
         let changed = changed_files.unwrap();
         let should = changed.iter().any(|changed_file| {
@@ -157,36 +162,33 @@ pub async fn build(
             let is_bundler_input = build_state.bundler_inputs.iter().any(|bundler_input| {
                 if let (Ok(changed_canonical), Ok(bundler_canonical)) = (
                     changed_file.canonicalize(),
-                    PathBuf::from(bundler_input).canonicalize()
+                    PathBuf::from(bundler_input).canonicalize(),
                 ) {
                     changed_canonical == bundler_canonical
                 } else {
                     false
                 }
             });
-            
+
             if is_bundler_input {
                 return true;
             }
-            
-            // Check if it's a transitive dependency (JS/CSS/TS file in asset_to_routes)
-            if let Some(ext) = changed_file.extension().and_then(|e| e.to_str()) {
-                let is_bundleable = matches!(ext.to_lowercase().as_str(), "js" | "ts" | "jsx" | "tsx" | "css");
-                if is_bundleable
-                    && let Ok(canonical) = changed_file.canonicalize() {
-                        return build_state.asset_to_routes.contains_key(&canonical);
-                    }
+
+            // Check if it's a transitive dependency tracked by the bundler
+            // (JS/TS modules, CSS files, or assets like images/fonts referenced via url())
+            if let Ok(canonical) = changed_file.canonicalize() {
+                return build_state.asset_to_routes.contains_key(&canonical);
             }
-            
+
             false
         });
-        
+
         if should {
             info!(target: "build", "Rebundling needed: changed file affects bundled assets");
         } else {
             info!(target: "build", "Skipping bundler: no changed files affect bundled assets");
         }
-        
+
         should
     } else {
         // Not incremental or no previous bundler inputs
@@ -320,7 +322,7 @@ pub async fn build(
             // Static base route
             if base_params.is_empty() {
                 let route_id = RouteIdentifier::base(base_path.clone(), None);
-                
+
                 // Check if we need to rebuild this route
                 if should_rebuild_route(&route_id, &routes_to_rebuild) {
                     let mut route_assets = RouteAssets::with_default_assets(
@@ -396,11 +398,9 @@ pub async fn build(
 
                     // Build all pages for this route
                     for page in pages {
-                        let route_id = RouteIdentifier::base(
-                            base_path.clone(),
-                            Some(page.0.0.clone()),
-                        );
-                        
+                        let route_id =
+                            RouteIdentifier::base(base_path.clone(), Some(page.0.0.clone()));
+
                         // Check if we need to rebuild this specific page
                         if should_rebuild_route(&route_id, &routes_to_rebuild) {
                             let page_start = Instant::now();
@@ -458,12 +458,9 @@ pub async fn build(
 
             if variant_params.is_empty() {
                 // Static variant
-                let route_id = RouteIdentifier::variant(
-                    variant_id.clone(),
-                    variant_path.clone(),
-                    None,
-                );
-                
+                let route_id =
+                    RouteIdentifier::variant(variant_id.clone(), variant_path.clone(), None);
+
                 // Check if we need to rebuild this variant
                 if should_rebuild_route(&route_id, &routes_to_rebuild) {
                     let mut route_assets = RouteAssets::with_default_assets(
@@ -475,8 +472,11 @@ pub async fn build(
 
                     let params = PageParams::default();
                     let url = cached_route.variant_url(&params, &variant_id)?;
-                    let file_path =
-                        cached_route.variant_file_path(&params, &options.output_dir, &variant_id)?;
+                    let file_path = cached_route.variant_file_path(
+                        &params,
+                        &options.output_dir,
+                        &variant_id,
+                    )?;
 
                     let result = route.build(&mut PageContext::from_static_route(
                         content_sources,
@@ -543,7 +543,7 @@ pub async fn build(
                             variant_path.clone(),
                             Some(page.0.0.clone()),
                         );
-                        
+
                         // Check if we need to rebuild this specific variant page
                         if should_rebuild_route(&route_id, &routes_to_rebuild) {
                             let variant_page_start = Instant::now();
@@ -608,7 +608,10 @@ pub async fn build(
         fs::create_dir_all(&route_assets_options.output_assets_dir)?;
     }
 
-    if !build_pages_styles.is_empty() || !build_pages_scripts.is_empty() || (is_incremental && should_rebundle) {
+    if !build_pages_styles.is_empty()
+        || !build_pages_scripts.is_empty()
+        || (is_incremental && should_rebundle)
+    {
         let assets_start = Instant::now();
         print_title("generating assets");
 
@@ -645,12 +648,12 @@ pub async fn build(
         // to ensure we bundle all assets, not just from rebuilt routes
         if is_incremental && !build_state.bundler_inputs.is_empty() {
             debug!(target: "bundling", "Merging with {} previous bundler inputs", build_state.bundler_inputs.len());
-            
+
             let current_imports: FxHashSet<String> = bundler_inputs
                 .iter()
                 .map(|input| input.import.clone())
                 .collect();
-            
+
             // Add previous inputs that aren't in the current set
             for prev_input in &build_state.bundler_inputs {
                 if !current_imports.contains(prev_input) {
@@ -687,8 +690,21 @@ pub async fn build(
 
         if !bundler_inputs.is_empty() {
             let mut module_types_hashmap = FxHashMap::default();
+            // Fonts
             module_types_hashmap.insert("woff".to_string(), ModuleType::Asset);
             module_types_hashmap.insert("woff2".to_string(), ModuleType::Asset);
+            module_types_hashmap.insert("ttf".to_string(), ModuleType::Asset);
+            module_types_hashmap.insert("otf".to_string(), ModuleType::Asset);
+            module_types_hashmap.insert("eot".to_string(), ModuleType::Asset);
+            // Images
+            module_types_hashmap.insert("png".to_string(), ModuleType::Asset);
+            module_types_hashmap.insert("jpg".to_string(), ModuleType::Asset);
+            module_types_hashmap.insert("jpeg".to_string(), ModuleType::Asset);
+            module_types_hashmap.insert("gif".to_string(), ModuleType::Asset);
+            module_types_hashmap.insert("svg".to_string(), ModuleType::Asset);
+            module_types_hashmap.insert("webp".to_string(), ModuleType::Asset);
+            module_types_hashmap.insert("avif".to_string(), ModuleType::Asset);
+            module_types_hashmap.insert("ico".to_string(), ModuleType::Asset);
 
             let mut bundler = Bundler::with_plugins(
                 BundlerOptions {
@@ -726,7 +742,11 @@ pub async fn build(
 
             // Track transitive dependencies from bundler output
             // For each chunk, map all its modules to the routes that use the entry point
+            // For assets (images, fonts via CSS url()), map them to all routes using any entry point
             if options.incremental {
+                // First, collect all routes that use any bundler entry point
+                let mut all_bundler_routes: FxHashSet<RouteIdentifier> = FxHashSet::default();
+
                 for output in &result.assets {
                     if let Output::Chunk(chunk) = output {
                         // Get the entry point for this chunk
@@ -734,14 +754,17 @@ pub async fn build(
                             // Try to find routes using this entry point
                             let entry_path = PathBuf::from(facade_module_id.as_str());
                             let canonical_entry = entry_path.canonicalize().ok();
-                            
+
                             // Look up routes for this entry point
                             let routes = canonical_entry
                                 .as_ref()
                                 .and_then(|p| build_state.asset_to_routes.get(p))
                                 .cloned();
-                            
+
                             if let Some(routes) = routes {
+                                // Collect routes for asset tracking later
+                                all_bundler_routes.extend(routes.iter().cloned());
+
                                 // Register all modules in this chunk as dependencies for those routes
                                 let mut transitive_count = 0;
                                 for module_id in &chunk.module_ids {
@@ -750,7 +773,10 @@ pub async fn build(
                                         // Skip the entry point itself (already tracked)
                                         if Some(&canonical_module) != canonical_entry.as_ref() {
                                             for route in &routes {
-                                                build_state.track_asset(canonical_module.clone(), route.clone());
+                                                build_state.track_asset(
+                                                    canonical_module.clone(),
+                                                    route.clone(),
+                                                );
                                             }
                                             transitive_count += 1;
                                         }
@@ -761,6 +787,31 @@ pub async fn build(
                                 }
                             }
                         }
+                    }
+                }
+
+                // Now track Output::Asset items (images, fonts, etc. referenced via CSS url() or JS imports)
+                // These are mapped to all routes that use any bundler entry point
+                if !all_bundler_routes.is_empty() {
+                    let mut asset_count = 0;
+                    for output in &result.assets {
+                        if let Output::Asset(asset) = output {
+                            for original_file in &asset.original_file_names {
+                                let asset_path = PathBuf::from(original_file);
+                                if let Ok(canonical_asset) = asset_path.canonicalize() {
+                                    for route in &all_bundler_routes {
+                                        build_state.track_asset(
+                                            canonical_asset.clone(),
+                                            route.clone(),
+                                        );
+                                    }
+                                    asset_count += 1;
+                                }
+                            }
+                        }
+                    }
+                    if asset_count > 0 {
+                        debug!(target: "build", "Tracked {} bundler assets for {} routes", asset_count, all_bundler_routes.len());
                     }
                 }
             }

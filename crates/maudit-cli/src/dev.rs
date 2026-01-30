@@ -11,7 +11,10 @@ use notify::{
 use notify_debouncer_full::{DebounceEventResult, DebouncedEvent, new_debouncer};
 use quanta::Instant;
 use server::WebSocketMessage;
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 use tokio::{
     signal,
     sync::{broadcast, mpsc::channel},
@@ -21,7 +24,11 @@ use tracing::{error, info};
 
 use crate::dev::build::BuildManager;
 
-pub async fn start_dev_env(cwd: &str, host: bool, port: Option<u16>) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn start_dev_env(
+    cwd: &str,
+    host: bool,
+    port: Option<u16>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let start_time = Instant::now();
     info!(name: "dev", "Preparing dev environment…");
 
@@ -166,32 +173,19 @@ pub async fn start_dev_env(cwd: &str, host: bool, port: Option<u16>) -> Result<(
                                     // Normal rebuild - check if we need full recompilation or just rerun
                                     let mut changed_paths: Vec<PathBuf> = events.iter()
                                         .flat_map(|e| e.paths.iter().cloned())
-                                        .filter(|p| {
-                                            // Only keep files with known asset extensions
-                                            if let Some(ext) = p.extension() {
-                                                let ext_str = ext.to_string_lossy().to_lowercase();
-                                                matches!(ext_str.as_str(), 
-                                                    "rs" | "toml" | "css" | "js" | "ts" | "jsx" | "tsx" | 
-                                                    "html" | "md" | "txt" | "json" | "yaml" | "yml" |
-                                                    "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "ico" |
-                                                    "woff" | "woff2" | "ttf" | "eot" | "otf")
-                                            } else {
-                                                false
-                                            }
-                                        })
                                         .collect();
-                                    
+
                                     // Deduplicate paths
                                     changed_paths.sort();
                                     changed_paths.dedup();
-                                    
+
                                     if changed_paths.is_empty() {
                                         // No file changes, only directory changes - skip rebuild
                                         continue;
                                     }
-                                    
+
                                     let needs_recompile = build_manager_watcher.needs_recompile(&changed_paths).await;
-                                    
+
                                     if needs_recompile {
                                         // Need to recompile - spawn in background so file watcher can continue
                                         info!(name: "watch", "Files changed, rebuilding...");
