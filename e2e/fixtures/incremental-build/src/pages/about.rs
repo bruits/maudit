@@ -1,5 +1,6 @@
 use maud::{html, Markup};
 use maudit::route::prelude::*;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[route("/about")]
 pub struct About;
@@ -9,12 +10,18 @@ impl Route for About {
         let _image = ctx.assets.add_image("src/assets/team.png");
         let _script = ctx.assets.add_script("src/assets/about.js");
 
+        // Generate a unique build ID - uses nanoseconds for uniqueness
+        let build_id = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos().to_string())
+            .unwrap_or_else(|_| "0".to_string());
+
         html! {
             html {
                 head {
                     title { "About Page" }
                 }
-                body {
+                body data-build-id=(build_id) {
                     h1 id="title" { "About Us" }
                     p id="content" { "Learn more about us" }
                 }

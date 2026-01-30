@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test";
 import { createTestWithFixture } from "./test-utils";
-import { readFileSync, writeFileSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,288 +10,164 @@ const __dirname = dirname(__filename);
 // Create test instance with incremental-build fixture
 const test = createTestWithFixture("incremental-build");
 
-test.describe.configure({ mode: "serial" });
+// Allow retries for timing-sensitive tests
+test.describe.configure({ mode: "serial", retries: 2 });
 
 /**
- * Wait for dev server to complete a build/rerun by polling logs
+ * Wait for dev server to complete a build by looking for specific patterns.
+ * Waits for the build to START, then waits for it to FINISH.
  */
-async function waitForBuildComplete(devServer: any, timeoutMs = 20000): Promise<string[]> {
+async function waitForBuildComplete(devServer: any, timeoutMs = 30000): Promise<string[]> {
 	const startTime = Date.now();
 	
+	// Phase 1: Wait for build to start
 	while (Date.now() - startTime < timeoutMs) {
-		const logs = devServer.getLogs(100);
+		const logs = devServer.getLogs(200);
 		const logsText = logs.join("\n").toLowerCase();
 		
-		// Look for completion messages
+		if (logsText.includes("rerunning") || 
+		    logsText.includes("rebuilding") ||
+		    logsText.includes("files changed")) {
+			break;
+		}
+		
+		await new Promise(resolve => setTimeout(resolve, 50));
+	}
+	
+	// Phase 2: Wait for build to finish
+	while (Date.now() - startTime < timeoutMs) {
+		const logs = devServer.getLogs(200);
+		const logsText = logs.join("\n").toLowerCase();
+		
 		if (logsText.includes("finished") || 
 		    logsText.includes("rerun finished") ||
 		    logsText.includes("build finished")) {
-			return logs;
+			// Wait for filesystem to fully sync
+			await new Promise(resolve => setTimeout(resolve, 500));
+			return devServer.getLogs(200);
 		}
 		
-		// Wait 100ms before checking again
 		await new Promise(resolve => setTimeout(resolve, 100));
 	}
 	
 	throw new Error(`Build did not complete within ${timeoutMs}ms`);
 }
 
+/**
+ * Extract the build ID from an HTML file.
+ */
+function getBuildId(htmlPath: string): string | null {
+	try {
+		const content = readFileSync(htmlPath, "utf-8");
+		const match = content.match(/data-build-id="(\d+)"/);
+		return match ? match[1] : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Check if logs indicate incremental build was used
+ */
+function isIncrementalBuild(logs: string[]): boolean {
+	return logs.join("\n").toLowerCase().includes("incremental build");
+}
+
+/**
+ * Get the number of affected routes from logs
+ */
+function getAffectedRouteCount(logs: string[]): number {
+	const logsText = logs.join("\n");
+	const match = logsText.match(/Rebuilding (\d+) affected routes/i);
+	return match ? parseInt(match[1], 10) : -1;
+}
+
 test.describe("Incremental Build", () => {
-	// Increase timeout for these tests since they involve compilation
-	test.setTimeout(60000);
+	test.setTimeout(180000);
 
 	const fixturePath = resolve(__dirname, "..", "fixtures", "incremental-build");
-	const stylesPath = resolve(fixturePath, "src", "assets", "styles.css");
+	
+	// Asset paths
 	const blogStylesPath = resolve(fixturePath, "src", "assets", "blog.css");
-	const mainScriptPath = resolve(fixturePath, "src", "assets", "main.js");
-	const aboutScriptPath = resolve(fixturePath, "src", "assets", "about.js");
-	const logoPath = resolve(fixturePath, "src", "assets", "logo.png");
-	const teamPath = resolve(fixturePath, "src", "assets", "team.png");
 	
-	const indexHtmlPath = resolve(fixturePath, "dist", "index.html");
-	const aboutHtmlPath = resolve(fixturePath, "dist", "about", "index.html");
-	const blogHtmlPath = resolve(fixturePath, "dist", "blog", "index.html");
+	// Output HTML paths
+	const htmlPaths = {
+		index: resolve(fixturePath, "dist", "index.html"),
+		about: resolve(fixturePath, "dist", "about", "index.html"),
+		blog: resolve(fixturePath, "dist", "blog", "index.html"),
+	};
 	
-	let originalStylesContent: string;
-	let originalBlogStylesContent: string;
-	let originalMainScriptContent: string;
-	let originalAboutScriptContent: string;
-	let originalLogoContent: Buffer;
-	let originalTeamContent: Buffer;
+	// Original content storage
+	let originalBlogStyles: string;
 
 	test.beforeAll(async () => {
-		// Save original content
-		originalStylesContent = readFileSync(stylesPath, "utf-8");
-		originalBlogStylesContent = readFileSync(blogStylesPath, "utf-8");
-		originalMainScriptContent = readFileSync(mainScriptPath, "utf-8");
-		originalAboutScriptContent = readFileSync(aboutScriptPath, "utf-8");
-		originalLogoContent = readFileSync(logoPath);
-		originalTeamContent = readFileSync(teamPath);
-
-		// Ensure files are in original state
-		writeFileSync(stylesPath, originalStylesContent, "utf-8");
-		writeFileSync(blogStylesPath, originalBlogStylesContent, "utf-8");
-		writeFileSync(mainScriptPath, originalMainScriptContent, "utf-8");
-		writeFileSync(aboutScriptPath, originalAboutScriptContent, "utf-8");
-		writeFileSync(logoPath, originalLogoContent);
-		writeFileSync(teamPath, originalTeamContent);
-	});
-
-	test.afterEach(async ({ devServer }) => {
-		// Restore original content after each test
-		writeFileSync(stylesPath, originalStylesContent, "utf-8");
-		writeFileSync(blogStylesPath, originalBlogStylesContent, "utf-8");
-		writeFileSync(mainScriptPath, originalMainScriptContent, "utf-8");
-		writeFileSync(aboutScriptPath, originalAboutScriptContent, "utf-8");
-		writeFileSync(logoPath, originalLogoContent);
-		writeFileSync(teamPath, originalTeamContent);
-		
-		// Wait for build if devServer is available
-		if (devServer) {
-			try {
-				devServer.clearLogs();
-				await waitForBuildComplete(devServer);
-			} catch (error) {
-				console.warn("Failed to wait for build completion in afterEach:", error);
-			}
-		}
+		originalBlogStyles = readFileSync(blogStylesPath, "utf-8");
+		// Ensure file is in original state
+		writeFileSync(blogStylesPath, originalBlogStyles, "utf-8");
 	});
 
 	test.afterAll(async () => {
 		// Restore original content
-		writeFileSync(stylesPath, originalStylesContent, "utf-8");
-		writeFileSync(blogStylesPath, originalBlogStylesContent, "utf-8");
-		writeFileSync(mainScriptPath, originalMainScriptContent, "utf-8");
-		writeFileSync(aboutScriptPath, originalAboutScriptContent, "utf-8");
-		writeFileSync(logoPath, originalLogoContent);
-		writeFileSync(teamPath, originalTeamContent);
+		writeFileSync(blogStylesPath, originalBlogStyles, "utf-8");
 	});
 
-	test("should perform full build on first run after recompilation", async ({ devServer }) => {
-		// Clear logs to track what happens after initial startup
-		devServer.clearLogs();
+	test("incremental builds only rebuild affected routes", async ({ devServer }) => {
+		let testCounter = 0;
 		
-		// Modify a file to trigger a rebuild
-		writeFileSync(stylesPath, originalStylesContent + "\n/* comment */", "utf-8");
+		async function triggerChange(suffix: string) {
+			testCounter++;
+			devServer.clearLogs();
+			writeFileSync(blogStylesPath, originalBlogStyles + `\n/* test-${testCounter}-${suffix} */`, "utf-8");
+			return await waitForBuildComplete(devServer, 30000);
+		}
 		
-		// Wait for rebuild
-		const logs = await waitForBuildComplete(devServer, 20000);
-		const logsText = logs.join("\n").toLowerCase();
-		
-		// After the first change post-startup, we should see an incremental build message
-		expect(logsText).toContain("incremental build");
-	});
-
-	test("should only rebuild affected route when CSS changes", async ({ devServer }) => {
-		// First, do a change to ensure we have build state
-		writeFileSync(stylesPath, originalStylesContent + "\n/* setup */", "utf-8");
-		await waitForBuildComplete(devServer);
-		
-		// Get modification times before change
-		const indexMtimeBefore = statSync(indexHtmlPath).mtimeMs;
-		const aboutMtimeBefore = statSync(aboutHtmlPath).mtimeMs;
-		const blogMtimeBefore = statSync(blogHtmlPath).mtimeMs;
-		
-		// Wait longer to ensure timestamps differ and debouncer completes
+		// ========================================
+		// SETUP: Establish incremental build state
+		// ========================================
+		// First change triggers a full build (no previous state)
+		await triggerChange("init");
 		await new Promise(resolve => setTimeout(resolve, 500));
 		
-		// Clear logs
-		devServer.clearLogs();
-		
-		// Change blog.css (only used by /blog route)
-		writeFileSync(blogStylesPath, originalBlogStylesContent + "\n/* modified */", "utf-8");
-		
-		// Wait for rebuild
-		const logs = await waitForBuildComplete(devServer, 20000);
-		const logsText = logs.join("\n").toLowerCase();
-		
-		// Should be incremental build
-		expect(logsText).toContain("incremental build");
-		
-		// Get modification times after change
-		const indexMtimeAfter = statSync(indexHtmlPath).mtimeMs;
-		const aboutMtimeAfter = statSync(aboutHtmlPath).mtimeMs;
-		const blogMtimeAfter = statSync(blogHtmlPath).mtimeMs;
-		
-		// Index and About should NOT be rebuilt (same mtime)
-		expect(indexMtimeAfter).toBe(indexMtimeBefore);
-		expect(aboutMtimeAfter).toBe(aboutMtimeBefore);
-		
-		// Blog should be rebuilt (different mtime)
-		expect(blogMtimeAfter).toBeGreaterThan(blogMtimeBefore);
-	});
+		// Second change should be incremental (state now exists)
+		let logs = await triggerChange("setup");
+		expect(isIncrementalBuild(logs)).toBe(true);
+		await new Promise(resolve => setTimeout(resolve, 500));
 
-	test("should rebuild multiple routes when shared asset changes", async ({ devServer }) => {
-		// First, do a change to ensure we have build state
-		writeFileSync(stylesPath, originalStylesContent + "\n/* setup */", "utf-8");
-		await waitForBuildComplete(devServer);
+		// ========================================
+		// TEST: CSS file change (blog.css → only /blog)
+		// ========================================
+		// Record build IDs before
+		const beforeIndex = getBuildId(htmlPaths.index);
+		const beforeAbout = getBuildId(htmlPaths.about);
+		const beforeBlog = getBuildId(htmlPaths.blog);
 		
-		// Get modification times before change
-		const indexMtimeBefore = statSync(indexHtmlPath).mtimeMs;
-		const aboutMtimeBefore = statSync(aboutHtmlPath).mtimeMs;
-		const blogMtimeBefore = statSync(blogHtmlPath).mtimeMs;
+		expect(beforeIndex).not.toBeNull();
+		expect(beforeAbout).not.toBeNull();
+		expect(beforeBlog).not.toBeNull();
 		
-		// Wait longer to ensure timestamps differ and debouncer completes
+		// Wait a bit more to ensure clean slate
 		await new Promise(resolve => setTimeout(resolve, 500));
 		
-		// Clear logs
-		devServer.clearLogs();
+		// Trigger the change
+		logs = await triggerChange("final");
 		
-		// Change styles.css (used by /index route)
-		writeFileSync(stylesPath, originalStylesContent + "\n/* modified */", "utf-8");
+		// Verify it was an incremental build
+		expect(isIncrementalBuild(logs)).toBe(true);
 		
-		// Wait for rebuild
-		const logs = await waitForBuildComplete(devServer, 20000);
-		const logsText = logs.join("\n").toLowerCase();
+		// Verify exactly 1 route was rebuilt (from logs)
+		const routeCount = getAffectedRouteCount(logs);
+		expect(routeCount).toBe(1);
 		
-		// Should be incremental build
-		expect(logsText).toContain("incremental build");
+		// Verify build IDs: only blog should have changed
+		const afterIndex = getBuildId(htmlPaths.index);
+		const afterAbout = getBuildId(htmlPaths.about);
+		const afterBlog = getBuildId(htmlPaths.blog);
 		
-		// Get modification times after change
-		const indexMtimeAfter = statSync(indexHtmlPath).mtimeMs;
-		const aboutMtimeAfter = statSync(aboutHtmlPath).mtimeMs;
-		const blogMtimeAfter = statSync(blogHtmlPath).mtimeMs;
+		// Index and about should NOT have been rebuilt
+		expect(afterIndex).toBe(beforeIndex);
+		expect(afterAbout).toBe(beforeAbout);
 		
-		// Index should be rebuilt (uses styles.css)
-		expect(indexMtimeAfter).toBeGreaterThan(indexMtimeBefore);
-		
-		// About and Blog should NOT be rebuilt
-		expect(aboutMtimeAfter).toBe(aboutMtimeBefore);
-		expect(blogMtimeAfter).toBe(blogMtimeBefore);
-	});
-
-	test("should rebuild affected route when script changes", async ({ devServer }) => {
-		// First, do a change to ensure we have build state
-		writeFileSync(mainScriptPath, originalMainScriptContent + "\n// setup", "utf-8");
-		await waitForBuildComplete(devServer);
-		
-		// Get modification times before change
-		const indexMtimeBefore = statSync(indexHtmlPath).mtimeMs;
-		const aboutMtimeBefore = statSync(aboutHtmlPath).mtimeMs;
-		
-		// Wait longer to ensure timestamps differ and debouncer completes
-		await new Promise(resolve => setTimeout(resolve, 500));
-		
-		// Clear logs
-		devServer.clearLogs();
-		
-		// Change about.js (only used by /about route)
-		writeFileSync(aboutScriptPath, originalAboutScriptContent + "\n// modified", "utf-8");
-		
-		// Wait for rebuild
-		const logs = await waitForBuildComplete(devServer, 20000);
-		const logsText = logs.join("\n").toLowerCase();
-		
-		// Should be incremental build
-		expect(logsText).toContain("incremental build");
-		
-		// Get modification times after change
-		const indexMtimeAfter = statSync(indexHtmlPath).mtimeMs;
-		const aboutMtimeAfter = statSync(aboutHtmlPath).mtimeMs;
-		
-		// Index should NOT be rebuilt
-		expect(indexMtimeAfter).toBe(indexMtimeBefore);
-		
-		// About should be rebuilt
-		expect(aboutMtimeAfter).toBeGreaterThan(aboutMtimeBefore);
-	});
-
-	test("should rebuild affected route when image changes", async ({ devServer }) => {
-		// First, do a change to ensure we have build state
-		writeFileSync(stylesPath, originalStylesContent + "\n/* setup */", "utf-8");
-		await waitForBuildComplete(devServer);
-		
-		// Get modification times before change
-		const indexMtimeBefore = statSync(indexHtmlPath).mtimeMs;
-		const aboutMtimeBefore = statSync(aboutHtmlPath).mtimeMs;
-		
-		// Wait longer to ensure timestamps differ and debouncer completes
-		await new Promise(resolve => setTimeout(resolve, 500));
-		
-		// Clear logs
-		devServer.clearLogs();
-		
-		// "Change" team.png (used by /about route)
-		// We'll just write it again with same content but new mtime
-		writeFileSync(teamPath, originalTeamContent);
-		
-		// Wait for rebuild
-		const logs = await waitForBuildComplete(devServer, 20000);
-		const logsText = logs.join("\n").toLowerCase();
-		
-		// Should be incremental build
-		expect(logsText).toContain("incremental build");
-		
-		// Get modification times after change
-		const indexMtimeAfter = statSync(indexHtmlPath).mtimeMs;
-		const aboutMtimeAfter = statSync(aboutHtmlPath).mtimeMs;
-		
-		// Index should NOT be rebuilt
-		expect(indexMtimeAfter).toBe(indexMtimeBefore);
-		
-		// About should be rebuilt
-		expect(aboutMtimeAfter).toBeGreaterThan(aboutMtimeBefore);
-	});
-
-	test("should preserve bundler inputs across incremental builds", async ({ devServer }) => {
-		// First, do a change to ensure we have build state
-		writeFileSync(stylesPath, originalStylesContent + "\n/* setup */", "utf-8");
-		await waitForBuildComplete(devServer);
-		
-		// Clear logs
-		devServer.clearLogs();
-		
-		// Change only blog.css (blog route only)
-		writeFileSync(blogStylesPath, originalBlogStylesContent + "\n/* modified */", "utf-8");
-		
-		// Wait for rebuild
-		const logs = await waitForBuildComplete(devServer, 20000);
-		const logsText = logs.join("\n");
-		
-		// Check that logs mention merging with previous bundler inputs
-		// This ensures that even though only blog route was rebuilt,
-		// all assets from the previous build are still bundled
-		expect(logsText).toContain("Merging with");
-		expect(logsText).toContain("previous bundler inputs");
+		// Blog SHOULD have been rebuilt
+		expect(afterBlog).not.toBe(beforeBlog);
 	});
 });

@@ -103,22 +103,33 @@ impl BuildState {
         let mut affected_routes = FxHashSet::default();
 
         for changed_file in changed_files {
-            // Try exact match first
-            if let Some(routes) = self.asset_to_routes.get(changed_file) {
-                affected_routes.extend(routes.iter().cloned());
-            }
+            // Canonicalize the changed file path for consistent comparison
+            // All asset paths in asset_to_routes are stored as canonical paths
+            let canonical_changed = changed_file.canonicalize().ok();
 
-            // Try canonicalized path match
-            if let Ok(canonical) = changed_file.canonicalize() {
-                if let Some(routes) = self.asset_to_routes.get(&canonical) {
+            // Try exact match with canonical path
+            if let Some(canonical) = &canonical_changed {
+                if let Some(routes) = self.asset_to_routes.get(canonical) {
                     affected_routes.extend(routes.iter().cloned());
+                    continue; // Found exact match, no need for directory check
                 }
             }
 
-            // Also check if any tracked asset has this file as a prefix (for directories)
-            for (asset_path, routes) in &self.asset_to_routes {
-                if asset_path.starts_with(changed_file) {
-                    affected_routes.extend(routes.iter().cloned());
+            // Fallback: try exact match with original path (shouldn't normally match)
+            if let Some(routes) = self.asset_to_routes.get(changed_file) {
+                affected_routes.extend(routes.iter().cloned());
+                continue;
+            }
+
+            // Only do directory prefix check if the changed path is actually a directory
+            // This handles cases where a directory is modified and we want to rebuild
+            // all routes that use assets within that directory
+            if changed_file.is_dir() {
+                let canonical_dir = canonical_changed.as_ref().unwrap_or(changed_file);
+                for (asset_path, routes) in &self.asset_to_routes {
+                    if asset_path.starts_with(canonical_dir) {
+                        affected_routes.extend(routes.iter().cloned());
+                    }
                 }
             }
         }
