@@ -108,11 +108,11 @@ impl BuildState {
             let canonical_changed = changed_file.canonicalize().ok();
 
             // Try exact match with canonical path
-            if let Some(canonical) = &canonical_changed {
-                if let Some(routes) = self.asset_to_routes.get(canonical) {
-                    affected_routes.extend(routes.iter().cloned());
-                    continue; // Found exact match, no need for directory check
-                }
+            if let Some(canonical) = &canonical_changed
+                && let Some(routes) = self.asset_to_routes.get(canonical)
+            {
+                affected_routes.extend(routes.iter().cloned());
+                continue; // Found exact match, no need for directory check
             }
 
             // Fallback: try exact match with original path (shouldn't normally match)

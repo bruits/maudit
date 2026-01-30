@@ -1,4 +1,4 @@
-use maud::{html, Markup};
+use maud::html;
 use maudit::route::prelude::*;
 use std::time::{SystemTime, UNIX_EPOCH};
 
