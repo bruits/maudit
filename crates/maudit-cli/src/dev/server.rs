@@ -64,10 +64,80 @@ pub struct PersistentStatus {
     pub message: String,
 }
 
+/// Manages status updates and WebSocket broadcasting.
+/// Cheap to clone - all clones share the same underlying state.
 #[derive(Clone)]
-struct AppState {
+pub struct StatusManager {
     tx: broadcast::Sender<WebSocketMessage>,
     current_status: Arc<RwLock<Option<PersistentStatus>>>,
+}
+
+impl StatusManager {
+    pub fn new() -> Self {
+        let (tx, _) = broadcast::channel::<WebSocketMessage>(100);
+        Self {
+            tx,
+            current_status: Arc::new(RwLock::new(None)),
+        }
+    }
+
+    /// Update the status and broadcast to all connected WebSocket clients.
+    pub async fn update(&self, status_type: StatusType, message: &str) {
+        // Only store persistent states (Success clears errors, Error stores the error)
+        let persistent_status = match status_type {
+            StatusType::Success => None, // Clear any error state
+            StatusType::Error => Some(PersistentStatus {
+                status_type: StatusType::Error,
+                message: message.to_string(),
+            }),
+            // Everything else just keeps the current state
+            _ => {
+                let status = self.current_status.read().await;
+                status.clone() // Keep existing persistent state
+            }
+        };
+
+        // Update the stored status
+        {
+            let mut status = self.current_status.write().await;
+            *status = persistent_status;
+        }
+
+        // Send the message to all connected clients
+        let _ = self.tx.send(WebSocketMessage {
+            data: json!({
+                "type": status_type.to_string(),
+                "message": message
+            })
+            .to_string(),
+        });
+    }
+
+    /// Subscribe to WebSocket messages (for new connections).
+    pub fn subscribe(&self) -> broadcast::Receiver<WebSocketMessage> {
+        self.tx.subscribe()
+    }
+
+    /// Get the current persistent status (for new connections).
+    pub async fn get_current(&self) -> Option<PersistentStatus> {
+        self.current_status.read().await.clone()
+    }
+
+    /// Send a raw WebSocket message (for initial errors, etc.).
+    pub fn send_raw(&self, message: WebSocketMessage) {
+        let _ = self.tx.send(message);
+    }
+}
+
+impl Default for StatusManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Clone)]
+struct AppState {
+    status_manager: StatusManager,
 }
 
 fn inject_live_reload_script(html_content: &str, socket_addr: SocketAddr, host: bool) -> String {
@@ -93,18 +163,17 @@ fn inject_live_reload_script(html_content: &str, socket_addr: SocketAddr, host: 
 
 pub async fn start_dev_web_server(
     start_time: Instant,
-    tx: broadcast::Sender<WebSocketMessage>,
+    status_manager: StatusManager,
     host: bool,
     port: Option<u16>,
     initial_error: Option<String>,
-    current_status: Arc<RwLock<Option<PersistentStatus>>>,
 ) {
     // TODO: The dist dir should be configurable
     let dist_dir = "dist";
 
     // Send initial error if present
     if let Some(error) = initial_error {
-        let _ = tx.send(WebSocketMessage {
+        status_manager.send_raw(WebSocketMessage {
             data: json!({
                 "type": StatusType::Error.to_string(),
                 "message": error
@@ -172,8 +241,7 @@ pub async fn start_dev_web_server(
                 .on_response(CustomOnResponse),
         )
         .with_state(AppState {
-            tx: tx.clone(),
-            current_status: current_status.clone(),
+            status_manager: status_manager.clone(),
         });
 
     log_server_start(
@@ -190,42 +258,6 @@ pub async fn start_dev_web_server(
     .with_graceful_shutdown(shutdown_signal())
     .await
     .unwrap();
-}
-
-pub async fn update_status(
-    tx: &broadcast::Sender<WebSocketMessage>,
-    current_status: Arc<RwLock<Option<PersistentStatus>>>,
-    status_type: StatusType,
-    message: &str,
-) {
-    // Only store persistent states (Success clears errors, Error stores the error)
-    let persistent_status = match status_type {
-        StatusType::Success => None, // Clear any error state
-        StatusType::Error => Some(PersistentStatus {
-            status_type: StatusType::Error,
-            message: message.to_string(),
-        }),
-        // Everything else just keeps the current state
-        _ => {
-            let status = current_status.read().await;
-            status.clone() // Keep existing persistent state
-        }
-    };
-
-    // Update the stored status
-    {
-        let mut status = current_status.write().await;
-        *status = persistent_status;
-    }
-
-    // Send the message to all connected clients
-    let _ = tx.send(WebSocketMessage {
-        data: json!({
-            "type": status_type.to_string(),
-            "message": message
-        })
-        .to_string(),
-    });
 }
 
 async fn add_dev_client_script(
@@ -311,35 +343,31 @@ async fn ws_handler(
     debug!("`{addr} connected.");
     // finalize the upgrade process by returning upgrade callback.
     // we can customize the callback by sending additional info such as address.
-    ws.on_upgrade(move |socket| handle_socket(socket, addr, state.tx, state.current_status))
+    ws.on_upgrade(move |socket| handle_socket(socket, addr, state.status_manager))
 }
 
 async fn handle_socket(
     socket: WebSocket,
     who: SocketAddr,
-    tx: broadcast::Sender<WebSocketMessage>,
-    current_status: Arc<RwLock<Option<PersistentStatus>>>,
+    status_manager: StatusManager,
 ) {
     let (mut sender, mut receiver) = socket.split();
 
     // Send current persistent status to new connection if there is one
-    {
-        let status = current_status.read().await;
-        if let Some(persistent_status) = status.as_ref() {
-            let _ = sender
-                .send(Message::Text(
-                    json!({
-                        "type": persistent_status.status_type.to_string(),
-                        "message": persistent_status.message
-                    })
-                    .to_string()
-                    .into(),
-                ))
-                .await;
-        }
+    if let Some(persistent_status) = status_manager.get_current().await {
+        let _ = sender
+            .send(Message::Text(
+                json!({
+                    "type": persistent_status.status_type.to_string(),
+                    "message": persistent_status.message
+                })
+                .to_string()
+                .into(),
+            ))
+            .await;
     }
 
-    let mut rx = tx.subscribe();
+    let mut rx = status_manager.subscribe();
 
     tokio::select! {
         _ = async {
@@ -385,5 +413,136 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = ctrl_c => {},
         _ = terminate => {},
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_status_manager_update_error_persists() {
+        let manager = StatusManager::new();
+
+        manager.update(StatusType::Error, "Something went wrong").await;
+
+        let status = manager.get_current().await;
+        assert!(status.is_some());
+        let status = status.unwrap();
+        assert!(matches!(status.status_type, StatusType::Error));
+        assert_eq!(status.message, "Something went wrong");
+    }
+
+    #[tokio::test]
+    async fn test_status_manager_update_success_clears_error() {
+        let manager = StatusManager::new();
+
+        // First set an error
+        manager.update(StatusType::Error, "Build failed").await;
+        assert!(manager.get_current().await.is_some());
+
+        // Then send success - should clear the error
+        manager.update(StatusType::Success, "Build succeeded").await;
+        assert!(manager.get_current().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_status_manager_update_info_preserves_state() {
+        let manager = StatusManager::new();
+
+        // Set an error
+        manager.update(StatusType::Error, "Build failed").await;
+        let original_status = manager.get_current().await;
+        assert!(original_status.is_some());
+
+        // Send info - should preserve the error state
+        manager.update(StatusType::Info, "Building...").await;
+        let status = manager.get_current().await;
+        assert!(status.is_some());
+        assert_eq!(status.unwrap().message, "Build failed");
+    }
+
+    #[tokio::test]
+    async fn test_status_manager_update_info_when_no_error() {
+        let manager = StatusManager::new();
+
+        // No prior state
+        assert!(manager.get_current().await.is_none());
+
+        // Send info - should remain None
+        manager.update(StatusType::Info, "Building...").await;
+        assert!(manager.get_current().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_status_manager_subscribe_receives_messages() {
+        let manager = StatusManager::new();
+        let mut rx = manager.subscribe();
+
+        manager.update(StatusType::Info, "Hello").await;
+
+        let msg = rx.try_recv();
+        assert!(msg.is_ok());
+        let msg = msg.unwrap();
+        assert!(msg.data.contains("Hello"));
+        assert!(msg.data.contains("info"));
+    }
+
+    #[tokio::test]
+    async fn test_status_manager_multiple_subscribers() {
+        let manager = StatusManager::new();
+        let mut rx1 = manager.subscribe();
+        let mut rx2 = manager.subscribe();
+
+        manager.update(StatusType::Success, "Done").await;
+
+        // Both subscribers should receive the message
+        assert!(rx1.try_recv().is_ok());
+        assert!(rx2.try_recv().is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_status_manager_send_raw() {
+        let manager = StatusManager::new();
+        let mut rx = manager.subscribe();
+
+        manager.send_raw(WebSocketMessage {
+            data: r#"{"custom": "message"}"#.to_string(),
+        });
+
+        let msg = rx.try_recv();
+        assert!(msg.is_ok());
+        assert_eq!(msg.unwrap().data, r#"{"custom": "message"}"#);
+    }
+
+    #[tokio::test]
+    async fn test_status_manager_clone_shares_state() {
+        let manager1 = StatusManager::new();
+        let manager2 = manager1.clone();
+
+        // Update via one clone
+        manager1.update(StatusType::Error, "Error from clone 1").await;
+
+        // Should be visible via the other clone
+        let status = manager2.get_current().await;
+        assert!(status.is_some());
+        assert_eq!(status.unwrap().message, "Error from clone 1");
+    }
+
+    #[tokio::test]
+    async fn test_status_manager_clone_shares_broadcast() {
+        let manager1 = StatusManager::new();
+        let manager2 = manager1.clone();
+
+        // Subscribe via one clone
+        let mut rx = manager2.subscribe();
+
+        // Send via the other clone
+        manager1.update(StatusType::Info, "From clone 1").await;
+
+        // Should receive the message
+        let msg = rx.try_recv();
+        assert!(msg.is_ok());
+        assert!(msg.unwrap().data.contains("From clone 1"));
     }
 }

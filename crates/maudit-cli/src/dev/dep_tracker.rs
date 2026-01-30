@@ -8,9 +8,9 @@ use tracing::{debug, warn};
 #[derive(Debug, Clone)]
 pub struct DependencyTracker {
     /// Path to the .d file
-    d_file_path: Option<PathBuf>,
+    pub(crate) d_file_path: Option<PathBuf>,
     /// Map of dependency paths to their last modification times
-    dependencies: HashMap<PathBuf, SystemTime>,
+    pub(crate) dependencies: HashMap<PathBuf, SystemTime>,
 }
 
 /// Find the target directory using multiple strategies

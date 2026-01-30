@@ -11,7 +11,7 @@ impl Route for Index {
 
         Ok(layout(html! {
             (logo.render("Maudit logo, a crudely drawn crown"))
-            h1 { "Hello World" }
+            h1 { "Hello World 3" }
         }))
     }
 }

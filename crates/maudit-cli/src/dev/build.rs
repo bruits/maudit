@@ -1,35 +1,40 @@
 use cargo_metadata::Message;
 use quanta::Instant;
-use server::{StatusType, WebSocketMessage, update_status};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::process::Command;
-use tokio::sync::broadcast;
+use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    dev::server,
+    dev::server::{StatusManager, StatusType},
     logging::{FormatElapsedTimeOptions, format_elapsed_time},
 };
 
 use super::dep_tracker::{DependencyTracker, find_target_dir};
 
+/// Internal state shared across all BuildManager handles.
+struct BuildManagerState {
+    current_cancel: RwLock<Option<CancellationToken>>,
+    build_semaphore: tokio::sync::Semaphore,
+    status_manager: StatusManager,
+    dep_tracker: RwLock<Option<DependencyTracker>>,
+    binary_path: RwLock<Option<PathBuf>>,
+    // Cached values computed once at startup
+    target_dir: Option<PathBuf>,
+    binary_name: Option<String>,
+}
+
+/// Manages cargo build processes with cancellation support.
+/// Cheap to clone - all clones share the same underlying state.
 #[derive(Clone)]
 pub struct BuildManager {
-    current_cancel: Arc<tokio::sync::RwLock<Option<CancellationToken>>>,
-    build_semaphore: Arc<tokio::sync::Semaphore>,
-    websocket_tx: broadcast::Sender<WebSocketMessage>,
-    current_status: Arc<tokio::sync::RwLock<Option<server::PersistentStatus>>>,
-    dep_tracker: Arc<tokio::sync::RwLock<Option<DependencyTracker>>>,
-    binary_path: Arc<tokio::sync::RwLock<Option<PathBuf>>>,
-    // Cached values computed once at startup
-    target_dir: Arc<Option<PathBuf>>,
-    binary_name: Arc<Option<String>>,
+    state: Arc<BuildManagerState>,
 }
 
 impl BuildManager {
-    pub fn new(websocket_tx: broadcast::Sender<WebSocketMessage>) -> Self {
+    pub fn new(status_manager: StatusManager) -> Self {
         // Try to determine target directory and binary name at startup
         let target_dir = find_target_dir().ok();
         let binary_name = Self::get_binary_name_from_cargo_toml().ok();
@@ -42,26 +47,22 @@ impl BuildManager {
         }
 
         Self {
-            current_cancel: Arc::new(tokio::sync::RwLock::new(None)),
-            build_semaphore: Arc::new(tokio::sync::Semaphore::new(1)), // Only one build at a time
-            websocket_tx,
-            current_status: Arc::new(tokio::sync::RwLock::new(None)),
-            dep_tracker: Arc::new(tokio::sync::RwLock::new(None)),
-            binary_path: Arc::new(tokio::sync::RwLock::new(None)),
-            target_dir: Arc::new(target_dir),
-            binary_name: Arc::new(binary_name),
+            state: Arc::new(BuildManagerState {
+                current_cancel: RwLock::new(None),
+                build_semaphore: tokio::sync::Semaphore::new(1),
+                status_manager,
+                dep_tracker: RwLock::new(None),
+                binary_path: RwLock::new(None),
+                target_dir,
+                binary_name,
+            }),
         }
     }
 
-    /// Get a reference to the current status for use with the web server
-    pub fn current_status(&self) -> Arc<tokio::sync::RwLock<Option<server::PersistentStatus>>> {
-        self.current_status.clone()
-    }
-
-    /// Check if the given paths require recompilation based on dependency tracking
-    /// Returns true if recompilation is needed, false if we can just rerun the binary
+    /// Check if the given paths require recompilation based on dependency tracking.
+    /// Returns true if recompilation is needed, false if we can just rerun the binary.
     pub async fn needs_recompile(&self, changed_paths: &[PathBuf]) -> bool {
-        let dep_tracker = self.dep_tracker.read().await;
+        let dep_tracker = self.state.dep_tracker.read().await;
 
         if let Some(tracker) = dep_tracker.as_ref()
             && tracker.has_dependencies()
@@ -77,43 +78,43 @@ impl BuildManager {
         true
     }
 
-    /// Rerun the binary without recompiling
+    /// Rerun the binary without recompiling.
     pub async fn rerun_binary(
         &self,
         changed_paths: &[PathBuf],
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        let binary_path = self.binary_path.read().await;
-
-        let Some(path) = binary_path.as_ref() else {
-            warn!(name: "build", "No binary path available, falling back to full rebuild");
-            return self.start_build().await;
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        // Get binary path with limited lock scope
+        let path = {
+            let guard = self.state.binary_path.read().await;
+            match guard.as_ref() {
+                Some(p) if p.exists() => p.clone(),
+                Some(p) => {
+                    warn!(name: "build", "Binary at {:?} no longer exists, falling back to full rebuild", p);
+                    return self.start_build().await;
+                }
+                None => {
+                    warn!(name: "build", "No binary path available, falling back to full rebuild");
+                    return self.start_build().await;
+                }
+            }
         };
-
-        if !path.exists() {
-            warn!(name: "build", "Binary at {:?} no longer exists, falling back to full rebuild", path);
-            return self.start_build().await;
-        }
 
         // Log that we're doing an incremental build
         info!(name: "build", "Incremental build: {} files changed", changed_paths.len());
-        debug!(name: "build", "Changed files: {:?}", changed_paths);
+        info!(name: "build", "Changed files: {:?}", changed_paths);
         info!(name: "build", "Rerunning binary without recompilation...");
 
-        // Notify that build is starting (even though we're just rerunning)
-        update_status(
-            &self.websocket_tx,
-            self.current_status.clone(),
-            StatusType::Info,
-            "Rerunning...",
-        )
-        .await;
+        self.state
+            .status_manager
+            .update(StatusType::Info, "Rerunning...")
+            .await;
 
         let build_start_time = Instant::now();
 
         // Serialize changed paths to JSON for the binary
         let changed_files_json = serde_json::to_string(changed_paths)?;
 
-        let child = Command::new(path)
+        let child = Command::new(&path)
             .envs([
                 ("MAUDIT_DEV", "true"),
                 ("MAUDIT_QUIET", "true"),
@@ -123,7 +124,6 @@ impl BuildManager {
             .stderr(std::process::Stdio::piped())
             .spawn()?;
 
-        // Wait for the process to complete
         let output = child.wait_with_output().await?;
 
         let duration = build_start_time.elapsed();
@@ -131,8 +131,6 @@ impl BuildManager {
             format_elapsed_time(duration, &FormatElapsedTimeOptions::default_dev());
 
         if output.status.success() {
-            // Optionally log output from the binary (includes incremental build info)
-            // Enable with MAUDIT_SHOW_BINARY_OUTPUT=1 for debugging
             if std::env::var("MAUDIT_SHOW_BINARY_OUTPUT").is_ok() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -143,63 +141,54 @@ impl BuildManager {
                 }
             }
             info!(name: "build", "Binary rerun finished {}", formatted_elapsed_time);
-            update_status(
-                &self.websocket_tx,
-                self.current_status.clone(),
-                StatusType::Success,
-                "Binary rerun finished successfully",
-            )
-            .await;
+            self.state
+                .status_manager
+                .update(StatusType::Success, "Binary rerun finished successfully")
+                .await;
             Ok(true)
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             error!(name: "build", "Binary rerun failed {}\nstdout: {}\nstderr: {}",
                 formatted_elapsed_time, stdout, stderr);
-            update_status(
-                &self.websocket_tx,
-                self.current_status.clone(),
-                StatusType::Error,
-                &format!("Binary rerun failed:\n{}\n{}", stdout, stderr),
-            )
-            .await;
+            self.state
+                .status_manager
+                .update(
+                    StatusType::Error,
+                    &format!("Binary rerun failed:\n{}\n{}", stdout, stderr),
+                )
+                .await;
             Ok(false)
         }
     }
 
-    /// Do initial build that can be cancelled (but isn't stored as current build)
-    pub async fn do_initial_build(&self) -> Result<bool, Box<dyn std::error::Error>> {
+    /// Do initial build that can be cancelled.
+    pub async fn do_initial_build(&self) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         self.internal_build(true).await
     }
 
-    /// Start a new build, cancelling any previous one
-    pub async fn start_build(&self) -> Result<bool, Box<dyn std::error::Error>> {
+    /// Start a new build, cancelling any previous one.
+    pub async fn start_build(&self) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         self.internal_build(false).await
     }
 
-    /// Internal build method that handles both initial and regular builds
-    async fn internal_build(&self, is_initial: bool) -> Result<bool, Box<dyn std::error::Error>> {
+    async fn internal_build(&self, is_initial: bool) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         // Cancel any existing build immediately
         let cancel = CancellationToken::new();
         {
-            let mut current_cancel = self.current_cancel.write().await;
+            let mut current_cancel = self.state.current_cancel.write().await;
             if let Some(old_cancel) = current_cancel.replace(cancel.clone()) {
                 old_cancel.cancel();
             }
         }
 
         // Acquire semaphore to ensure only one build runs at a time
-        // This prevents resource conflicts if cancellation fails
-        let _ = self.build_semaphore.acquire().await?;
+        let _permit = self.state.build_semaphore.acquire().await?;
 
-        // Notify that build is starting
-        update_status(
-            &self.websocket_tx,
-            self.current_status.clone(),
-            StatusType::Info,
-            "Building...",
-        )
-        .await;
+        self.state
+            .status_manager
+            .update(StatusType::Info, "Building...")
+            .await;
 
         let mut child = Command::new("cargo")
             .args([
@@ -217,182 +206,134 @@ impl BuildManager {
             .stderr(std::process::Stdio::piped())
             .spawn()?;
 
-        // Take the stderr stream for manual handling
-        let mut stdout = child.stdout.take().unwrap();
-        let mut stderr = child.stderr.take().unwrap();
+        // Take stdout/stderr before select! so we can use them in the completion branch
+        // while still being able to kill the child in the cancellation branch
+        let stdout = child.stdout.take().unwrap();
+        let stderr = child.stderr.take().unwrap();
 
         let build_start_time = Instant::now();
-        let websocket_tx = self.websocket_tx.clone();
-        let current_status = self.current_status.clone();
-        let dep_tracker_clone = self.dep_tracker.clone();
-        let binary_path_clone = self.binary_path.clone();
-        let target_dir_clone = self.target_dir.clone();
-        let binary_name_clone = self.binary_name.clone();
 
-        // Create a channel to get the build result back
-        let (result_tx, mut result_rx) = tokio::sync::mpsc::channel::<bool>(1);
-
-        // Spawn watcher task to monitor the child process
-        tokio::spawn(async move {
-            let output_future = async {
-                // Read stdout concurrently with waiting for process to finish
-                let stdout_task = tokio::spawn(async move {
-                    let mut out = Vec::new();
-                    tokio::io::copy(&mut stdout, &mut out).await.unwrap_or(0);
-
-                    let mut rendered_messages: Vec<String> = Vec::new();
-
-                    // Ideally we'd stream things as they come, but I can't figure it out
-                    for message in cargo_metadata::Message::parse_stream(
-                        String::from_utf8_lossy(&out).to_string().as_bytes(),
-                    ) {
-                        match message {
-                            Err(e) => {
-                                error!(name: "build", "Failed to parse cargo message: {}", e);
-                                continue;
-                            }
-                            Ok(message) => {
-                                match message {
-                                    // Compiler wants to tell us something
-                                    Message::CompilerMessage(msg) => {
-                                        // TODO: For now, just send through the rendered messages, but in the future let's send
-                                        // structured messages to the frontend so we can do better formatting
-                                        if let Some(rendered) = &msg.message.rendered {
-                                            info!("{}", rendered);
-                                            rendered_messages.push(rendered.to_string());
-                                        }
-                                    }
-                                    // Random text came in, just log it
-                                    Message::TextLine(msg) => {
-                                        info!("{}", msg);
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-
-                    (out, rendered_messages)
-                });
-
-                let stderr_task = tokio::spawn(async move {
-                    let mut err = Vec::new();
-                    tokio::io::copy(&mut stderr, &mut err).await.unwrap_or(0);
-
-                    err
-                });
-
-                let status = child.wait().await?;
-                let stdout_data = stdout_task.await.unwrap_or_default();
-                let stderr_data = stderr_task.await.unwrap_or_default();
-
-                Ok::<(std::process::Output, Vec<String>), Box<dyn std::error::Error + Send + Sync>>(
-                    (
-                        std::process::Output {
-                            status,
-                            stdout: stdout_data.0,
-                            stderr: stderr_data,
-                        },
-                        stdout_data.1,
-                    ),
-                )
-            };
-
-            tokio::select! {
-                _ = cancel.cancelled() => {
-                    debug!(name: "build", "Build cancelled");
-                    let _ = child.kill().await;
-                    update_status(&websocket_tx, current_status, StatusType::Info, "Build cancelled").await;
-                    let _ = result_tx.send(false).await; // Build failed due to cancellation
-                }
-                res = output_future => {
-                    let duration = build_start_time.elapsed();
-                    let formatted_elapsed_time = format_elapsed_time(
-                        duration,
-                        &FormatElapsedTimeOptions::default_dev(),
-                    );
-
-                    let success = match res {
-                        Ok(output) => {
-                            let (output, rendered_messages) = output;
-                            if output.status.success() {
-                                let build_type = if is_initial { "Initial build" } else { "Rebuild" };
-                                info!(name: "build", "{} finished {}", build_type, formatted_elapsed_time);
-                                update_status(&websocket_tx, current_status.clone(), StatusType::Success, "Build finished successfully").await;
-
-                                // Update dependency tracker after successful build
-                                Self::update_dependency_tracker_after_build(
-                                    dep_tracker_clone.clone(),
-                                    binary_path_clone.clone(),
-                                    target_dir_clone.clone(),
-                                    binary_name_clone.clone(),
-                                ).await;
-
-                                true
-                            } else {
-                                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                                println!("{}", stderr); // Raw stderr sometimes has something to say whenever cargo fails, even if the errors messages are actually in stdout
-                                let build_type = if is_initial { "Initial build" } else { "Rebuild" };
-                                error!(name: "build", "{} failed with errors {}", build_type, formatted_elapsed_time);
-                                if is_initial {
-                                    error!(name: "build", "Initial build needs to succeed before we can start the dev server");
-                                    update_status(&websocket_tx, current_status, StatusType::Error, "Initial build failed - fix errors and save to retry").await;
-                                } else {
-                                    update_status(&websocket_tx, current_status, StatusType::Error, &rendered_messages.join("\n")).await;
-                                }
-                                false
-                            }
-                        }
-                        Err(e) => {
-                            error!(name: "build", "Failed to wait for build: {}", e);
-                            update_status(&websocket_tx, current_status, StatusType::Error, &format!("Failed to wait for build: {}", e)).await;
-                            false
-                        }
-                    };
-                    let _ = result_tx.send(success).await;
-                }
+        tokio::select! {
+            _ = cancel.cancelled() => {
+                debug!(name: "build", "Build cancelled");
+                let _ = child.kill().await;
+                self.state.status_manager.update(StatusType::Info, "Build cancelled").await;
+                Ok(false)
             }
-        });
-
-        // Wait for the build result
-        let success = result_rx.recv().await.unwrap_or(false);
-        Ok(success)
+            result = self.run_build_to_completion(&mut child, stdout, stderr, is_initial, build_start_time) => {
+                result
+            }
+        }
     }
 
-    /// Update the dependency tracker after a successful build
-    async fn update_dependency_tracker_after_build(
-        dep_tracker: Arc<tokio::sync::RwLock<Option<DependencyTracker>>>,
-        binary_path: Arc<tokio::sync::RwLock<Option<PathBuf>>>,
-        target_dir: Arc<Option<PathBuf>>,
-        binary_name: Arc<Option<String>>,
-    ) {
-        // Use cached binary name (computed once at startup)
-        let Some(name) = binary_name.as_ref() else {
+    /// Run the cargo build process to completion and handle the output.
+    async fn run_build_to_completion(
+        &self,
+        child: &mut tokio::process::Child,
+        mut stdout: tokio::process::ChildStdout,
+        mut stderr: tokio::process::ChildStderr,
+        is_initial: bool,
+        build_start_time: Instant,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        // Read stdout and stderr concurrently
+        let stdout_task = tokio::spawn(async move {
+            let mut out = Vec::new();
+            tokio::io::copy(&mut stdout, &mut out).await.unwrap_or(0);
+
+            let mut rendered_messages: Vec<String> = Vec::new();
+
+            for message in cargo_metadata::Message::parse_stream(
+                String::from_utf8_lossy(&out).to_string().as_bytes(),
+            ) {
+                match message {
+                    Err(e) => {
+                        error!(name: "build", "Failed to parse cargo message: {}", e);
+                    }
+                    Ok(Message::CompilerMessage(msg)) => {
+                        if let Some(rendered) = &msg.message.rendered {
+                            info!("{}", rendered);
+                            rendered_messages.push(rendered.to_string());
+                        }
+                    }
+                    Ok(Message::TextLine(msg)) => {
+                        info!("{}", msg);
+                    }
+                    _ => {}
+                }
+            }
+
+            (out, rendered_messages)
+        });
+
+        let stderr_task = tokio::spawn(async move {
+            let mut err = Vec::new();
+            tokio::io::copy(&mut stderr, &mut err).await.unwrap_or(0);
+            err
+        });
+
+        let status = child.wait().await?;
+        let (_stdout_bytes, rendered_messages) = stdout_task.await.unwrap_or_default();
+        let stderr_bytes = stderr_task.await.unwrap_or_default();
+
+        let duration = build_start_time.elapsed();
+        let formatted_elapsed_time = format_elapsed_time(
+            duration,
+            &FormatElapsedTimeOptions::default_dev(),
+        );
+
+        if status.success() {
+            let build_type = if is_initial { "Initial build" } else { "Rebuild" };
+            info!(name: "build", "{} finished {}", build_type, formatted_elapsed_time);
+            self.state.status_manager.update(StatusType::Success, "Build finished successfully").await;
+
+            self.update_dependency_tracker().await;
+
+            Ok(true)
+        } else {
+            let stderr_str = String::from_utf8_lossy(&stderr_bytes).to_string();
+            // Raw stderr sometimes has something to say whenever cargo fails
+            println!("{}", stderr_str);
+
+            let build_type = if is_initial { "Initial build" } else { "Rebuild" };
+            error!(name: "build", "{} failed with errors {}", build_type, formatted_elapsed_time);
+
+            if is_initial {
+                error!(name: "build", "Initial build needs to succeed before we can start the dev server");
+                self.state.status_manager.update(StatusType::Error, "Initial build failed - fix errors and save to retry").await;
+            } else {
+                self.state.status_manager.update(StatusType::Error, &rendered_messages.join("\n")).await;
+            }
+
+            Ok(false)
+        }
+    }
+
+    /// Update the dependency tracker after a successful build.
+    async fn update_dependency_tracker(&self) {
+        let Some(ref name) = self.state.binary_name else {
             debug!(name: "build", "No binary name available, skipping dependency tracker update");
             return;
         };
 
-        // Use cached target directory (computed once at startup)
-        let Some(target) = target_dir.as_ref() else {
+        let Some(ref target) = self.state.target_dir else {
             debug!(name: "build", "No target directory available, skipping dependency tracker update");
             return;
         };
 
-        // Update binary path using cached values
+        // Update binary path
         let bin_path = target.join(name);
         if bin_path.exists() {
-            *binary_path.write().await = Some(bin_path.clone());
+            *self.state.binary_path.write().await = Some(bin_path.clone());
             debug!(name: "build", "Binary path set to: {:?}", bin_path);
         } else {
             debug!(name: "build", "Binary not found at expected path: {:?}", bin_path);
         }
 
         // Reload the dependency tracker from the .d file
-        // This MUST be done after each build since dependencies can change
         match DependencyTracker::load_from_binary_name(name) {
             Ok(tracker) => {
                 debug!(name: "build", "Loaded {} dependencies for tracking", tracker.get_dependencies().len());
-                *dep_tracker.write().await = Some(tracker);
+                *self.state.dep_tracker.write().await = Some(tracker);
             }
             Err(e) => {
                 debug!(name: "build", "Could not load dependency tracker: {}", e);
@@ -400,8 +341,7 @@ impl BuildManager {
         }
     }
 
-    /// Get the binary name from Cargo.toml in the current directory
-    fn get_binary_name_from_cargo_toml() -> Result<String, Box<dyn std::error::Error>> {
+    fn get_binary_name_from_cargo_toml() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let cargo_toml_path = PathBuf::from("Cargo.toml");
         if !cargo_toml_path.exists() {
             return Err("Cargo.toml not found in current directory".into());
@@ -410,7 +350,6 @@ impl BuildManager {
         let cargo_toml_content = std::fs::read_to_string(&cargo_toml_path)?;
         let cargo_toml: toml::Value = toml::from_str(&cargo_toml_content)?;
 
-        // First, try to get the package name
         if let Some(package_name) = cargo_toml
             .get("package")
             .and_then(|p| p.get("name"))
@@ -424,10 +363,189 @@ impl BuildManager {
                 return Ok(bin_name.to_string());
             }
 
-            // No explicit bin name, use package name
             return Ok(package_name.to_string());
         }
 
         Err("Could not find package name in Cargo.toml".into())
+    }
+
+    /// Set the dependency tracker directly (for testing).
+    #[cfg(test)]
+    pub(crate) async fn set_dep_tracker(&self, tracker: Option<DependencyTracker>) {
+        *self.state.dep_tracker.write().await = tracker;
+    }
+
+    /// Set the binary path directly (for testing).
+    #[cfg(test)]
+    pub(crate) async fn set_binary_path(&self, path: Option<PathBuf>) {
+        *self.state.binary_path.write().await = path;
+    }
+
+    /// Get the current binary path (for testing).
+    #[cfg(test)]
+    pub(crate) async fn get_binary_path(&self) -> Option<PathBuf> {
+        self.state.binary_path.read().await.clone()
+    }
+
+    /// Create a BuildManager with custom target_dir and binary_name (for testing).
+    #[cfg(test)]
+    pub(crate) fn new_with_config(
+        status_manager: StatusManager,
+        target_dir: Option<PathBuf>,
+        binary_name: Option<String>,
+    ) -> Self {
+        Self {
+            state: Arc::new(BuildManagerState {
+                current_cancel: RwLock::new(None),
+                build_semaphore: tokio::sync::Semaphore::new(1),
+                status_manager,
+                dep_tracker: RwLock::new(None),
+                binary_path: RwLock::new(None),
+                target_dir,
+                binary_name,
+            }),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::time::SystemTime;
+    use tempfile::TempDir;
+
+    fn create_test_manager() -> BuildManager {
+        let status_manager = StatusManager::new();
+        BuildManager::new_with_config(status_manager, None, None)
+    }
+
+    fn create_test_manager_with_config(
+        target_dir: Option<PathBuf>,
+        binary_name: Option<String>,
+    ) -> BuildManager {
+        let status_manager = StatusManager::new();
+        BuildManager::new_with_config(status_manager, target_dir, binary_name)
+    }
+
+    #[tokio::test]
+    async fn test_build_manager_clone_shares_state() {
+        let manager1 = create_test_manager();
+        let manager2 = manager1.clone();
+
+        // Set binary path via one clone
+        let test_path = PathBuf::from("/test/path");
+        manager1.set_binary_path(Some(test_path.clone())).await;
+
+        // Should be visible via the other clone
+        assert_eq!(manager2.get_binary_path().await, Some(test_path));
+    }
+
+    #[tokio::test]
+    async fn test_needs_recompile_without_tracker() {
+        let manager = create_test_manager();
+
+        // Without a dependency tracker, should always return true
+        let changed = vec![PathBuf::from("src/main.rs")];
+        assert!(manager.needs_recompile(&changed).await);
+    }
+
+    #[tokio::test]
+    async fn test_needs_recompile_with_empty_tracker() {
+        let manager = create_test_manager();
+
+        // Set an empty tracker (no dependencies)
+        let tracker = DependencyTracker::new();
+        manager.set_dep_tracker(Some(tracker)).await;
+
+        // Empty tracker has no dependencies, so has_dependencies() returns false
+        // This means we should still return true (recompile needed)
+        let changed = vec![PathBuf::from("src/main.rs")];
+        assert!(manager.needs_recompile(&changed).await);
+    }
+
+    #[tokio::test]
+    async fn test_needs_recompile_with_matching_dependency() {
+        let manager = create_test_manager();
+
+        // Create a tracker with some dependencies
+        let temp_dir = TempDir::new().unwrap();
+        let dep_file = temp_dir.path().join("src/lib.rs");
+        std::fs::create_dir_all(dep_file.parent().unwrap()).unwrap();
+        std::fs::write(&dep_file, "// test").unwrap();
+
+        // Get canonical path and current mod time
+        let canonical_path = dep_file.canonicalize().unwrap();
+        let old_time = SystemTime::UNIX_EPOCH; // Very old time
+
+        let mut tracker = DependencyTracker::new();
+        tracker.dependencies = HashMap::from([(canonical_path, old_time)]);
+
+        manager.set_dep_tracker(Some(tracker)).await;
+
+        // Changed file IS a dependency and is newer - should need recompile
+        let changed = vec![dep_file];
+        assert!(manager.needs_recompile(&changed).await);
+    }
+
+    #[tokio::test]
+    async fn test_needs_recompile_with_non_matching_file() {
+        let manager = create_test_manager();
+
+        // Create a tracker with some dependencies
+        let temp_dir = TempDir::new().unwrap();
+        let dep_file = temp_dir.path().join("src/lib.rs");
+        std::fs::create_dir_all(dep_file.parent().unwrap()).unwrap();
+        std::fs::write(&dep_file, "// test").unwrap();
+
+        let canonical_path = dep_file.canonicalize().unwrap();
+        let mod_time = std::fs::metadata(&dep_file).unwrap().modified().unwrap();
+
+        let mut tracker = DependencyTracker::new();
+        tracker.dependencies = HashMap::from([(canonical_path, mod_time)]);
+
+        manager.set_dep_tracker(Some(tracker)).await;
+
+        // Changed file is NOT a dependency (different file)
+        let other_file = temp_dir.path().join("assets/style.css");
+        std::fs::create_dir_all(other_file.parent().unwrap()).unwrap();
+        std::fs::write(&other_file, "/* css */").unwrap();
+
+        let changed = vec![other_file];
+        assert!(!manager.needs_recompile(&changed).await);
+    }
+
+    #[tokio::test]
+    async fn test_update_dependency_tracker_with_config_missing_binary() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = create_test_manager_with_config(
+            Some(temp_dir.path().to_path_buf()),
+            Some("nonexistent-binary".to_string()),
+        );
+
+        // Binary doesn't exist, so binary_path should not be set
+        manager.update_dependency_tracker().await;
+
+        assert!(manager.get_binary_path().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_update_dependency_tracker_with_existing_binary() {
+        let temp_dir = TempDir::new().unwrap();
+        let binary_name = "test-binary";
+        let binary_path = temp_dir.path().join(binary_name);
+
+        // Create a fake binary file
+        std::fs::write(&binary_path, "fake binary").unwrap();
+
+        let manager = create_test_manager_with_config(
+            Some(temp_dir.path().to_path_buf()),
+            Some(binary_name.to_string()),
+        );
+
+        manager.update_dependency_tracker().await;
+
+        // Binary path should be set
+        assert_eq!(manager.get_binary_path().await, Some(binary_path));
     }
 }

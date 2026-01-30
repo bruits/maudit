@@ -10,14 +10,14 @@ use notify::{
 };
 use notify_debouncer_full::{DebounceEventResult, DebouncedEvent, new_debouncer};
 use quanta::Instant;
-use server::WebSocketMessage;
+use server::StatusManager;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 use tokio::{
     signal,
-    sync::{broadcast, mpsc::channel},
+    sync::mpsc::channel,
     task::JoinHandle,
 };
 use tracing::{error, info};
@@ -28,14 +28,15 @@ pub async fn start_dev_env(
     cwd: &str,
     host: bool,
     port: Option<u16>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let start_time = Instant::now();
     info!(name: "dev", "Preparing dev environment…");
 
-    let (sender_websocket, _) = broadcast::channel::<WebSocketMessage>(100);
+    // Create status manager (handles WebSocket communication)
+    let status_manager = StatusManager::new();
 
-    // Create build manager (it will create its own status state internally)
-    let build_manager = BuildManager::new(sender_websocket.clone());
+    // Create build manager
+    let build_manager = BuildManager::new(status_manager.clone());
 
     // Do initial build
     info!(name: "build", "Doing initial build…");
@@ -81,17 +82,16 @@ pub async fn start_dev_env(
         info!(name: "dev", "Starting web server...");
         web_server_thread = Some(tokio::spawn(server::start_dev_web_server(
             start_time,
-            sender_websocket.clone(),
+            status_manager.clone(),
             host,
             port,
             None,
-            build_manager.current_status(),
         )));
     }
 
     // Clone build manager for the file watcher task
     let build_manager_watcher = build_manager.clone();
-    let sender_websocket_watcher = sender_websocket.clone();
+    let status_manager_watcher = status_manager.clone();
 
     let file_watcher_task = tokio::spawn(async move {
         let mut dev_server_started = initial_build_success;
@@ -107,6 +107,7 @@ pub async fn start_dev_env(
 
                     match result {
                         Ok(events) => {
+                            info!(name: "watch", "Received {} events: {:?}", events.len(), events);
                             // TODO: Handle rescan events, I don't fully understand the implication of them yet
                             // some issues:
                             // - https://github.com/notify-rs/notify/issues/434
@@ -155,11 +156,10 @@ pub async fn start_dev_env(
                                             dev_server_handle =
                                                 Some(tokio::spawn(server::start_dev_web_server(
                                                     start_time,
-                                                    sender_websocket_watcher.clone(),
+                                                    status_manager_watcher.clone(),
                                                     host,
                                                     port,
                                                     None,
-                                                    build_manager_watcher.current_status(),
                                                 )));
                                         }
                                         Ok(false) => {
@@ -171,7 +171,9 @@ pub async fn start_dev_env(
                                     }
                                 } else {
                                     // Normal rebuild - check if we need full recompilation or just rerun
+                                    // Only collect paths from events that actually trigger a rebuild
                                     let mut changed_paths: Vec<PathBuf> = events.iter()
+                                        .filter(|e| should_rebuild_for_event(e))
                                         .flat_map(|e| e.paths.iter().cloned())
                                         .collect();
 
