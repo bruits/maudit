@@ -8,6 +8,7 @@ pub struct Blog;
 impl Route for Blog {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let _style = ctx.assets.add_style("src/assets/blog.css");
+        let _icon_style = ctx.assets.add_style("src/assets/icons/blog-icon.css");
 
         // Generate a unique build ID - uses nanoseconds for uniqueness
         let build_id = SystemTime::now()

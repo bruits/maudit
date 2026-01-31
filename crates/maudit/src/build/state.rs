@@ -121,13 +121,21 @@ impl BuildState {
                 continue;
             }
 
-            // Only do directory prefix check if the changed path is actually a directory
-            // This handles cases where a directory is modified and we want to rebuild
-            // all routes that use assets within that directory
-            if changed_file.is_dir() {
-                let canonical_dir = canonical_changed.as_ref().unwrap_or(changed_file);
+            // Directory prefix check: find all routes using assets within this directory.
+            // This handles two cases:
+            // 1. A directory was modified - rebuild all routes using assets in that dir
+            // 2. A directory was renamed/deleted - the old path no longer exists but we
+            //    still need to rebuild routes that used assets under that path
+            //
+            // We do this check if:
+            // - The path currently exists as a directory, OR
+            // - The path doesn't exist (could be a deleted/renamed directory)
+            let should_check_prefix = changed_file.is_dir() || !changed_file.exists();
+
+            if should_check_prefix {
+                // Use original path for prefix matching (canonical won't exist for deleted dirs)
                 for (asset_path, routes) in &self.asset_to_routes {
-                    if asset_path.starts_with(canonical_dir) {
+                    if asset_path.starts_with(changed_file) {
                         affected_routes.extend(routes.iter().cloned());
                     }
                 }
@@ -141,5 +149,85 @@ impl BuildState {
     pub fn clear(&mut self) {
         self.asset_to_routes.clear();
         self.bundler_inputs.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_route(path: &str) -> RouteIdentifier {
+        RouteIdentifier::base(path.to_string(), None)
+    }
+
+    #[test]
+    fn test_get_affected_routes_exact_match() {
+        let mut state = BuildState::new();
+        let asset_path = PathBuf::from("/project/src/assets/logo.png");
+        let route = make_route("/");
+
+        state.track_asset(asset_path.clone(), route.clone());
+
+        // Exact match should work
+        let affected = state.get_affected_routes(&[asset_path]);
+        assert_eq!(affected.len(), 1);
+        assert!(affected.contains(&route));
+    }
+
+    #[test]
+    fn test_get_affected_routes_no_match() {
+        let mut state = BuildState::new();
+        let asset_path = PathBuf::from("/project/src/assets/logo.png");
+        let route = make_route("/");
+
+        state.track_asset(asset_path, route);
+
+        // Different file should not match
+        let other_path = PathBuf::from("/project/src/assets/other.png");
+        let affected = state.get_affected_routes(&[other_path]);
+        assert!(affected.is_empty());
+    }
+
+    #[test]
+    fn test_get_affected_routes_deleted_directory() {
+        let mut state = BuildState::new();
+
+        // Track assets under a directory path
+        let asset1 = PathBuf::from("/project/src/assets/icons/logo.png");
+        let asset2 = PathBuf::from("/project/src/assets/icons/favicon.ico");
+        let asset3 = PathBuf::from("/project/src/assets/styles.css");
+        let route1 = make_route("/");
+        let route2 = make_route("/about");
+
+        state.track_asset(asset1, route1.clone());
+        state.track_asset(asset2, route1.clone());
+        state.track_asset(asset3, route2.clone());
+
+        // Simulate a deleted/renamed directory (path doesn't exist)
+        // The "icons" directory was renamed, so the old path doesn't exist
+        let deleted_dir = PathBuf::from("/project/src/assets/icons");
+
+        // Since the path doesn't exist, it should check prefix matching
+        let affected = state.get_affected_routes(&[deleted_dir]);
+
+        // Should find route1 (uses assets under /icons/) but not route2
+        assert_eq!(affected.len(), 1);
+        assert!(affected.contains(&route1));
+    }
+
+    #[test]
+    fn test_get_affected_routes_multiple_routes_same_asset() {
+        let mut state = BuildState::new();
+        let asset_path = PathBuf::from("/project/src/assets/shared.css");
+        let route1 = make_route("/");
+        let route2 = make_route("/about");
+
+        state.track_asset(asset_path.clone(), route1.clone());
+        state.track_asset(asset_path.clone(), route2.clone());
+
+        let affected = state.get_affected_routes(&[asset_path]);
+        assert_eq!(affected.len(), 2);
+        assert!(affected.contains(&route1));
+        assert!(affected.contains(&route2));
     }
 }

@@ -100,9 +100,9 @@ impl BuildManager {
         };
 
         // Log that we're doing an incremental build
-        info!(name: "build", "Incremental build: {} files changed", changed_paths.len());
+        debug!(name: "build", "Incremental build: {} files changed", changed_paths.len());
         debug!(name: "build", "Changed files: {:?}", changed_paths);
-        info!(name: "build", "Rerunning binary without recompilation...");
+        debug!(name: "build", "Rerunning binary without recompilation...");
 
         self.state
             .status_manager

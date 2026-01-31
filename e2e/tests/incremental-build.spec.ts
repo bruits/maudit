@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test";
 import { createTestWithFixture } from "./test-utils";
-import { readFileSync, writeFileSync, mkdirSync, renameSync, rmSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync, rmSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -54,6 +54,8 @@ async function waitForBuildComplete(devServer: any, timeoutMs = 30000): Promise<
 		await new Promise((resolve) => setTimeout(resolve, 100));
 	}
 
+	// On timeout, log what we DID see for debugging
+	console.log("TIMEOUT - logs seen:", devServer.getLogs(50));
 	throw new Error(`Build did not complete within ${timeoutMs}ms`);
 }
 
@@ -420,72 +422,100 @@ test.describe("Incremental Build", () => {
 	});
 
 	// ============================================================
-	// TEST 8: Folder rename handling
+	// TEST 8: Folder rename detection
 	// ============================================================
-	test("folder rename triggers rebuild with correct changed paths", async ({ devServer }) => {
-		// Create a test folder structure that we can rename
-		const testFolder = resolve(fixturePath, "src", "assets", "test-icons");
-		const renamedFolder = resolve(fixturePath, "src", "assets", "test-icons-renamed");
-		const testFile = resolve(testFolder, "test-icon.css");
+	test("folder rename is detected and affects routes using assets in that folder", async ({ devServer }) => {
+		// This test verifies that renaming a folder containing tracked assets
+		// is detected by the file watcher and affects the correct routes.
+		//
+		// Setup: The blog page uses src/assets/icons/blog-icon.css
+		// Test: Rename icons -> icons-renamed, verify the blog route is identified as affected
+		//
+		// Note: The actual build will fail because the asset path becomes invalid,
+		// but this test verifies the DETECTION and ROUTE MATCHING works correctly.
 
-		// Clean up any leftover folders from previous test runs
-		if (existsSync(testFolder)) {
-			rmSync(testFolder, { recursive: true });
-		}
+		const iconsFolder = resolve(fixturePath, "src", "assets", "icons");
+		const renamedFolder = resolve(fixturePath, "src", "assets", "icons-renamed");
+		const iconFile = resolve(iconsFolder, "blog-icon.css");
+
+		// Ensure we start with the correct state
 		if (existsSync(renamedFolder)) {
-			rmSync(renamedFolder, { recursive: true });
+			// Restore from previous failed run
+			renameSync(renamedFolder, iconsFolder);
+			await new Promise((resolve) => setTimeout(resolve, 1000));
 		}
+
+		// Make sure the icons folder exists with the file
+		expect(existsSync(iconsFolder)).toBe(true);
+		expect(existsSync(iconFile)).toBe(true);
 
 		try {
-			// Step 1: Create the test folder and file
-			mkdirSync(testFolder, { recursive: true });
-			writeFileSync(testFile, "/* test icon styles */\n.icon { width: 16px; }");
-
-			// Wait for initial detection
+			// First, trigger TWO builds to establish the asset tracking
+			// The first build creates the state, the second ensures the icon is tracked
+			const originalContent = readFileSync(iconFile, "utf-8");
+			
+			// Build 1: Ensure blog-icon.css is used and tracked
 			devServer.clearLogs();
-			await new Promise((resolve) => setTimeout(resolve, 1000));
+			writeFileSync(iconFile, originalContent + "\n/* setup1 */");
+			await waitForBuildComplete(devServer, 30000);
+			await new Promise((resolve) => setTimeout(resolve, 500));
 
-			// Step 2: Rename the folder
+			// Build 2: Now the asset should definitely be in the state
 			devServer.clearLogs();
-			renameSync(testFolder, renamedFolder);
+			writeFileSync(iconFile, originalContent + "\n/* setup2 */");
+			await waitForBuildComplete(devServer, 30000);
+			await new Promise((resolve) => setTimeout(resolve, 500));
 
-			// Wait for the file watcher to detect the rename and process it
+			// Clear for the actual test
+			devServer.clearLogs();
+
+			// Rename icons -> icons-renamed
+			renameSync(iconsFolder, renamedFolder);
+
+			// Wait for the build to be attempted (it will fail because path is now invalid)
 			const startTime = Date.now();
-			const timeoutMs = 10000;
-			let logsAfterRename: string[] = [];
+			const timeoutMs = 15000;
+			let logs: string[] = [];
 
 			while (Date.now() - startTime < timeoutMs) {
-				logsAfterRename = devServer.getLogs(100);
-				const logsText = logsAfterRename.join("\n");
+				logs = devServer.getLogs(100);
+				const logsText = logs.join("\n");
 
-				// Wait for the build to complete (indicates paths were processed)
-				if (logsText.includes("rerun finished") || logsText.includes("Build completed")) {
+				// Wait for either success or failure
+				if (logsText.includes("finished") || logsText.includes("failed")) {
 					break;
 				}
 
 				await new Promise((resolve) => setTimeout(resolve, 100));
 			}
 
-			// Log what we received for debugging
-			console.log("Logs after folder rename:", logsAfterRename.slice(-20));
+			console.log("Logs after folder rename:", logs.slice(-15));
 
-			const logsText = logsAfterRename.join("\n");
+			const logsText = logs.join("\n");
 
-			// Verify that events were received
-			expect(logsText).toContain("Received");
+			// Key assertions: verify the detection and route matching worked
+			// 1. The folder paths should be in changed files
+			expect(logsText).toContain("icons");
 
-			// The key assertion: the changed files should include the FILE inside the folder,
-			// not just the folder path itself
-			// After expanding directory paths, we should see the CSS file
-			expect(logsText).toContain("test-icon.css");
+			// 2. The blog route should be identified as affected
+			expect(logsText).toContain("Rebuilding 1 affected routes");
+			expect(logsText).toContain("/blog");
+
+			// 3. Other routes should NOT be affected (index and about don't use icons/)
+			expect(logsText).not.toContain("/about");
+
 		} finally {
-			// Cleanup: remove test folders
-			if (existsSync(testFolder)) {
-				rmSync(testFolder, { recursive: true });
+			// Restore: rename icons-renamed back to icons
+			if (existsSync(renamedFolder) && !existsSync(iconsFolder)) {
+				renameSync(renamedFolder, iconsFolder);
 			}
-			if (existsSync(renamedFolder)) {
-				rmSync(renamedFolder, { recursive: true });
+			// Restore original content
+			if (existsSync(iconFile)) {
+				const content = readFileSync(iconFile, "utf-8");
+				writeFileSync(iconFile, content.replace(/\n\/\* setup[12] \*\//g, ""));
 			}
+			// Wait for restoration to be processed
+			await new Promise((resolve) => setTimeout(resolve, 1000));
 		}
 	});
 });

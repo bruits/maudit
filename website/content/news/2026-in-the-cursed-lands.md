@@ -70,7 +70,7 @@ Check [our documentation on placeholders](/docs/images/#placeholders) for more i
 
 ### Shortcodes
 
-Embedding a YouTube video typically means copying a long, ugly iframe tag and configuring several attributes to ensure proper rendering. It'd be nice to have something friendlier, a code that would be short, you will.
+Embedding a YouTube video typically means copying a long, ugly iframe tag and configuring several attributes to ensure proper rendering. It'd be nice to have something friendlier, a code that would be short, if you will.
 
 ```md
 Here's my cool video:
