@@ -20,7 +20,11 @@ use tracing::{error, info};
 
 use crate::dev::build::BuildManager;
 
-pub async fn start_dev_env(cwd: &str, host: bool, port: Option<u16>) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn start_dev_env(
+    cwd: &str,
+    host: bool,
+    port: Option<u16>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let start_time = Instant::now();
     info!(name: "dev", "Preparing dev environment…");
 
