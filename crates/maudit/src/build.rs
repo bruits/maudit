@@ -43,29 +43,38 @@ pub mod metadata;
 pub mod options;
 pub mod state;
 
-/// Helper to check if a route should be rebuilt during incremental builds
+/// Helper to check if a route should be rebuilt during incremental builds.
+/// Returns `true` for full builds (when `routes_to_rebuild` is `None`).
 fn should_rebuild_route(
-    route_id: &RouteIdentifier,
+    route_id: Option<&RouteIdentifier>,
     routes_to_rebuild: &Option<FxHashSet<RouteIdentifier>>,
 ) -> bool {
-    let result = match routes_to_rebuild {
-        Some(set) => set.contains(route_id),
-        None => true, // Full build
-    };
-
-    if !result {
-        trace!(target: "build", "Skipping route {:?} (not in rebuild set)", route_id);
+    match routes_to_rebuild {
+        Some(set) => {
+            // Incremental build - need route_id to check
+            let route_id = route_id.expect("route_id required for incremental builds");
+            let result = set.contains(route_id);
+            if !result {
+                trace!(target: "build", "Skipping route {:?} (not in rebuild set)", route_id);
+            }
+            result
+        }
+        None => true, // Full build - always rebuild
     }
-
-    result
 }
 
-/// Helper to track all assets used by a route
+/// Helper to track all assets used by a route.
+/// Only performs work when incremental builds are enabled and route_id is provided.
 fn track_route_assets(
     build_state: &mut BuildState,
-    route_id: &RouteIdentifier,
+    route_id: Option<&RouteIdentifier>,
     route_assets: &RouteAssets,
 ) {
+    // Skip tracking entirely when route_id is not provided (incremental disabled)
+    let Some(route_id) = route_id else {
+        return;
+    };
+
     // Track images
     for image in &route_assets.images {
         if let Ok(canonical) = image.path().canonicalize() {
@@ -321,10 +330,15 @@ pub async fn build(
 
             // Static base route
             if base_params.is_empty() {
-                let route_id = RouteIdentifier::base(base_path.clone(), None);
+                // Only create RouteIdentifier when incremental builds are enabled
+                let route_id = if options.incremental {
+                    Some(RouteIdentifier::base(base_path.clone(), None))
+                } else {
+                    None
+                };
 
                 // Check if we need to rebuild this route
-                if should_rebuild_route(&route_id, &routes_to_rebuild) {
+                if should_rebuild_route(route_id.as_ref(), &routes_to_rebuild) {
                     let mut route_assets = RouteAssets::with_default_assets(
                         &route_assets_options,
                         Some(image_cache.clone()),
@@ -350,7 +364,7 @@ pub async fn build(
                     info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
                     // Track assets for this route
-                    track_route_assets(&mut build_state, &route_id, &route_assets);
+                    track_route_assets(&mut build_state, route_id.as_ref(), &route_assets);
 
                     build_pages_images.extend(route_assets.images);
                     build_pages_scripts.extend(route_assets.scripts);
@@ -398,11 +412,15 @@ pub async fn build(
 
                     // Build all pages for this route
                     for page in pages {
-                        let route_id =
-                            RouteIdentifier::base(base_path.clone(), Some(page.0.0.clone()));
+                        // Only create RouteIdentifier when incremental builds are enabled
+                        let route_id = if options.incremental {
+                            Some(RouteIdentifier::base(base_path.clone(), Some(page.0.0.clone())))
+                        } else {
+                            None
+                        };
 
                         // Check if we need to rebuild this specific page
-                        if should_rebuild_route(&route_id, &routes_to_rebuild) {
+                        if should_rebuild_route(route_id.as_ref(), &routes_to_rebuild) {
                             let page_start = Instant::now();
                             let url = cached_route.url(&page.0);
                             let file_path = cached_route.file_path(&page.0, &options.output_dir);
@@ -421,7 +439,7 @@ pub async fn build(
                             info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), &route_format_options));
 
                             // Track assets for this page
-                            track_route_assets(&mut build_state, &route_id, &route_assets);
+                            track_route_assets(&mut build_state, route_id.as_ref(), &route_assets);
 
                             build_metadata.add_page(
                                 base_path.clone(),
@@ -458,11 +476,15 @@ pub async fn build(
 
             if variant_params.is_empty() {
                 // Static variant
-                let route_id =
-                    RouteIdentifier::variant(variant_id.clone(), variant_path.clone(), None);
+                // Only create RouteIdentifier when incremental builds are enabled
+                let route_id = if options.incremental {
+                    Some(RouteIdentifier::variant(variant_id.clone(), variant_path.clone(), None))
+                } else {
+                    None
+                };
 
                 // Check if we need to rebuild this variant
-                if should_rebuild_route(&route_id, &routes_to_rebuild) {
+                if should_rebuild_route(route_id.as_ref(), &routes_to_rebuild) {
                     let mut route_assets = RouteAssets::with_default_assets(
                         &route_assets_options,
                         Some(image_cache.clone()),
@@ -491,7 +513,7 @@ pub async fn build(
                     info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_start.elapsed(), &route_format_options));
 
                     // Track assets for this variant
-                    track_route_assets(&mut build_state, &route_id, &route_assets);
+                    track_route_assets(&mut build_state, route_id.as_ref(), &route_assets);
 
                     build_pages_images.extend(route_assets.images);
                     build_pages_scripts.extend(route_assets.scripts);
@@ -538,14 +560,19 @@ pub async fn build(
 
                     // Build all pages for this variant group
                     for page in pages {
-                        let route_id = RouteIdentifier::variant(
-                            variant_id.clone(),
-                            variant_path.clone(),
-                            Some(page.0.0.clone()),
-                        );
+                        // Only create RouteIdentifier when incremental builds are enabled
+                        let route_id = if options.incremental {
+                            Some(RouteIdentifier::variant(
+                                variant_id.clone(),
+                                variant_path.clone(),
+                                Some(page.0.0.clone()),
+                            ))
+                        } else {
+                            None
+                        };
 
                         // Check if we need to rebuild this specific variant page
-                        if should_rebuild_route(&route_id, &routes_to_rebuild) {
+                        if should_rebuild_route(route_id.as_ref(), &routes_to_rebuild) {
                             let variant_page_start = Instant::now();
                             let url = cached_route.variant_url(&page.0, &variant_id)?;
                             let file_path = cached_route.variant_file_path(
@@ -568,7 +595,7 @@ pub async fn build(
                             info!(target: "pages", "│  ├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_page_start.elapsed(), &route_format_options));
 
                             // Track assets for this variant page
-                            track_route_assets(&mut build_state, &route_id, &route_assets);
+                            track_route_assets(&mut build_state, route_id.as_ref(), &route_assets);
 
                             build_metadata.add_page(
                                 variant_path.clone(),
