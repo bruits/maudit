@@ -1,7 +1,12 @@
 //! Core functions and structs to define the content sources of your website.
 //!
 //! Content sources represent the content of your website, such as articles, blog posts, etc. Then, content sources can be passed to [`coronate()`](crate::coronate), through the [`content_sources!`](crate::content_sources) macro, to be loaded.
-use std::{any::Any, cell::RefCell, path::PathBuf, sync::Arc};
+use std::{
+    any::Any,
+    cell::RefCell,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -50,10 +55,10 @@ pub(crate) fn finish_tracking_content_files() -> Option<FxHashSet<PathBuf>> {
 
 /// Record that a content file was accessed.
 /// This is called internally when entries are accessed.
-fn track_content_file_access(file_path: &PathBuf) {
+fn track_content_file_access(file_path: &Path) {
     ACCESSED_CONTENT_FILES.with(|cell| {
         if let Some(ref mut set) = *cell.borrow_mut() {
-            set.insert(file_path.clone());
+            set.insert(file_path.to_path_buf());
         }
     });
 }
@@ -419,9 +424,10 @@ impl<T> ContentSource<T> {
 
         // Track file access for incremental builds
         if let Some(entry) = &entry
-            && let Some(ref file_path) = entry.file_path {
-                track_content_file_access(file_path);
-            }
+            && let Some(ref file_path) = entry.file_path
+        {
+            track_content_file_access(file_path);
+        }
 
         entry
     }

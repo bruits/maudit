@@ -158,7 +158,10 @@ impl BuildState {
     /// that all content sources should be re-initialized.
     ///
     /// Only considers files that look like content files (have common content extensions).
-    pub fn get_affected_content_sources(&self, changed_files: &[PathBuf]) -> Option<FxHashSet<String>> {
+    pub fn get_affected_content_sources(
+        &self,
+        changed_files: &[PathBuf],
+    ) -> Option<FxHashSet<String>> {
         let content_extensions = ["md", "mdx", "yaml", "yml", "json", "toml"];
         let mut affected_sources = FxHashSet::default();
 
@@ -999,7 +1002,10 @@ mod tests {
         state.track_content_file_source(file.clone(), "articles".to_string());
 
         assert_eq!(state.content_file_to_source.len(), 1);
-        assert_eq!(state.content_file_to_source.get(&file), Some(&"articles".to_string()));
+        assert_eq!(
+            state.content_file_to_source.get(&file),
+            Some(&"articles".to_string())
+        );
     }
 
     #[test]
@@ -1027,7 +1033,9 @@ mod tests {
         state.track_content_file_source(page.clone(), "pages".to_string());
 
         // Change both files
-        let affected = state.get_affected_content_sources(&[article, page]).unwrap();
+        let affected = state
+            .get_affected_content_sources(&[article, page])
+            .unwrap();
         assert_eq!(affected.len(), 2);
         assert!(affected.contains("articles"));
         assert!(affected.contains("pages"));
@@ -1057,11 +1065,15 @@ mod tests {
         let rust_file = PathBuf::from("/project/src/pages/index.rs");
 
         // Should return empty set (no content sources affected)
-        let affected = state.get_affected_content_sources(&[rust_file.clone()]).unwrap();
+        let affected = state
+            .get_affected_content_sources(std::slice::from_ref(&rust_file))
+            .unwrap();
         assert!(affected.is_empty());
 
         // Mixed: content file + non-content file
-        let affected = state.get_affected_content_sources(&[article, rust_file]).unwrap();
+        let affected = state
+            .get_affected_content_sources(&[article, rust_file])
+            .unwrap();
         assert_eq!(affected.len(), 1);
         assert!(affected.contains("articles"));
     }
@@ -1096,7 +1108,7 @@ mod tests {
         // Articles source mappings should be removed
         assert!(!state.content_file_to_source.contains_key(&article1));
         assert!(!state.content_file_to_source.contains_key(&article2));
-        
+
         // But routes mappings should be preserved (cleared separately per-route)
         assert!(state.content_file_to_routes.contains_key(&article1));
         assert!(state.content_file_to_routes.contains_key(&article2));
@@ -1104,7 +1116,10 @@ mod tests {
         // Pages should remain completely unchanged
         assert!(state.content_file_to_source.contains_key(&page));
         assert!(state.content_file_to_routes.contains_key(&page));
-        assert_eq!(state.content_file_to_source.get(&page), Some(&"pages".to_string()));
+        assert_eq!(
+            state.content_file_to_source.get(&page),
+            Some(&"pages".to_string())
+        );
     }
 
     #[test]
