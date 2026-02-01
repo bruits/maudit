@@ -53,7 +53,7 @@ pub async fn start_dev_env(
         .collect::<Vec<_>>();
 
     let mut debouncer = new_debouncer(
-        std::time::Duration::from_millis(200), // Longer debounce to better batch rapid file changes
+        std::time::Duration::from_millis(100),
         None,
         move |result: DebounceEventResult| {
             tx.blocking_send(result).unwrap_or(());
