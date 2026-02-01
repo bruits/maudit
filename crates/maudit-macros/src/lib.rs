@@ -330,6 +330,10 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
         impl maudit::route::InternalRoute for #struct_name {
             #route_raw_impl
 
+            fn source_file(&self) -> &'static str {
+                file!()
+            }
+
             #variant_method
 
             #sitemap_method

@@ -9,7 +9,7 @@ use rustc_hash::FxHashMap;
 use std::any::Any;
 use std::path::{Path, PathBuf};
 
-use lol_html::{RewriteStrSettings, element, rewrite_str};
+use lol_html::{element, rewrite_str, RewriteStrSettings};
 
 /// The result of a page render, can be either text, raw bytes, or an error.
 ///
@@ -504,6 +504,11 @@ pub enum RouteType {
 pub trait InternalRoute {
     fn route_raw(&self) -> Option<String>;
 
+    /// Returns the source file path where this route is defined.
+    /// This is used for incremental builds to track which routes are affected
+    /// when a source file changes.
+    fn source_file(&self) -> &'static str;
+
     fn variants(&self) -> Vec<(String, String)> {
         vec![]
     }
@@ -796,6 +801,10 @@ impl<'a> InternalRoute for CachedRoute<'a> {
         self.inner.route_raw()
     }
 
+    fn source_file(&self) -> &'static str {
+        self.inner.source_file()
+    }
+
     fn variants(&self) -> Vec<(String, String)> {
         self.inner.variants()
     }
@@ -957,15 +966,15 @@ pub mod prelude {
     //! use maudit::route::prelude::*;
     //! ```
     pub use super::{
-        CachedRoute, DynamicRouteContext, FullRoute, Page, PageContext, PageParams, Pages,
-        PaginatedContentPage, PaginationPage, RenderResult, Route, RouteExt, paginate, redirect,
+        paginate, redirect, CachedRoute, DynamicRouteContext, FullRoute, Page, PageContext,
+        PageParams, Pages, PaginatedContentPage, PaginationPage, RenderResult, Route, RouteExt,
     };
     pub use crate::assets::{
         Asset, Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt, Script, Style,
         StyleOptions,
     };
     pub use crate::content::{ContentContext, ContentEntry, Entry, EntryInner, MarkdownContent};
-    pub use maudit_macros::{Params, route};
+    pub use maudit_macros::{route, Params};
 }
 
 #[cfg(test)]
@@ -982,6 +991,10 @@ mod tests {
     impl InternalRoute for TestPage {
         fn route_raw(&self) -> Option<String> {
             Some(self.route.clone())
+        }
+
+        fn source_file(&self) -> &'static str {
+            file!()
         }
     }
 

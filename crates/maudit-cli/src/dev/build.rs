@@ -90,11 +90,11 @@ impl BuildManager {
                 Some(p) if p.exists() => p.clone(),
                 Some(p) => {
                     warn!(name: "build", "Binary at {:?} no longer exists, falling back to full rebuild", p);
-                    return self.start_build().await;
+                    return self.start_build(Some(changed_paths)).await;
                 }
                 None => {
                     warn!(name: "build", "No binary path available, falling back to full rebuild");
-                    return self.start_build().await;
+                    return self.start_build(Some(changed_paths)).await;
                 }
             }
         };
@@ -164,17 +164,22 @@ impl BuildManager {
 
     /// Do initial build that can be cancelled.
     pub async fn do_initial_build(&self) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-        self.internal_build(true).await
+        self.internal_build(true, None).await
     }
 
     /// Start a new build, cancelling any previous one.
-    pub async fn start_build(&self) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-        self.internal_build(false).await
+    /// If changed_paths is provided, they will be passed to the binary for incremental builds.
+    pub async fn start_build(
+        &self,
+        changed_paths: Option<&[PathBuf]>,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        self.internal_build(false, changed_paths).await
     }
 
     async fn internal_build(
         &self,
         is_initial: bool,
+        changed_paths: Option<&[PathBuf]>,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         // Cancel any existing build immediately
         let cancel = CancellationToken::new();
@@ -193,6 +198,20 @@ impl BuildManager {
             .update(StatusType::Info, "Building...")
             .await;
 
+        // Build environment variables
+        let mut envs: Vec<(&str, String)> = vec![
+            ("MAUDIT_DEV", "true".to_string()),
+            ("MAUDIT_QUIET", "true".to_string()),
+            ("CARGO_TERM_COLOR", "always".to_string()),
+        ];
+
+        // Add changed files if provided (for incremental builds after recompilation)
+        if let Some(paths) = changed_paths
+            && let Ok(json) = serde_json::to_string(paths) {
+                debug!(name: "build", "Passing MAUDIT_CHANGED_FILES to cargo: {}", json);
+                envs.push(("MAUDIT_CHANGED_FILES", json));
+            }
+
         let mut child = Command::new("cargo")
             .args([
                 "run",
@@ -200,11 +219,7 @@ impl BuildManager {
                 "--message-format",
                 "json-diagnostic-rendered-ansi",
             ])
-            .envs([
-                ("MAUDIT_DEV", "true"),
-                ("MAUDIT_QUIET", "true"),
-                ("CARGO_TERM_COLOR", "always"),
-            ])
+            .envs(envs.iter().map(|(k, v)| (*k, v.as_str())))
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()?;

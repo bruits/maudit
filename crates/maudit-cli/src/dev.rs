@@ -187,8 +187,9 @@ pub async fn start_dev_env(
                                         // Need to recompile - spawn in background so file watcher can continue
                                         info!(name: "watch", "Files changed, rebuilding...");
                                         let build_manager_clone = build_manager_watcher.clone();
+                                        let changed_paths_clone = changed_paths.clone();
                                         tokio::spawn(async move {
-                                            match build_manager_clone.start_build().await {
+                                            match build_manager_clone.start_build(Some(&changed_paths_clone)).await {
                                                 Ok(_) => {
                                                     // Build completed (success or failure already logged)
                                                 }

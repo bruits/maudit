@@ -2,6 +2,11 @@ use maud::html;
 use maudit::route::prelude::*;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use super::helpers;
+
+// Include content from external file - this creates a compile-time dependency
+const ABOUT_CONTENT: &str = include_str!("../assets/about-content.txt");
+
 #[route("/about")]
 pub struct About;
 
@@ -11,6 +16,9 @@ impl Route for About {
         let _script = ctx.assets.add_script("src/assets/about.js");
         // Shared style with index page (for testing shared assets)
         let _style = ctx.assets.add_style("src/assets/styles.css");
+
+        // Use shared helper function
+        let greeting = helpers::get_greeting();
 
         // Generate a unique build ID - uses nanoseconds for uniqueness
         let build_id = SystemTime::now()
@@ -25,7 +33,8 @@ impl Route for About {
                 }
                 body data-build-id=(build_id) {
                     h1 id="title" { "About Us" }
-                    p id="content" { "Learn more about us" }
+                    p id="greeting" { (greeting) }
+                    p id="content" { (ABOUT_CONTENT.trim()) }
                 }
             }
         }

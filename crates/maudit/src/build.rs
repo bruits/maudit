@@ -63,7 +63,7 @@ fn should_rebuild_route(
     }
 }
 
-/// Helper to track all assets used by a route.
+/// Helper to track all assets and source files used by a route.
 /// Only performs work when incremental builds are enabled and route_id is provided.
 fn track_route_assets(
     build_state: &mut BuildState,
@@ -95,6 +95,51 @@ fn track_route_assets(
             build_state.track_asset(canonical, route_id.clone());
         }
     }
+}
+
+/// Helper to track the source file where a route is defined.
+/// Only performs work when incremental builds are enabled and route_id is provided.
+fn track_route_source_file(
+    build_state: &mut BuildState,
+    route_id: Option<&RouteIdentifier>,
+    source_file: &str,
+) {
+    // Skip tracking entirely when route_id is not provided (incremental disabled)
+    let Some(route_id) = route_id else {
+        return;
+    };
+
+    // The file!() macro returns a path relative to the cargo workspace root.
+    // We need to canonicalize it to match against changed file paths (which are absolute).
+    let source_path = PathBuf::from(source_file);
+
+    // Try direct canonicalization first (works if CWD is workspace root)
+    if let Ok(canonical) = source_path.canonicalize() {
+        build_state.track_source_file(canonical, route_id.clone());
+        return;
+    }
+
+    // The file!() macro path is relative to the workspace root at compile time.
+    // At runtime, we're typically running from the package directory.
+    // Try to find the file by walking up from CWD until we find it.
+    if let Ok(cwd) = std::env::current_dir() {
+        let mut current = cwd.as_path();
+        loop {
+            let candidate = current.join(&source_path);
+            if let Ok(canonical) = candidate.canonicalize() {
+                build_state.track_source_file(canonical, route_id.clone());
+                return;
+            }
+            match current.parent() {
+                Some(parent) => current = parent,
+                None => break,
+            }
+        }
+    }
+
+    // Last resort: store the relative path (won't match absolute changed files)
+    debug!(target: "build", "Could not canonicalize source file path: {}", source_file);
+    build_state.track_source_file(source_path, route_id.clone());
 }
 
 pub fn execute_build(
@@ -132,25 +177,36 @@ pub async fn build(
         BuildState::new()
     };
 
-    debug!(target: "build", "Loaded build state with {} asset mappings", build_state.asset_to_routes.len());
+    debug!(target: "build", "Loaded build state with {} asset mappings, {} source mappings", build_state.asset_to_routes.len(), build_state.source_to_routes.len());
     debug!(target: "build", "options.incremental: {}, changed_files.is_some(): {}", options.incremental, changed_files.is_some());
 
     // Determine if this is an incremental build
-    let is_incremental =
-        options.incremental && changed_files.is_some() && !build_state.asset_to_routes.is_empty();
+    // We need either asset mappings OR source file mappings to do incremental builds
+    let has_build_state =
+        !build_state.asset_to_routes.is_empty() || !build_state.source_to_routes.is_empty();
+    let is_incremental = options.incremental && changed_files.is_some() && has_build_state;
 
     let routes_to_rebuild = if is_incremental {
         let changed = changed_files.unwrap();
         info!(target: "build", "Incremental build: {} files changed", changed.len());
         info!(target: "build", "Changed files: {:?}", changed);
 
-        info!(target: "build", "Build state has {} asset mappings", build_state.asset_to_routes.len());
+        info!(target: "build", "Build state has {} asset mappings, {} source mappings", build_state.asset_to_routes.len(), build_state.source_to_routes.len());
 
-        let affected = build_state.get_affected_routes(changed);
-        info!(target: "build", "Rebuilding {} affected routes", affected.len());
-        info!(target: "build", "Affected routes: {:?}", affected);
-
-        Some(affected)
+        match build_state.get_affected_routes(changed) {
+            Some(affected) => {
+                info!(target: "build", "Rebuilding {} affected routes", affected.len());
+                info!(target: "build", "Affected routes: {:?}", affected);
+                Some(affected)
+            }
+            None => {
+                // Some changed files weren't tracked (e.g., include_str! dependencies)
+                // Fall back to full rebuild to ensure correctness
+                info!(target: "build", "Untracked files changed, falling back to full rebuild");
+                build_state.clear();
+                None
+            }
+        }
     } else {
         if changed_files.is_some() {
             info!(target: "build", "Full build (first run after recompilation)");
@@ -363,8 +419,9 @@ pub async fn build(
 
                     info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
-                    // Track assets for this route
+                    // Track assets and source file for this route
                     track_route_assets(&mut build_state, route_id.as_ref(), &route_assets);
+                    track_route_source_file(&mut build_state, route_id.as_ref(), route.source_file());
 
                     build_pages_images.extend(route_assets.images);
                     build_pages_scripts.extend(route_assets.scripts);
@@ -438,8 +495,9 @@ pub async fn build(
 
                             info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), &route_format_options));
 
-                            // Track assets for this page
+                            // Track assets and source file for this page
                             track_route_assets(&mut build_state, route_id.as_ref(), &route_assets);
+                            track_route_source_file(&mut build_state, route_id.as_ref(), route.source_file());
 
                             build_metadata.add_page(
                                 base_path.clone(),
@@ -512,8 +570,9 @@ pub async fn build(
 
                     info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_start.elapsed(), &route_format_options));
 
-                    // Track assets for this variant
+                    // Track assets and source file for this variant
                     track_route_assets(&mut build_state, route_id.as_ref(), &route_assets);
+                    track_route_source_file(&mut build_state, route_id.as_ref(), route.source_file());
 
                     build_pages_images.extend(route_assets.images);
                     build_pages_scripts.extend(route_assets.scripts);
@@ -594,8 +653,9 @@ pub async fn build(
 
                             info!(target: "pages", "│  ├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_page_start.elapsed(), &route_format_options));
 
-                            // Track assets for this variant page
+                            // Track assets and source file for this variant page
                             track_route_assets(&mut build_state, route_id.as_ref(), &route_assets);
+                            track_route_source_file(&mut build_state, route_id.as_ref(), route.source_file());
 
                             build_metadata.add_page(
                                 variant_path.clone(),

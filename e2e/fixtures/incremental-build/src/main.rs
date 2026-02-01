@@ -1,4 +1,4 @@
-use maudit::{BuildOptions, BuildOutput, content_sources, coronate, routes};
+use maudit::{content_sources, coronate, routes, BuildOptions, BuildOutput};
 
 mod pages;
 

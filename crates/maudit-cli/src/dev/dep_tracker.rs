@@ -1,3 +1,4 @@
+use depinfo::RustcDepInfo;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -108,62 +109,7 @@ impl DependencyTracker {
         Ok(tracker)
     }
 
-    /// Parse space-separated paths from a string, handling escaped spaces
-    /// In Make-style .d files, spaces in filenames are escaped with backslashes
-    fn parse_paths(input: &str) -> Vec<PathBuf> {
-        let mut paths = Vec::new();
-        let mut current_path = String::new();
-        let mut chars = input.chars().peekable();
-
-        while let Some(ch) = chars.next() {
-            match ch {
-                '\\' => {
-                    // Check if this is escaping a space or newline
-                    if let Some(&next_ch) = chars.peek() {
-                        if next_ch == ' ' {
-                            // Escaped space - add it to the current path
-                            current_path.push(' ');
-                            chars.next(); // consume the space
-                        } else if next_ch == '\n' || next_ch == '\r' {
-                            // Line continuation - skip the backslash and newline
-                            chars.next();
-                            if next_ch == '\r' {
-                                // Handle \r\n
-                                if chars.peek() == Some(&'\n') {
-                                    chars.next();
-                                }
-                            }
-                        } else {
-                            // Not escaping space or newline, keep the backslash
-                            current_path.push('\\');
-                        }
-                    } else {
-                        // Backslash at end of string
-                        current_path.push('\\');
-                    }
-                }
-                ' ' | '\t' | '\n' | '\r' => {
-                    // Unescaped whitespace - end current path
-                    if !current_path.is_empty() {
-                        paths.push(PathBuf::from(current_path.clone()));
-                        current_path.clear();
-                    }
-                }
-                _ => {
-                    current_path.push(ch);
-                }
-            }
-        }
-
-        // Don't forget the last path
-        if !current_path.is_empty() {
-            paths.push(PathBuf::from(current_path));
-        }
-
-        paths
-    }
-
-    /// Reload dependencies from the .d file
+    /// Reload dependencies from the .d file using the depinfo crate
     pub fn reload_dependencies(&mut self) -> Result<(), std::io::Error> {
         let Some(d_file_path) = &self.d_file_path else {
             return Err(std::io::Error::new(
@@ -172,27 +118,15 @@ impl DependencyTracker {
             ));
         };
 
-        let content = fs::read_to_string(d_file_path)?;
-
-        // Parse the .d file format: "target: dep1 dep2 dep3 ..."
-        // The first line contains the target and dependencies, separated by ':'
-        let deps = if let Some(colon_pos) = content.find(':') {
-            // Everything after the colon is dependencies
-            &content[colon_pos + 1..]
-        } else {
-            // Malformed .d file
-            warn!("Malformed .d file at {:?}", d_file_path);
-            return Ok(());
-        };
-
-        // Dependencies are space-separated and may span multiple lines (with line continuations)
-        // Spaces in filenames are escaped with backslashes
-        let dep_paths = Self::parse_paths(deps);
+        let dep_info = RustcDepInfo::from_file(d_file_path).map_err(|e| {
+            warn!("Failed to parse .d file at {:?}: {}", d_file_path, e);
+            std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())
+        })?;
 
         // Clear old dependencies and load new ones with their modification times
         self.dependencies.clear();
 
-        for dep_path in dep_paths {
+        for dep_path in dep_info.files {
             match fs::metadata(&dep_path) {
                 Ok(metadata) => {
                     if let Ok(modified) = metadata.modified() {
@@ -341,37 +275,5 @@ mod tests {
                 .any(|p| p.to_str().unwrap().contains("normal.rs")),
             "Should contain normal file"
         );
-    }
-
-    #[test]
-    fn test_parse_escaped_paths() {
-        // Test basic space-separated paths
-        let paths = DependencyTracker::parse_paths("a.rs b.rs c.rs");
-        assert_eq!(paths.len(), 3);
-        assert_eq!(paths[0], PathBuf::from("a.rs"));
-        assert_eq!(paths[1], PathBuf::from("b.rs"));
-        assert_eq!(paths[2], PathBuf::from("c.rs"));
-
-        // Test escaped spaces
-        let paths = DependencyTracker::parse_paths("my\\ file.rs another.rs");
-        assert_eq!(paths.len(), 2);
-        assert_eq!(paths[0], PathBuf::from("my file.rs"));
-        assert_eq!(paths[1], PathBuf::from("another.rs"));
-
-        // Test line continuation
-        let paths = DependencyTracker::parse_paths("a.rs b.rs \\\nc.rs");
-        assert_eq!(paths.len(), 3);
-        assert_eq!(paths[0], PathBuf::from("a.rs"));
-        assert_eq!(paths[1], PathBuf::from("b.rs"));
-        assert_eq!(paths[2], PathBuf::from("c.rs"));
-
-        // Test multiple escaped spaces
-        let paths = DependencyTracker::parse_paths("path/to/my\\ file\\ name.rs");
-        assert_eq!(paths.len(), 1);
-        assert_eq!(paths[0], PathBuf::from("path/to/my file name.rs"));
-
-        // Test mixed whitespace
-        let paths = DependencyTracker::parse_paths("a.rs\tb.rs\nc.rs");
-        assert_eq!(paths.len(), 3);
     }
 }
