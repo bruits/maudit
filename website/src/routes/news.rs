@@ -1,12 +1,12 @@
 use chrono::Datelike;
-use maud::PreEscaped;
 use maud::html;
+use maud::PreEscaped;
 use maudit::route::prelude::*;
 use std::collections::BTreeMap;
 
 use crate::content::NewsContent;
-use crate::layout::SeoMeta;
 use crate::layout::layout;
+use crate::layout::SeoMeta;
 
 #[route("/news/")]
 pub struct NewsIndex;
@@ -18,7 +18,7 @@ impl Route for NewsIndex {
         // Group articles by year
         let mut articles_by_year: BTreeMap<String, Vec<_>> = BTreeMap::new();
 
-        for article in &content.entries {
+        for article in content.entries() {
             let year = article.data(ctx).date.year().to_string();
             articles_by_year
                 .entry(year)

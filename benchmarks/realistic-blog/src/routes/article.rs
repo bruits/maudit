@@ -16,7 +16,10 @@ impl Route<ArticlesParams, PaginatedContentPage<ArticleContent>> for Articles {
         &self,
         ctx: &mut DynamicRouteContext,
     ) -> Pages<ArticlesParams, PaginatedContentPage<ArticleContent>> {
-        let articles = &ctx.content.get_source::<ArticleContent>("articles").entries;
+        let articles = ctx
+            .content
+            .get_source::<ArticleContent>("articles")
+            .entries();
 
         let mut articles = articles.to_vec();
         articles.sort_by(|a, b| b.data(ctx).date.cmp(&a.data(ctx).date));

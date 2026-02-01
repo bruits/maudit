@@ -19,7 +19,7 @@ use crate::{
         options::PrefetchStrategy,
         state::{BuildState, RouteIdentifier},
     },
-    content::ContentSources,
+    content::{ContentSources, finish_tracking_content_files, start_tracking_content_files},
     is_dev,
     logging::print_title,
     route::{CachedRoute, DynamicRouteContext, FullRoute, InternalRoute, PageContext, PageParams},
@@ -142,6 +142,29 @@ fn track_route_source_file(
     build_state.track_source_file(source_path, route_id.clone());
 }
 
+/// Helper to track content files accessed during page rendering.
+/// Only performs work when incremental builds are enabled and route_id is provided.
+/// This should be called after `finish_tracking_content_files()` to get the accessed files.
+fn track_route_content_files(
+    build_state: &mut BuildState,
+    route_id: Option<&RouteIdentifier>,
+    accessed_files: Option<FxHashSet<PathBuf>>,
+) {
+    // Skip tracking entirely when route_id is not provided (incremental disabled)
+    let Some(route_id) = route_id else {
+        return;
+    };
+
+    // Skip if no files were tracked
+    let Some(files) = accessed_files else {
+        return;
+    };
+
+    for file_path in files {
+        build_state.track_content_file(file_path, route_id.clone());
+    }
+}
+
 pub fn execute_build(
     routes: &[&dyn FullRoute],
     content_sources: &mut ContentSources,
@@ -177,7 +200,7 @@ pub async fn build(
         BuildState::new()
     };
 
-    debug!(target: "build", "Loaded build state with {} asset mappings, {} source mappings", build_state.asset_to_routes.len(), build_state.source_to_routes.len());
+    debug!(target: "build", "Loaded build state with {} asset mappings, {} source mappings, {} content file mappings", build_state.asset_to_routes.len(), build_state.source_to_routes.len(), build_state.content_file_to_routes.len());
     debug!(target: "build", "options.incremental: {}, changed_files.is_some(): {}", options.incremental, changed_files.is_some());
 
     // Determine if this is an incremental build
@@ -191,7 +214,7 @@ pub async fn build(
         info!(target: "build", "Incremental build: {} files changed", changed.len());
         info!(target: "build", "Changed files: {:?}", changed);
 
-        info!(target: "build", "Build state has {} asset mappings, {} source mappings", build_state.asset_to_routes.len(), build_state.source_to_routes.len());
+        info!(target: "build", "Build state has {} asset mappings, {} source mappings, {} content file mappings", build_state.asset_to_routes.len(), build_state.source_to_routes.len(), build_state.content_file_to_routes.len());
 
         match build_state.get_affected_routes(changed) {
             Some(affected) => {
@@ -287,17 +310,85 @@ pub async fn build(
 
     let content_sources_start = Instant::now();
     print_title("initializing content sources");
-    content_sources.sources_mut().iter_mut().for_each(|source| {
-        let source_start = Instant::now();
-        source.init();
 
-        info!(target: "content", "{} initialized in {}", source.get_name(), format_elapsed_time(source_start.elapsed(), &FormatElapsedTimeOptions::default()));
-    });
+    // Determine which content sources need to be initialized
+    // For incremental builds, only re-init sources whose files have changed
+    let sources_to_init: Option<FxHashSet<String>> = if is_incremental {
+        if let Some(changed) = changed_files {
+            build_state.get_affected_content_sources(changed)
+        } else {
+            None // Full init
+        }
+    } else {
+        None // Full init
+    };
+
+    // Initialize content sources (all or selective)
+    let initialized_sources: Vec<String> = match &sources_to_init {
+        Some(source_names) if !source_names.is_empty() => {
+            info!(target: "content", "Selectively initializing {} content source(s): {:?}", source_names.len(), source_names);
+            
+            // Clear mappings for sources being re-initialized before init
+            build_state.clear_content_mappings_for_sources(source_names);
+            
+            // Initialize only the affected sources
+            let mut initialized = Vec::new();
+            for source in content_sources.sources_mut() {
+                if source_names.contains(source.get_name()) {
+                    let source_start = Instant::now();
+                    source.init();
+                    info!(target: "content", "{} initialized in {}", source.get_name(), format_elapsed_time(source_start.elapsed(), &FormatElapsedTimeOptions::default()));
+                    initialized.push(source.get_name().to_string());
+                } else {
+                    info!(target: "content", "{} (unchanged, skipped)", source.get_name());
+                }
+            }
+            initialized
+        }
+        Some(_) => {
+            // Empty set means no content files changed, skip all initialization
+            info!(target: "content", "No content files changed, skipping content source initialization");
+            Vec::new()
+        }
+        None => {
+            // Full initialization (first build, unknown files, or non-incremental)
+            info!(target: "content", "Initializing all content sources");
+            
+            // Clear all content mappings for full init
+            build_state.clear_content_file_mappings();
+            build_state.content_file_to_source.clear();
+            
+            let mut initialized = Vec::new();
+            for source in content_sources.sources_mut() {
+                let source_start = Instant::now();
+                source.init();
+                info!(target: "content", "{} initialized in {}", source.get_name(), format_elapsed_time(source_start.elapsed(), &FormatElapsedTimeOptions::default()));
+                initialized.push(source.get_name().to_string());
+            }
+            initialized
+        }
+    };
+
+    // Track file->source mappings for all initialized sources
+    for source in content_sources.sources() {
+        if initialized_sources.contains(&source.get_name().to_string()) {
+            let source_name = source.get_name().to_string();
+            for file_path in source.get_entry_file_paths() {
+                build_state.track_content_file_source(file_path, source_name.clone());
+            }
+        }
+    }
 
     info!(target: "content", "{}", format!("Content sources initialized in {}", format_elapsed_time(
         content_sources_start.elapsed(),
         &FormatElapsedTimeOptions::default(),
     )).bold());
+
+    // Clear content file->routes mappings for routes being rebuilt
+    // (so they get fresh tracking during this build)
+    if let Some(ref routes) = routes_to_rebuild {
+        build_state.clear_content_file_mappings_for_routes(routes);
+    }
 
     print_title("generating pages");
     let pages_start = Instant::now();
@@ -405,6 +496,11 @@ pub async fn build(
                     let params = PageParams::default();
                     let url = cached_route.url(&params);
 
+                    // Start tracking content file access for incremental builds
+                    if options.incremental {
+                        start_tracking_content_files();
+                    }
+
                     let result = route.build(&mut PageContext::from_static_route(
                         content_sources,
                         &mut route_assets,
@@ -413,15 +509,23 @@ pub async fn build(
                         None,
                     ))?;
 
+                    // Finish tracking and record accessed content files
+                    let accessed_files = if options.incremental {
+                        finish_tracking_content_files()
+                    } else {
+                        None
+                    };
+
                     let file_path = cached_route.file_path(&params, &options.output_dir);
 
                     write_route_file(&result, &file_path)?;
 
                     info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(route_start.elapsed(), &route_format_options));
 
-                    // Track assets and source file for this route
+                    // Track assets, source file, and content files for this route
                     track_route_assets(&mut build_state, route_id.as_ref(), &route_assets);
                     track_route_source_file(&mut build_state, route_id.as_ref(), route.source_file());
+                    track_route_content_files(&mut build_state, route_id.as_ref(), accessed_files);
 
                     build_pages_images.extend(route_assets.images);
                     build_pages_scripts.extend(route_assets.scripts);
@@ -482,6 +586,11 @@ pub async fn build(
                             let url = cached_route.url(&page.0);
                             let file_path = cached_route.file_path(&page.0, &options.output_dir);
 
+                            // Start tracking content file access for incremental builds
+                            if options.incremental {
+                                start_tracking_content_files();
+                            }
+
                             let content = route.build(&mut PageContext::from_dynamic_route(
                                 &page,
                                 content_sources,
@@ -491,13 +600,21 @@ pub async fn build(
                                 None,
                             ))?;
 
+                            // Finish tracking and record accessed content files
+                            let accessed_files = if options.incremental {
+                                finish_tracking_content_files()
+                            } else {
+                                None
+                            };
+
                             write_route_file(&content, &file_path)?;
 
                             info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), &route_format_options));
 
-                            // Track assets and source file for this page
+                            // Track assets, source file, and content files for this page
                             track_route_assets(&mut build_state, route_id.as_ref(), &route_assets);
                             track_route_source_file(&mut build_state, route_id.as_ref(), route.source_file());
+                            track_route_content_files(&mut build_state, route_id.as_ref(), accessed_files);
 
                             build_metadata.add_page(
                                 base_path.clone(),
@@ -558,6 +675,11 @@ pub async fn build(
                         &variant_id,
                     )?;
 
+                    // Start tracking content file access for incremental builds
+                    if options.incremental {
+                        start_tracking_content_files();
+                    }
+
                     let result = route.build(&mut PageContext::from_static_route(
                         content_sources,
                         &mut route_assets,
@@ -566,13 +688,21 @@ pub async fn build(
                         Some(variant_id.clone()),
                     ))?;
 
+                    // Finish tracking and record accessed content files
+                    let accessed_files = if options.incremental {
+                        finish_tracking_content_files()
+                    } else {
+                        None
+                    };
+
                     write_route_file(&result, &file_path)?;
 
                     info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_start.elapsed(), &route_format_options));
 
-                    // Track assets and source file for this variant
+                    // Track assets, source file, and content files for this variant
                     track_route_assets(&mut build_state, route_id.as_ref(), &route_assets);
                     track_route_source_file(&mut build_state, route_id.as_ref(), route.source_file());
+                    track_route_content_files(&mut build_state, route_id.as_ref(), accessed_files);
 
                     build_pages_images.extend(route_assets.images);
                     build_pages_scripts.extend(route_assets.scripts);
@@ -640,6 +770,11 @@ pub async fn build(
                                 &variant_id,
                             )?;
 
+                            // Start tracking content file access for incremental builds
+                            if options.incremental {
+                                start_tracking_content_files();
+                            }
+
                             let content = route.build(&mut PageContext::from_dynamic_route(
                                 &page,
                                 content_sources,
@@ -649,13 +784,21 @@ pub async fn build(
                                 Some(variant_id.clone()),
                             ))?;
 
+                            // Finish tracking and record accessed content files
+                            let accessed_files = if options.incremental {
+                                finish_tracking_content_files()
+                            } else {
+                                None
+                            };
+
                             write_route_file(&content, &file_path)?;
 
                             info!(target: "pages", "│  ├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_page_start.elapsed(), &route_format_options));
 
-                            // Track assets and source file for this variant page
+                            // Track assets, source file, and content files for this variant page
                             track_route_assets(&mut build_state, route_id.as_ref(), &route_assets);
                             track_route_source_file(&mut build_state, route_id.as_ref(), route.source_file());
+                            track_route_content_files(&mut build_state, route_id.as_ref(), accessed_files);
 
                             build_metadata.add_page(
                                 variant_path.clone(),

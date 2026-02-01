@@ -5,8 +5,8 @@ use crate::{
     content::ArticleContent,
     layout::layout,
     routes::{
-        Article, Articles,
         article::{ArticleParams, ArticlesParams},
+        Article, Articles,
     },
 };
 
@@ -18,9 +18,8 @@ impl Route for Index {
         let mut articles = ctx
             .content
             .get_source::<ArticleContent>("articles")
-            .entries
-            .iter()
-            .collect::<Vec<_>>(); // Collect into a Vec to allow sorting
+            .entries()
+            .to_vec(); // Clone into a Vec to allow sorting
 
         // Sort by date, newest first
         articles.sort_by(|a, b| b.data(ctx).date.cmp(&a.data(ctx).date));

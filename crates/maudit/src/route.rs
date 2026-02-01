@@ -282,7 +282,7 @@ pub fn redirect(url: &str) -> RenderResult {
 /// impl Route for Index {
 ///   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
 ///     let logo = ctx.assets.add_image("logo.png")?;
-///     let last_entries = &ctx.content.get_source::<ArticleContent>("articles").entries;
+///     let last_entries = ctx.content.get_source::<ArticleContent>("articles").entries();
 ///
 ///     Ok(html! {
 ///       main {

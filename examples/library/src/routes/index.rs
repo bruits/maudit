@@ -4,7 +4,7 @@ use maudit::route::prelude::*;
 use crate::{
     content::ArticleContent,
     layout::layout,
-    routes::{Article, article::ArticleParams},
+    routes::{article::ArticleParams, Article},
 };
 
 #[route("/")]
@@ -18,7 +18,7 @@ impl Route for Index {
         let markup = html! {
           (logo.render("Maudit logo, a crudely drawn crown"))
           ul {
-            @for entry in &articles.entries {
+            @for entry in articles.entries() {
               li {
                 a href=(&Article.url(ArticleParams { article: entry.id.clone() })) {
                     h2 { (entry.data(ctx).title) }

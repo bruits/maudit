@@ -1,9 +1,9 @@
 //! Core functions and structs to define the content sources of your website.
 //!
 //! Content sources represent the content of your website, such as articles, blog posts, etc. Then, content sources can be passed to [`coronate()`](crate::coronate), through the [`content_sources!`](crate::content_sources) macro, to be loaded.
-use std::{any::Any, path::PathBuf, sync::Arc};
+use std::{any::Any, cell::RefCell, path::PathBuf, sync::Arc};
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 mod highlight;
 pub mod markdown;
@@ -25,6 +25,38 @@ pub use markdown::{
 };
 
 pub use highlight::{HighlightOptions, highlight_code};
+
+// Thread-local storage for tracking content file access during page rendering.
+// This allows us to transparently track which content files a page uses
+// without requiring changes to user code.
+thread_local! {
+    static ACCESSED_CONTENT_FILES: RefCell<Option<FxHashSet<PathBuf>>> = const { RefCell::new(None) };
+}
+
+/// Start tracking content file access for a page render.
+/// Call this before rendering a page, then call `finish_tracking_content_files()`
+/// after rendering to get the set of accessed content files.
+pub(crate) fn start_tracking_content_files() {
+    ACCESSED_CONTENT_FILES.with(|cell| {
+        *cell.borrow_mut() = Some(FxHashSet::default());
+    });
+}
+
+/// Finish tracking content file access and return the set of accessed files.
+/// Returns `None` if tracking was not started.
+pub(crate) fn finish_tracking_content_files() -> Option<FxHashSet<PathBuf>> {
+    ACCESSED_CONTENT_FILES.with(|cell| cell.borrow_mut().take())
+}
+
+/// Record that a content file was accessed.
+/// This is called internally when entries are accessed.
+fn track_content_file_access(file_path: &PathBuf) {
+    ACCESSED_CONTENT_FILES.with(|cell| {
+        if let Some(ref mut set) = *cell.borrow_mut() {
+            set.insert(file_path.clone());
+        }
+    });
+}
 
 /// Helps implement a struct as a Markdown content entry.
 ///
@@ -302,6 +334,20 @@ impl ContentSources {
         }
     }
 
+    /// Initialize only the content sources with the given names.
+    /// Sources not in the set are left untouched (their entries remain as-is).
+    /// Returns the names of sources that were actually initialized.
+    pub fn init_sources(&mut self, source_names: &rustc_hash::FxHashSet<String>) -> Vec<String> {
+        let mut initialized = Vec::new();
+        for source in &mut self.0 {
+            if source_names.contains(source.get_name()) {
+                source.init();
+                initialized.push(source.get_name().to_string());
+            }
+        }
+        initialized
+    }
+
     pub fn get_untyped_source(&self, name: &str) -> &ContentSource<Untyped> {
         self.get_source::<Untyped>(name)
     }
@@ -337,7 +383,7 @@ type ContentSourceInitMethod<T> = Box<dyn Fn() -> Vec<Arc<EntryInner<T>>> + Send
 /// A source of content such as articles, blog posts, etc.
 pub struct ContentSource<T = Untyped> {
     pub name: String,
-    pub entries: Vec<Arc<EntryInner<T>>>,
+    entries: Vec<Arc<EntryInner<T>>>,
     pub(crate) init_method: ContentSourceInitMethod<T>,
 }
 
@@ -354,20 +400,42 @@ impl<T> ContentSource<T> {
     }
 
     pub fn get_entry(&self, id: &str) -> &Entry<T> {
-        self.entries
+        let entry = self
+            .entries
             .iter()
             .find(|entry| entry.id == id)
-            .unwrap_or_else(|| panic!("Entry with id '{}' not found", id))
+            .unwrap_or_else(|| panic!("Entry with id '{}' not found", id));
+
+        // Track file access for incremental builds
+        if let Some(ref file_path) = entry.file_path {
+            track_content_file_access(file_path);
+        }
+
+        entry
     }
 
     pub fn get_entry_safe(&self, id: &str) -> Option<&Entry<T>> {
-        self.entries.iter().find(|entry| entry.id == id)
+        let entry = self.entries.iter().find(|entry| entry.id == id);
+
+        // Track file access for incremental builds
+        if let Some(entry) = &entry
+            && let Some(ref file_path) = entry.file_path {
+                track_content_file_access(file_path);
+            }
+
+        entry
     }
 
     pub fn into_params<P>(&self, cb: impl FnMut(&Entry<T>) -> P) -> Vec<P>
     where
         P: Into<PageParams>,
     {
+        // Track all entries accessed for incremental builds
+        for entry in &self.entries {
+            if let Some(ref file_path) = entry.file_path {
+                track_content_file_access(file_path);
+            }
+        }
         self.entries.iter().map(cb).collect()
     }
 
@@ -378,7 +446,27 @@ impl<T> ContentSource<T> {
     where
         Params: Into<PageParams>,
     {
+        // Track all entries accessed for incremental builds
+        for entry in &self.entries {
+            if let Some(ref file_path) = entry.file_path {
+                track_content_file_access(file_path);
+            }
+        }
         self.entries.iter().map(cb).collect()
+    }
+
+    /// Get all entries, tracking access for incremental builds.
+    ///
+    /// This returns a slice of all entries in the content source.
+    /// You can use standard slice methods like `.iter()`, `.len()`, `.is_empty()`, etc.
+    pub fn entries(&self) -> &[Entry<T>] {
+        // Track all entries accessed for incremental builds
+        for entry in &self.entries {
+            if let Some(ref file_path) = entry.file_path {
+                track_content_file_access(file_path);
+            }
+        }
+        &self.entries
     }
 }
 
@@ -389,6 +477,10 @@ pub trait ContentSourceInternal: Send + Sync {
     fn init(&mut self);
     fn get_name(&self) -> &str;
     fn as_any(&self) -> &dyn Any; // Used for type checking at runtime
+
+    /// Get all file paths for entries in this content source.
+    /// Used for incremental builds to map content files to their source.
+    fn get_entry_file_paths(&self) -> Vec<PathBuf>;
 }
 
 impl<T: 'static + Sync + Send> ContentSourceInternal for ContentSource<T> {
@@ -400,5 +492,11 @@ impl<T: 'static + Sync + Send> ContentSourceInternal for ContentSource<T> {
     }
     fn as_any(&self) -> &dyn Any {
         self
+    }
+    fn get_entry_file_paths(&self) -> Vec<PathBuf> {
+        self.entries
+            .iter()
+            .filter_map(|entry| entry.file_path.clone())
+            .collect()
     }
 }

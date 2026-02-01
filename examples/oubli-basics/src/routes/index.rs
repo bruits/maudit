@@ -16,7 +16,7 @@ impl Route for Index {
         Ok(layout(html! {
             (logo.render("Maudit logo, a crudely drawn crown"))
             h1 { "Hello World" }
-            @for archetype in &archetype_store.entries {
+            @for archetype in archetype_store.entries() {
                 a href=(archetype.id) { (archetype.data(ctx).title) }
             }
         }))

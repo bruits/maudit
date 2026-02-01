@@ -208,11 +208,22 @@ test.describe("Incremental Build", () => {
 		bgPng: resolve(fixturePath, "src", "assets", "bg.png"),
 	};
 
+	// Content file paths (for granular content tracking tests)
+	const contentFiles = {
+		firstPost: resolve(fixturePath, "content", "articles", "first-post.md"),
+		secondPost: resolve(fixturePath, "content", "articles", "second-post.md"),
+		thirdPost: resolve(fixturePath, "content", "articles", "third-post.md"),
+	};
+
 	// Output HTML paths
 	const htmlPaths = {
 		index: resolve(fixturePath, "dist", "index.html"),
 		about: resolve(fixturePath, "dist", "about", "index.html"),
 		blog: resolve(fixturePath, "dist", "blog", "index.html"),
+		articles: resolve(fixturePath, "dist", "articles", "index.html"),
+		articleFirst: resolve(fixturePath, "dist", "articles", "first-post", "index.html"),
+		articleSecond: resolve(fixturePath, "dist", "articles", "second-post", "index.html"),
+		articleThird: resolve(fixturePath, "dist", "articles", "third-post", "index.html"),
 	};
 
 	// Original content storage
@@ -228,6 +239,10 @@ test.describe("Incremental Build", () => {
 		originals.logoPng = readFileSync(assets.logoPng); // binary
 		originals.teamPng = readFileSync(assets.teamPng); // binary
 		originals.bgPng = readFileSync(assets.bgPng); // binary
+		// Content files
+		originals.firstPost = readFileSync(contentFiles.firstPost, "utf-8");
+		originals.secondPost = readFileSync(contentFiles.secondPost, "utf-8");
+		originals.thirdPost = readFileSync(contentFiles.thirdPost, "utf-8");
 	});
 
 	test.afterAll(async () => {
@@ -240,6 +255,10 @@ test.describe("Incremental Build", () => {
 		writeFileSync(assets.logoPng, originals.logoPng);
 		writeFileSync(assets.teamPng, originals.teamPng);
 		writeFileSync(assets.bgPng, originals.bgPng);
+		// Restore content files
+		writeFileSync(contentFiles.firstPost, originals.firstPost);
+		writeFileSync(contentFiles.secondPost, originals.secondPost);
+		writeFileSync(contentFiles.thirdPost, originals.thirdPost);
 	});
 
 	// ============================================================
@@ -740,5 +759,173 @@ test.describe("Incremental Build", () => {
 				// Restoration build may not always complete, that's ok
 			}
 		}
+	});
+
+	// ============================================================
+	// TEST 12: Content file change rebuilds only routes accessing that specific file
+	// ============================================================
+	test("content file change rebuilds only routes accessing that file (granular tracking)", async ({ devServer }) => {
+		// This test verifies granular content file tracking.
+		// 
+		// Setup:
+		// - /articles/first-post uses get_entry("first-post") → tracks only first-post.md
+		// - /articles/second-post uses get_entry("second-post") → tracks only second-post.md
+		// - /articles (list) uses entries() → tracks ALL content files
+		//
+		// When we change first-post.md:
+		// - /articles/first-post should be rebuilt (directly uses this file)
+		// - /articles should be rebuilt (uses entries() which tracks all files)
+		// - /articles/second-post should NOT be rebuilt (uses different file)
+		// - /articles/third-post should NOT be rebuilt (uses different file)
+		// - Other routes (/, /about, /blog) should NOT be rebuilt
+
+		let testCounter = 0;
+
+		function modifyFile(suffix: string) {
+			testCounter++;
+			const newContent = (originals.firstPost as string).replace(
+				"first post",
+				`first post - test-${testCounter}-${suffix}`
+			);
+			writeFileSync(contentFiles.firstPost, newContent);
+		}
+
+		// Setup: establish incremental state
+		const before = await setupIncrementalState(devServer, modifyFile, htmlPaths, "articleFirst");
+		expect(before.articleFirst).not.toBeNull();
+		expect(before.articleSecond).not.toBeNull();
+		expect(before.articles).not.toBeNull();
+
+		// Trigger the final change
+		const logs = await triggerAndWaitForBuild(devServer, () => modifyFile("final"));
+		await waitForBuildIdChange(htmlPaths.articleFirst, before.articleFirst);
+
+		// Verify incremental build occurred
+		expect(isIncrementalBuild(logs)).toBe(true);
+
+		// Check which routes were rebuilt
+		const after = recordBuildIds(htmlPaths);
+
+		// Routes that should NOT be rebuilt (don't access first-post.md)
+		expect(after.index).toBe(before.index);
+		expect(after.about).toBe(before.about);
+		expect(after.blog).toBe(before.blog);
+		expect(after.articleSecond).toBe(before.articleSecond);
+		expect(after.articleThird).toBe(before.articleThird);
+
+		// Routes that SHOULD be rebuilt (access first-post.md)
+		expect(after.articleFirst).not.toBe(before.articleFirst);
+		expect(after.articles).not.toBe(before.articles); // Uses entries() which tracks all files
+	});
+
+	// ============================================================
+	// TEST 13: Different content file changes rebuild different routes
+	// ============================================================
+	test("different content files trigger rebuilds of different routes", async ({ devServer }) => {
+		// This test verifies that changing different content files rebuilds
+		// different sets of routes, proving granular tracking works.
+		//
+		// Change second-post.md:
+		// - /articles/second-post should be rebuilt
+		// - /articles (list) should be rebuilt (entries() tracks all)
+		// - /articles/first-post and /articles/third-post should NOT be rebuilt
+
+		let testCounter = 0;
+
+		function modifyFile(suffix: string) {
+			testCounter++;
+			const newContent = (originals.secondPost as string).replace(
+				"second post",
+				`second post - test-${testCounter}-${suffix}`
+			);
+			writeFileSync(contentFiles.secondPost, newContent);
+		}
+
+		// Setup: establish incremental state
+		const before = await setupIncrementalState(devServer, modifyFile, htmlPaths, "articleSecond");
+		expect(before.articleFirst).not.toBeNull();
+		expect(before.articleSecond).not.toBeNull();
+		expect(before.articleThird).not.toBeNull();
+		expect(before.articles).not.toBeNull();
+
+		// Trigger the final change
+		const logs = await triggerAndWaitForBuild(devServer, () => modifyFile("final"));
+		await waitForBuildIdChange(htmlPaths.articleSecond, before.articleSecond);
+
+		// Verify incremental build occurred
+		expect(isIncrementalBuild(logs)).toBe(true);
+
+		// Check which routes were rebuilt
+		const after = recordBuildIds(htmlPaths);
+
+		// Routes that should NOT be rebuilt
+		expect(after.index).toBe(before.index);
+		expect(after.about).toBe(before.about);
+		expect(after.blog).toBe(before.blog);
+		expect(after.articleFirst).toBe(before.articleFirst);
+		expect(after.articleThird).toBe(before.articleThird);
+
+		// Routes that SHOULD be rebuilt
+		expect(after.articleSecond).not.toBe(before.articleSecond);
+		expect(after.articles).not.toBe(before.articles);
+	});
+
+	// ============================================================
+	// TEST 14: Multiple content files changed rebuilds union of affected routes
+	// ============================================================
+	test("multiple content file changes rebuild union of affected routes", async ({ devServer }) => {
+		// This test verifies that changing multiple content files correctly
+		// rebuilds the union of all routes that access any of the changed files.
+		//
+		// Change both first-post.md and third-post.md simultaneously:
+		// - /articles/first-post should be rebuilt
+		// - /articles/third-post should be rebuilt
+		// - /articles (list) should be rebuilt
+		// - /articles/second-post should NOT be rebuilt
+
+		let testCounter = 0;
+
+		function modifyFile(suffix: string) {
+			testCounter++;
+			// Change both first and third posts
+			const newFirst = (originals.firstPost as string).replace(
+				"first post",
+				`first post - multi-${testCounter}-${suffix}`
+			);
+			const newThird = (originals.thirdPost as string).replace(
+				"third post",
+				`third post - multi-${testCounter}-${suffix}`
+			);
+			writeFileSync(contentFiles.firstPost, newFirst);
+			writeFileSync(contentFiles.thirdPost, newThird);
+		}
+
+		// Setup: establish incremental state
+		const before = await setupIncrementalState(devServer, modifyFile, htmlPaths, "articleFirst");
+		expect(before.articleFirst).not.toBeNull();
+		expect(before.articleSecond).not.toBeNull();
+		expect(before.articleThird).not.toBeNull();
+		expect(before.articles).not.toBeNull();
+
+		// Trigger the final change
+		const logs = await triggerAndWaitForBuild(devServer, () => modifyFile("final"));
+		await waitForBuildIdChange(htmlPaths.articleFirst, before.articleFirst);
+
+		// Verify incremental build occurred
+		expect(isIncrementalBuild(logs)).toBe(true);
+
+		// Check which routes were rebuilt
+		const after = recordBuildIds(htmlPaths);
+
+		// Routes that should NOT be rebuilt
+		expect(after.index).toBe(before.index);
+		expect(after.about).toBe(before.about);
+		expect(after.blog).toBe(before.blog);
+		expect(after.articleSecond).toBe(before.articleSecond);
+
+		// Routes that SHOULD be rebuilt
+		expect(after.articleFirst).not.toBe(before.articleFirst);
+		expect(after.articleThird).not.toBe(before.articleThird);
+		expect(after.articles).not.toBe(before.articles);
 	});
 });

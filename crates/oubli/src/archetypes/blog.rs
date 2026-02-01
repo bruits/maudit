@@ -1,10 +1,10 @@
 //! Blog archetype.
 //! Represents a markdown blog archetype, with an index page and individual entry pages.
 use crate::layouts::layout;
-use maud::{Markup, html};
+use maud::{html, Markup};
 use maudit::content::markdown_entry;
-use maudit::route::FullRoute;
 use maudit::route::prelude::*;
+use maudit::route::FullRoute;
 
 pub fn blog_index_content<T: FullRoute>(
     route: impl FullRoute,
@@ -18,7 +18,7 @@ pub fn blog_index_content<T: FullRoute>(
 
     let markup = html! {
         main {
-            @for entry in &blog_entries.entries {
+            @for entry in blog_entries.entries() {
                 a href=(route.url(&BlogEntryParams { entry: entry.id.clone() }.into())) {
                     h2 { (entry.data(ctx).title) }
                     p { (entry.data(ctx).description) }
