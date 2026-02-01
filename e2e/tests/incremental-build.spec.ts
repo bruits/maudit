@@ -928,4 +928,97 @@ test.describe("Incremental Build", () => {
 		expect(after.articleThird).not.toBe(before.articleThird);
 		expect(after.articles).not.toBe(before.articles);
 	});
+
+	// ============================================================
+	// TEST 15: Full rebuild from untracked file properly initializes content sources
+	// ============================================================
+	test("full rebuild from untracked file properly initializes content sources", async ({ devServer }) => {
+		// This test verifies that when an untracked Rust file (like helpers.rs) changes,
+		// triggering a full rebuild (routes_to_rebuild = None), content sources are
+		// still properly initialized.
+		//
+		// This was a bug where the code checked `is_incremental` instead of 
+		// `routes_to_rebuild.is_some()`, causing content sources to not be initialized
+		// during full rebuilds triggered by untracked file changes.
+		//
+		// Setup:
+		// - helpers.rs is a shared module not tracked in source_to_routes
+		// - Changing it triggers routes_to_rebuild = None (full rebuild)
+		// - Routes like /articles/* use content from the "articles" content source
+		// - If content sources aren't initialized, the build would crash
+		//
+		// This test:
+		// 1. First modifies a content file to ensure specific content exists
+		// 2. Then modifies helpers.rs to trigger a full rebuild
+		// 3. Verifies the content-using routes are properly built with correct content
+
+		const helpersRs = resolve(fixturePath, "src", "pages", "helpers.rs");
+		const originalHelpersRs = readFileSync(helpersRs, "utf-8");
+		const rsTimeout = 60000;
+
+		try {
+			// Step 1: Modify content file to set up specific content we can verify
+			const testMarker = `CONTENT-INIT-TEST-${Date.now()}`;
+			const newContent = (originals.firstPost as string).replace(
+				"first post",
+				`first post - ${testMarker}`
+			);
+			writeFileSync(contentFiles.firstPost, newContent);
+
+			// Wait for the content change to be processed
+			const beforeContent = getBuildId(htmlPaths.articleFirst);
+			await waitForBuildComplete(devServer, rsTimeout);
+			await waitForBuildIdChange(htmlPaths.articleFirst, beforeContent, rsTimeout);
+
+			// Verify the content was updated
+			let articleHtml = readFileSync(htmlPaths.articleFirst, "utf-8");
+			expect(articleHtml).toContain(testMarker);
+
+			// Record build IDs before the helpers.rs change
+			const before = recordBuildIds(htmlPaths);
+			expect(before.articleFirst).not.toBeNull();
+			expect(before.articles).not.toBeNull();
+
+			// Step 2: Modify helpers.rs to trigger full rebuild
+			// This is an untracked file, so it triggers routes_to_rebuild = None
+			devServer.clearLogs();
+			writeFileSync(helpersRs, originalHelpersRs + `\n// content-init-test-${Date.now()}`);
+			
+			await waitForBuildComplete(devServer, rsTimeout);
+			await waitForBuildIdChange(htmlPaths.articleFirst, before.articleFirst, rsTimeout);
+
+			// Step 3: Verify the build succeeded and content is still correct
+			// If content sources weren't initialized, this would fail or crash
+			const after = recordBuildIds(htmlPaths);
+			
+			// All routes should be rebuilt (full rebuild)
+			expect(after.index).not.toBe(before.index);
+			expect(after.about).not.toBe(before.about);
+			expect(after.blog).not.toBe(before.blog);
+			expect(after.articleFirst).not.toBe(before.articleFirst);
+			expect(after.articles).not.toBe(before.articles);
+
+			// Most importantly: verify the content-using routes have correct content
+			// This proves content sources were properly initialized during the full rebuild
+			articleHtml = readFileSync(htmlPaths.articleFirst, "utf-8");
+			expect(articleHtml).toContain(testMarker);
+
+			// Also verify the articles list page works (uses entries())
+			const articlesHtml = readFileSync(htmlPaths.articles, "utf-8");
+			expect(articlesHtml).toContain("First Post");
+
+		} finally {
+			// Restore original content
+			writeFileSync(helpersRs, originalHelpersRs);
+			writeFileSync(contentFiles.firstPost, originals.firstPost as string);
+			
+			// Wait for restoration build
+			const beforeRestore = getBuildId(htmlPaths.articleFirst);
+			try {
+				await waitForBuildIdChange(htmlPaths.articleFirst, beforeRestore, 60000);
+			} catch {
+				// Restoration build may not always complete, that's ok
+			}
+		}
+	});
 });

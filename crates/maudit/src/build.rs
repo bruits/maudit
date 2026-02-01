@@ -312,15 +312,16 @@ pub async fn build(
     print_title("initializing content sources");
 
     // Determine which content sources need to be initialized
-    // For incremental builds, only re-init sources whose files have changed
-    let sources_to_init: Option<FxHashSet<String>> = if is_incremental {
+    // For incremental builds with specific routes to rebuild, only re-init sources whose files have changed
+    // If routes_to_rebuild is None (full rebuild), always init all sources
+    let sources_to_init: Option<FxHashSet<String>> = if routes_to_rebuild.is_some() {
         if let Some(changed) = changed_files {
             build_state.get_affected_content_sources(changed)
         } else {
             None // Full init
         }
     } else {
-        None // Full init
+        None // Full init (routes_to_rebuild is None means full rebuild)
     };
 
     // Initialize content sources (all or selective)
