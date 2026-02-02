@@ -1,5 +1,6 @@
 use cargo_metadata::Message;
 use quanta::Instant;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::process::Command;
@@ -24,6 +25,9 @@ struct BuildManagerState {
     // Cached values computed once at startup
     target_dir: Option<PathBuf>,
     binary_name: Option<String>,
+    /// Accumulates changed file paths across cancelled/failed builds.
+    /// Only cleared after a successful build completion.
+    pending_changed_files: RwLock<HashSet<PathBuf>>,
 }
 
 /// Manages cargo build processes with cancellation support.
@@ -55,6 +59,7 @@ impl BuildManager {
                 binary_path: RwLock::new(None),
                 target_dir,
                 binary_name,
+                pending_changed_files: RwLock::new(HashSet::new()),
             }),
         }
     }
@@ -99,9 +104,20 @@ impl BuildManager {
             }
         };
 
+        // Merge incoming changed_paths with any pending changes from cancelled/failed builds
+        let effective_changed_paths: Vec<PathBuf> = {
+            let mut pending = self.state.pending_changed_files.write().await;
+
+            // Add new changes to pending set
+            pending.extend(changed_paths.iter().cloned());
+
+            // Convert to Vec for passing to the binary (don't clear yet - wait for success)
+            pending.iter().cloned().collect()
+        };
+
         // Log that we're doing an incremental build
-        debug!(name: "build", "Incremental build: {} files changed", changed_paths.len());
-        debug!(name: "build", "Changed files: {:?}", changed_paths);
+        debug!(name: "build", "Incremental build: {} files changed (including pending from cancelled builds)", effective_changed_paths.len());
+        debug!(name: "build", "Changed files: {:?}", effective_changed_paths);
         debug!(name: "build", "Rerunning binary without recompilation...");
 
         self.state
@@ -112,7 +128,7 @@ impl BuildManager {
         let build_start_time = Instant::now();
 
         // Serialize changed paths to JSON for the binary
-        let changed_files_json = serde_json::to_string(changed_paths)?;
+        let changed_files_json = serde_json::to_string(&effective_changed_paths)?;
 
         let child = Command::new(&path)
             .envs([
@@ -131,6 +147,10 @@ impl BuildManager {
             format_elapsed_time(duration, &FormatElapsedTimeOptions::default_dev());
 
         if output.status.success() {
+            // Clear pending changes on success
+            self.state.pending_changed_files.write().await.clear();
+            debug!(name: "build", "Binary rerun succeeded, cleared pending changed files");
+
             if std::env::var("MAUDIT_SHOW_BINARY_OUTPUT").is_ok() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -147,6 +167,7 @@ impl BuildManager {
                 .await;
             Ok(true)
         } else {
+            // On failure, pending changes are preserved for the next build
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             error!(name: "build", "Binary rerun failed {}\nstdout: {}\nstderr: {}",
@@ -193,6 +214,27 @@ impl BuildManager {
         // Acquire semaphore to ensure only one build runs at a time
         let _permit = self.state.build_semaphore.acquire().await?;
 
+        // Merge incoming changed_paths with any pending changes from cancelled/failed builds
+        let effective_changed_paths: Option<Vec<PathBuf>> = {
+            let mut pending = self.state.pending_changed_files.write().await;
+
+            // Add new changes to pending set
+            if let Some(paths) = changed_paths {
+                pending.extend(paths.iter().cloned());
+            }
+
+            if pending.is_empty() {
+                None
+            } else {
+                // Convert to Vec for passing to cargo (don't clear yet - wait for success)
+                Some(pending.iter().cloned().collect())
+            }
+        };
+
+        if let Some(ref paths) = effective_changed_paths {
+            debug!(name: "build", "Building with {} changed files (including pending from cancelled builds)", paths.len());
+        }
+
         self.state
             .status_manager
             .update(StatusType::Info, "Building...")
@@ -206,7 +248,7 @@ impl BuildManager {
         ];
 
         // Add changed files if provided (for incremental builds after recompilation)
-        if let Some(paths) = changed_paths
+        if let Some(ref paths) = effective_changed_paths
             && let Ok(json) = serde_json::to_string(paths) {
                 debug!(name: "build", "Passing MAUDIT_CHANGED_FILES to cargo: {}", json);
                 envs.push(("MAUDIT_CHANGED_FILES", json));
@@ -233,12 +275,18 @@ impl BuildManager {
 
         tokio::select! {
             _ = cancel.cancelled() => {
-                debug!(name: "build", "Build cancelled");
+                debug!(name: "build", "Build cancelled (pending changes preserved for next build)");
                 let _ = child.kill().await;
                 self.state.status_manager.update(StatusType::Info, "Build cancelled").await;
+                // Pending changes are preserved - don't clear them
                 Ok(false)
             }
             result = self.run_build_to_completion(&mut child, stdout, stderr, is_initial, build_start_time) => {
+                // Clear pending changes only on success
+                if let Ok(true) = result {
+                    self.state.pending_changed_files.write().await.clear();
+                    debug!(name: "build", "Build succeeded, cleared pending changed files");
+                }
                 result
             }
         }
@@ -424,6 +472,25 @@ impl BuildManager {
         self.state.binary_path.read().await.clone()
     }
 
+    /// Get the current pending changed files (for testing).
+    #[cfg(test)]
+    pub(crate) async fn get_pending_changed_files(&self) -> HashSet<PathBuf> {
+        self.state.pending_changed_files.read().await.clone()
+    }
+
+    /// Add paths to pending changed files (for testing).
+    #[cfg(test)]
+    pub(crate) async fn add_pending_changed_files(&self, paths: &[PathBuf]) {
+        let mut pending = self.state.pending_changed_files.write().await;
+        pending.extend(paths.iter().cloned());
+    }
+
+    /// Clear pending changed files (for testing).
+    #[cfg(test)]
+    pub(crate) async fn clear_pending_changed_files(&self) {
+        self.state.pending_changed_files.write().await.clear();
+    }
+
     /// Create a BuildManager with custom target_dir and binary_name (for testing).
     #[cfg(test)]
     pub(crate) fn new_with_config(
@@ -440,6 +507,7 @@ impl BuildManager {
                 binary_path: RwLock::new(None),
                 target_dir,
                 binary_name,
+                pending_changed_files: RwLock::new(HashSet::new()),
             }),
         }
     }
@@ -584,5 +652,110 @@ mod tests {
 
         // Binary path should be set
         assert_eq!(manager.get_binary_path().await, Some(binary_path));
+    }
+
+    #[tokio::test]
+    async fn test_pending_changed_files_starts_empty() {
+        let manager = create_test_manager();
+        assert!(manager.get_pending_changed_files().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_pending_changed_files_can_be_added() {
+        let manager = create_test_manager();
+
+        let paths = vec![
+            PathBuf::from("content/post1.md"),
+            PathBuf::from("content/post2.md"),
+        ];
+        manager.add_pending_changed_files(&paths).await;
+
+        let pending = manager.get_pending_changed_files().await;
+        assert_eq!(pending.len(), 2);
+        assert!(pending.contains(&PathBuf::from("content/post1.md")));
+        assert!(pending.contains(&PathBuf::from("content/post2.md")));
+    }
+
+    #[tokio::test]
+    async fn test_pending_changed_files_accumulate_across_additions() {
+        let manager = create_test_manager();
+
+        // First batch of changes
+        manager
+            .add_pending_changed_files(&[PathBuf::from("content/post1.md")])
+            .await;
+
+        // Second batch of changes (simulating a cancelled build followed by new changes)
+        manager
+            .add_pending_changed_files(&[PathBuf::from("content/post2.md")])
+            .await;
+
+        // Third batch
+        manager
+            .add_pending_changed_files(&[PathBuf::from("content/post3.md")])
+            .await;
+
+        let pending = manager.get_pending_changed_files().await;
+        assert_eq!(pending.len(), 3);
+        assert!(pending.contains(&PathBuf::from("content/post1.md")));
+        assert!(pending.contains(&PathBuf::from("content/post2.md")));
+        assert!(pending.contains(&PathBuf::from("content/post3.md")));
+    }
+
+    #[tokio::test]
+    async fn test_pending_changed_files_deduplicates() {
+        let manager = create_test_manager();
+
+        // Add the same file multiple times
+        manager
+            .add_pending_changed_files(&[PathBuf::from("content/post1.md")])
+            .await;
+        manager
+            .add_pending_changed_files(&[PathBuf::from("content/post1.md")])
+            .await;
+        manager
+            .add_pending_changed_files(&[PathBuf::from("content/post1.md")])
+            .await;
+
+        let pending = manager.get_pending_changed_files().await;
+        assert_eq!(pending.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_pending_changed_files_can_be_cleared() {
+        let manager = create_test_manager();
+
+        manager
+            .add_pending_changed_files(&[
+                PathBuf::from("content/post1.md"),
+                PathBuf::from("content/post2.md"),
+            ])
+            .await;
+        assert_eq!(manager.get_pending_changed_files().await.len(), 2);
+
+        manager.clear_pending_changed_files().await;
+        assert!(manager.get_pending_changed_files().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_pending_changed_files_shared_across_clones() {
+        let manager1 = create_test_manager();
+        let manager2 = manager1.clone();
+
+        // Add via one clone
+        manager1
+            .add_pending_changed_files(&[PathBuf::from("content/post1.md")])
+            .await;
+
+        // Should be visible via the other clone
+        let pending = manager2.get_pending_changed_files().await;
+        assert_eq!(pending.len(), 1);
+        assert!(pending.contains(&PathBuf::from("content/post1.md")));
+
+        // Clear via second clone
+        manager2.clear_pending_changed_files().await;
+
+        // Should be cleared in first clone too
+        assert!(manager1.get_pending_changed_files().await.is_empty());
     }
 }
