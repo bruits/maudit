@@ -1330,6 +1330,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
+name = "depinfo"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef6dbc1a9be8240ab2bf1f337cd232ca39f361f698227fae35eff7b11690278f"
+dependencies = [
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "deranged"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2611,6 +2620,7 @@ dependencies = [
  "chrono",
  "clap",
  "colored 3.1.1",
+ "depinfo",
  "flate2",
  "futures",
  "inquire",
@@ -2622,6 +2632,7 @@ dependencies = [
  "serde_json",
  "spinach",
  "tar",
+ "tempfile",
  "tokio",
  "tokio-util",
  "toml_edit 0.24.0+spec-1.1.0",
