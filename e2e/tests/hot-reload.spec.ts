@@ -22,12 +22,10 @@ async function waitForBuildComplete(devServer: any, timeoutMs = 20000): Promise<
 		const logs = devServer.getLogs(100);
 		const logsText = logs.join("\n").toLowerCase();
 
-		// Look for completion messages
-		if (
-			logsText.includes("finished") ||
-			logsText.includes("rerun finished") ||
-			logsText.includes("build finished")
-		) {
+		// Look for rebuild/rerun completion messages specifically
+		// "rebuild finished" comes from a successful recompile (build.rs)
+		// "rerun finished" comes from a successful binary rerun (build.rs)
+		if (logsText.includes("rebuild finished") || logsText.includes("rerun finished")) {
 			return logs;
 		}
 
@@ -71,10 +69,13 @@ test.describe("Hot Reload", () => {
 		// Only wait for build if devServer is available (startup might have failed)
 		if (devServer) {
 			try {
-				devServer.clearLogs();
+				// Wait for the rebuild triggered by file restoration to finish,
+				// then clear logs so the next test starts with a clean slate.
 				await waitForBuildComplete(devServer);
+				devServer.clearLogs();
 			} catch (error) {
 				console.warn("Failed to wait for build completion in afterEach:", error);
+				devServer.clearLogs();
 			}
 		}
 	});
