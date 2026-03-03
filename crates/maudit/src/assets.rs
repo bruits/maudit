@@ -9,12 +9,14 @@ use std::{fs, path::PathBuf};
 mod image;
 pub mod image_cache;
 pub mod prefetch;
+pub mod pwa;
 mod sanitize_filename;
 mod script;
 mod style;
 mod tailwind;
 pub use image::{Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt, RenderedImage};
 pub use prefetch::PrefetchPlugin;
+pub use pwa::PwaPlugin;
 pub use script::Script;
 pub use style::{Style, StyleOptions};
 pub use tailwind::TailwindPlugin;
@@ -28,6 +30,7 @@ pub struct RouteAssets {
     pub images: FxHashSet<Image>,
     pub scripts: FxHashSet<Script>,
     pub styles: FxHashSet<Style>,
+    pub(crate) head_links: Vec<String>,
 
     pub(crate) options: RouteAssetsOptions,
     pub(crate) image_cache: Option<ImageCache>,
@@ -67,6 +70,7 @@ impl RouteAssets {
         image_cache: Option<ImageCache>,
         scripts: Vec<Script>,
         styles: Vec<Style>,
+        head_links: Vec<String>,
     ) -> Self {
         let mut route_assets = Self::new(assets_options, image_cache);
 
@@ -77,6 +81,8 @@ impl RouteAssets {
         for style in styles {
             route_assets.styles.insert(style);
         }
+
+        route_assets.head_links = head_links;
 
         route_assets
     }

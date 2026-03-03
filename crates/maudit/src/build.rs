@@ -11,13 +11,14 @@ use std::{
 use crate::{
     BuildOptions, BuildOutput,
     assets::{
-        self, HashAssetType, HashConfig, PrefetchPlugin, RouteAssets, Script, TailwindPlugin,
-        calculate_hash, image_cache::ImageCache, prefetch,
+        self, HashAssetType, HashConfig, PrefetchPlugin, PwaPlugin, RouteAssets, Script,
+        TailwindPlugin, calculate_hash, image_cache::ImageCache, prefetch, pwa as pwa_assets,
     },
     build::{images::process_image, options::PrefetchStrategy},
     content::ContentSources,
     is_dev,
     logging::print_title,
+    pwa,
     route::{CachedRoute, DynamicRouteContext, FullRoute, InternalRoute, PageContext, PageParams},
     routing::extract_params_from_raw_route,
     sitemap::{SitemapEntry, generate_sitemap},
@@ -159,6 +160,28 @@ pub async fn build(
         default_scripts.push(prefetch_script);
     }
 
+    if options.pwa.enabled {
+        let pwa_register_path = PathBuf::from(pwa_assets::PWA_REGISTER_PATH);
+        let pwa_script = Script::new(
+            pwa_register_path.clone(),
+            true,
+            calculate_hash(
+                &pwa_register_path,
+                Some(&HashConfig {
+                    asset_type: HashAssetType::Script,
+                    hashing_strategy: &options.assets.hashing_strategy,
+                }),
+            )?,
+            &route_assets_options,
+        );
+        default_scripts.push(pwa_script);
+    }
+
+    let mut default_head_links: Vec<String> = vec![];
+    if options.pwa.enabled {
+        default_head_links.push("<link rel=\"manifest\" href=\"/manifest.json\">".into());
+    }
+
     // This is fully serial. It is somewhat trivial to make it parallel, but it currently isn't because every time I've tried to
     // (uncommited, #25, #41, #46) it either made no difference or was slower. The overhead of parallelism is just too high for
     // how fast most sites build. Ideally, it'd be configurable and default to serial, but I haven't found an ergonomic way to do that yet.
@@ -188,6 +211,7 @@ pub async fn build(
                     Some(image_cache.clone()),
                     default_scripts.clone(),
                     vec![],
+                    default_head_links.clone(),
                 );
 
                 let params = PageParams::default();
@@ -213,6 +237,7 @@ pub async fn build(
 
                 build_metadata.add_page(
                     base_path.clone(),
+                    url.clone(),
                     file_path.to_string_lossy().to_string(),
                     None,
                 );
@@ -234,6 +259,7 @@ pub async fn build(
                     Some(image_cache.clone()),
                     default_scripts.clone(),
                     vec![],
+                    default_head_links.clone(),
                 );
                 let pages = route.get_pages(&mut DynamicRouteContext {
                     content: content_sources,
@@ -269,6 +295,7 @@ pub async fn build(
 
                         build_metadata.add_page(
                             base_path.clone(),
+                            url.clone(),
                             file_path.to_string_lossy().to_string(),
                             Some(page.0.0.clone()),
                         );
@@ -304,6 +331,7 @@ pub async fn build(
                     Some(image_cache.clone()),
                     default_scripts.clone(),
                     vec![],
+                    default_head_links.clone(),
                 );
 
                 let params = PageParams::default();
@@ -329,6 +357,7 @@ pub async fn build(
 
                 build_metadata.add_page(
                     variant_path.clone(),
+                    url.clone(),
                     file_path.to_string_lossy().to_string(),
                     None,
                 );
@@ -350,6 +379,7 @@ pub async fn build(
                     Some(image_cache.clone()),
                     default_scripts.clone(),
                     vec![],
+                    default_head_links.clone(),
                 );
                 let pages = route.get_pages(&mut DynamicRouteContext {
                     content: content_sources,
@@ -388,6 +418,7 @@ pub async fn build(
 
                         build_metadata.add_page(
                             variant_path.clone(),
+                            url.clone(),
                             file_path.to_string_lossy().to_string(),
                             Some(page.0.0.clone()),
                         );
@@ -496,13 +527,16 @@ pub async fn build(
                             .collect::<Vec<PathBuf>>(),
                     }),
                     Arc::new(PrefetchPlugin {}),
+                    Arc::new(PwaPlugin {}),
                     Arc::new(ReplacePlugin::new(FxHashMap::default())?),
                 ],
             )?;
 
-            let _result = bundler.write().await?;
+            let result = bundler.write().await?;
 
-            // TODO: Add outputted chunks to build_metadata
+            for output in &result.assets {
+                build_metadata.add_asset(output.filename().to_string());
+            }
         }
 
         info!(target: "build", "{}", format!("Assets generated in {}", format_elapsed_time(assets_start.elapsed(), &section_format_options)).bold());
@@ -593,6 +627,17 @@ pub async fn build(
         } else {
             warn!(target: "build", "Sitemap generation is enabled but no base_url is set in BuildOptions. Either disable sitemap generation or set a base_url to enable it.");
         }
+    }
+
+    // Generate PWA files
+    if options.pwa.enabled {
+        let pwa_start = Instant::now();
+        print_title("generating pwa files");
+
+        pwa::generate_manifest(&options.pwa, &options.output_dir)?;
+        pwa::generate_service_worker(&options.pwa, &build_metadata, &options.output_dir, &options.assets.assets_dir)?;
+
+        info!(target: "build", "{}", format!("PWA files generated in {}", format_elapsed_time(pwa_start.elapsed(), &FormatElapsedTimeOptions::default())).bold());
     }
 
     info!(target: "SKIP_FORMAT", "{}", "");

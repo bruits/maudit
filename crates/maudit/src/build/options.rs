@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf};
 
-use crate::{assets::RouteAssetsOptions, is_dev, sitemap::SitemapOptions};
+use crate::{assets::RouteAssetsOptions, is_dev, pwa::PwaOptions, sitemap::SitemapOptions};
 
 /// Maudit build options. Should be passed to [`coronate()`](crate::coronate()).
 ///
@@ -23,7 +23,7 @@ use crate::{assets::RouteAssetsOptions, is_dev, sitemap::SitemapOptions};
 /// ```rust
 /// use maudit::{
 ///   content_sources, coronate, routes, BuildOptions, BuildOutput, AssetsOptions,
-///   PrefetchOptions, PrefetchStrategy,
+///   PrefetchOptions, PrefetchStrategy, PwaOptions,
 /// };
 ///
 /// fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
@@ -41,6 +41,10 @@ use crate::{assets::RouteAssetsOptions, is_dev, sitemap::SitemapOptions};
 ///       },
 ///       prefetch: PrefetchOptions {
 ///         strategy: PrefetchStrategy::Viewport,
+///         ..Default::default()
+///       },
+///       pwa: PwaOptions {
+///         name: "My App".into(),
 ///         ..Default::default()
 ///       },
 ///       ..Default::default()
@@ -67,6 +71,9 @@ pub struct BuildOptions {
 
     /// Options for sitemap generation. See [`SitemapOptions`] for configuration.
     pub sitemap: SitemapOptions,
+
+    /// Options for PWA (Progressive Web App) support. See [`PwaOptions`] for configuration.
+    pub pwa: PwaOptions,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -204,6 +211,7 @@ impl Default for BuildOptions {
             prefetch: PrefetchOptions::default(),
             assets: AssetsOptions::default(),
             sitemap: SitemapOptions::default(),
+            pwa: PwaOptions::default(),
         }
     }
 }

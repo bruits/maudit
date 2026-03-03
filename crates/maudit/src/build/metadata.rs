@@ -6,6 +6,7 @@ use rustc_hash::FxHashMap;
 #[derive(Debug)]
 pub struct PageOutput {
     pub route: String,
+    pub url: String,
     pub file_path: String,
     pub params: Option<FxHashMap<String, Option<String>>>,
 }
@@ -41,18 +42,18 @@ impl BuildOutput {
     pub(crate) fn add_page(
         &mut self,
         route: String,
+        url: String,
         file_path: String,
         params: Option<FxHashMap<String, Option<String>>>,
     ) {
         self.pages.push(PageOutput {
             route,
+            url,
             file_path,
             params,
         });
     }
 
-    // TODO
-    #[allow(dead_code)]
     pub(crate) fn add_asset(&mut self, file_path: String) {
         self.assets.push(file_path);
     }

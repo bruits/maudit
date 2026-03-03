@@ -892,14 +892,22 @@ pub fn finish_route(
         RenderResult::Text(html) => {
             let included_styles: Vec<_> = page_assets.included_styles().collect();
             let included_scripts: Vec<_> = page_assets.included_scripts().collect();
+            let head_links = &page_assets.head_links;
 
-            if included_scripts.is_empty() && included_styles.is_empty() {
+            if included_scripts.is_empty()
+                && included_styles.is_empty()
+                && head_links.is_empty()
+            {
                 return Ok(html.into_bytes());
             }
 
             let element_content_handlers = vec![
-                // Add included scripts and styles to the head
+                // Add included scripts, styles, and head links to the head
                 element!("head", |el| {
+                    for link in head_links {
+                        el.append(link, lol_html::html_content::ContentType::Html);
+                    }
+
                     for style in &included_styles {
                         el.append(
                             &format!("<link rel=\"stylesheet\" href=\"{}\">", style.url()),

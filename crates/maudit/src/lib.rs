@@ -9,6 +9,7 @@
 pub mod assets;
 pub mod content;
 pub mod errors;
+pub mod pwa;
 pub mod route;
 pub mod routing;
 pub mod sitemap;
@@ -18,6 +19,7 @@ pub use build::metadata::{BuildOutput, PageOutput, StaticAssetOutput};
 pub use build::options::{
     AssetHashingStrategy, AssetsOptions, BuildOptions, PrefetchOptions, PrefetchStrategy,
 };
+pub use pwa::{PwaDisplayMode, PwaIcon, PwaOptions};
 pub use sitemap::{ChangeFreq, SitemapOptions};
 
 // Re-export FxHashMap so that macro-generated code can use it without requiring users to add it as a dependency.
