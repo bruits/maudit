@@ -1678,6 +1678,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "fixtures-pwa"
+version = "0.1.0"
+dependencies = [
+ "maud",
+ "maudit",
+]
+
+[[package]]
 name = "flate2"
 version = "1.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
