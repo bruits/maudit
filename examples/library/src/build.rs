@@ -78,11 +78,11 @@ pub fn build_website(
             // The `get_pages` method returns all the possible pages for this route, along with their parameters and properties.
             // It is very common for dynamic pages to be based on content, for instance a blog post page that has one route per blog post.
             // As such, we create essentially a mini `PageContext` through `DynamicRouteContext` that includes the content sources, so that the page can use them to generate its routes.
-            let mut dynamic_ctx = DynamicRouteContext {
-                content: &content_sources,
-                assets: &mut page_assets,
-                variant: None,
-            };
+            let mut dynamic_ctx = DynamicRouteContext::new(
+                &content_sources,
+                &mut page_assets,
+                None,
+            );
 
             let routes = route.get_pages(&mut dynamic_ctx);
 

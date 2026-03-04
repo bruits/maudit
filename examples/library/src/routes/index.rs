@@ -12,13 +12,13 @@ pub struct Index;
 
 impl Route for Index {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-        let articles = ctx.content.get_source::<ArticleContent>("articles");
+        let articles = ctx.content::<ArticleContent>("articles");
         let logo = ctx.assets.add_image("images/logo.svg")?;
 
         let markup = html! {
           (logo.render("Maudit logo, a crudely drawn crown"))
           ul {
-            @for entry in &articles.entries {
+            @for entry in articles.entries() {
               li {
                 a href=(&Article.url(ArticleParams { article: entry.id.clone() })) {
                     h2 { (entry.data(ctx).title) }

@@ -10,22 +10,18 @@ struct Params {
 
 impl Route<Params> for Article {
     fn pages(&self, context: &mut DynamicRouteContext) -> Pages<Params> {
-        context
-            .content
-            .get_source::<UntypedMarkdownContent>("articles")
-            .into_pages(|entry| {
-                Page::from_params(Params {
-                    file: entry.id.clone(),
-                })
+        let articles = context.content::<UntypedMarkdownContent>("articles");
+        articles.into_pages(|entry| {
+            Page::from_params(Params {
+                file: entry.id.clone(),
             })
+        })
     }
 
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let params = ctx.params::<Params>();
-        let entry = ctx
-            .content
-            .get_source::<UntypedMarkdownContent>("articles")
-            .get_entry(params.file.as_str());
+        let articles = ctx.content::<UntypedMarkdownContent>("articles");
+        let entry = articles.get_entry(params.file.as_str());
 
         entry.render(ctx)
     }

@@ -2573,6 +2573,7 @@ name = "maudit"
 version = "0.10.0"
 dependencies = [
  "base64",
+ "bincode",
  "brk_rolldown",
  "brk_rolldown_plugin_replace",
  "chrono",

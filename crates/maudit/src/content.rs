@@ -8,6 +8,7 @@ use rustc_hash::FxHashMap;
 mod highlight;
 pub mod markdown;
 mod slugger;
+pub mod tracked;
 
 use crate::{
     assets::RouteAssets,
@@ -25,6 +26,7 @@ pub use markdown::{
 };
 
 pub use highlight::{HighlightOptions, highlight_code};
+pub use tracked::TrackedContentSource;
 
 /// Helps implement a struct as a Markdown content entry.
 ///
@@ -107,7 +109,7 @@ pub use maudit_macros::markdown_entry;
 ///
 /// impl Route for Article {
 ///    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-///      let articles = ctx.content.get_source::<ArticleContent>("articles");
+///      let articles = ctx.content::<ArticleContent>("articles");
 ///      let article = articles.get_entry("my-article"); // returns a Entry<ArticleContent>
 ///
 ///      article.render(ctx)
@@ -261,13 +263,13 @@ pub type Untyped = FxHashMap<String, String>;
 /// impl Route<ArticleParams> for Article {
 ///    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
 ///      let params = ctx.params::<ArticleParams>();
-///      let articles = ctx.content.get_source::<ArticleContent>("articles");
+///      let articles = ctx.content::<ArticleContent>("articles");
 ///      let article = articles.get_entry(&params.article);
 ///      article.render(ctx)
 ///   }
 ///
 ///   fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<ArticleParams> {
-///     let articles = ctx.content.get_source::<ArticleContent>("articles");
+///     let articles = ctx.content::<ArticleContent>("articles");
 ///
 ///     articles.into_pages(|entry| Page::from_params(ArticleParams {
 ///        article: entry.id.clone(),
@@ -389,6 +391,13 @@ pub trait ContentSourceInternal: Send + Sync {
     fn init(&mut self);
     fn get_name(&self) -> &str;
     fn as_any(&self) -> &dyn Any; // Used for type checking at runtime
+
+    /// Return (entry_id, file_path) for each entry.
+    /// Used by the incremental build system to track file hashes.
+    fn entry_file_info(&self) -> Vec<(String, Option<PathBuf>)>;
+
+    /// Return sorted entry IDs for structural change detection.
+    fn entry_ids(&self) -> Vec<String>;
 }
 
 impl<T: 'static + Sync + Send> ContentSourceInternal for ContentSource<T> {
@@ -400,5 +409,16 @@ impl<T: 'static + Sync + Send> ContentSourceInternal for ContentSource<T> {
     }
     fn as_any(&self) -> &dyn Any {
         self
+    }
+    fn entry_file_info(&self) -> Vec<(String, Option<PathBuf>)> {
+        self.entries
+            .iter()
+            .map(|e| (e.id.clone(), e.file_path.clone()))
+            .collect()
+    }
+    fn entry_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self.entries.iter().map(|e| e.id.clone()).collect();
+        ids.sort();
+        ids
     }
 }

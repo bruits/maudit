@@ -15,10 +15,9 @@ pub struct Index;
 
 impl Route for Index {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-        let mut articles = ctx
-            .content
-            .get_source::<ArticleContent>("articles")
-            .entries
+        let source = ctx.content::<ArticleContent>("articles");
+        let mut articles = source
+            .entries()
             .iter()
             .collect::<Vec<_>>(); // Collect into a Vec to allow sorting
 

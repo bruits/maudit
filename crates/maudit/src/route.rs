@@ -282,13 +282,13 @@ pub fn redirect(url: &str) -> RenderResult {
 /// impl Route for Index {
 ///   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
 ///     let logo = ctx.assets.add_image("logo.png")?;
-///     let last_entries = &ctx.content.get_source::<ArticleContent>("articles").entries;
+///     let articles = ctx.content::<ArticleContent>("articles");
 ///
 ///     Ok(html! {
 ///       main {
 ///         (logo.render("Maudit logo, a crudely drawn crown"))
 ///         ul {
-///           @for entry in last_entries {
+///           @for entry in articles.entries() {
 ///             li { (entry.data(ctx).title) }
 ///           }
 ///         }
@@ -299,7 +299,7 @@ pub fn redirect(url: &str) -> RenderResult {
 pub struct PageContext<'a> {
     pub params: &'a dyn Any,
     pub props: &'a dyn Any,
-    pub content: &'a ContentSources,
+    pub(crate) content: &'a ContentSources,
     pub assets: &'a mut RouteAssets,
     /// The current path being rendered, e.g. `/articles/my-article`.
     pub current_path: &'a String,
@@ -307,6 +307,7 @@ pub struct PageContext<'a> {
     pub base_url: &'a Option<String>,
     /// The variant being rendered, e.g. `Some("en")` for English variant, `None` for base route
     pub variant: Option<String>,
+    pub(crate) access_log: std::rc::Rc<std::cell::RefCell<crate::content::tracked::ContentAccessLog>>,
 }
 
 impl<'a> PageContext<'a> {
@@ -325,6 +326,9 @@ impl<'a> PageContext<'a> {
             current_path,
             base_url,
             variant,
+            access_log: std::rc::Rc::new(std::cell::RefCell::new(
+                crate::content::tracked::ContentAccessLog::new(),
+            )),
         }
     }
 
@@ -344,7 +348,28 @@ impl<'a> PageContext<'a> {
             current_path,
             base_url,
             variant,
+            access_log: std::rc::Rc::new(std::cell::RefCell::new(
+                crate::content::tracked::ContentAccessLog::new(),
+            )),
         }
+    }
+
+    /// Get a tracked content source by name. All accesses through the returned
+    /// handle are recorded for incremental build dependency tracking.
+    pub fn content<T: 'static>(
+        &self,
+        name: &str,
+    ) -> crate::content::tracked::TrackedContentSource<'a, T> {
+        crate::content::tracked::TrackedContentSource {
+            inner: self.content.get_source::<T>(name),
+            source_name: name.to_string(),
+            log: self.access_log.clone(),
+        }
+    }
+
+    /// Consume and return the access log. Called internally after each page render.
+    pub(crate) fn take_access_log(&self) -> crate::content::tracked::ContentAccessLog {
+        self.access_log.take()
     }
 
     pub fn params<T: 'static + Clone>(&self) -> T {
@@ -405,13 +430,13 @@ impl<'a> PageContext<'a> {
 /// impl Route<ArticleParams> for Article {
 ///    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
 ///      let params = ctx.params::<ArticleParams>();
-///      let articles = ctx.content.get_source::<ArticleContent>("articles");
+///      let articles = ctx.content::<ArticleContent>("articles");
 ///      let article = articles.get_entry(&params.article);
 ///      article.render(ctx)
 ///   }
 ///
 ///    fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<ArticleParams> {
-///       let articles = ctx.content.get_source::<ArticleContent>("articles");
+///       let articles = ctx.content::<ArticleContent>("articles");
 ///
 ///       articles.into_pages(|entry| Page::from_params(ArticleParams {
 ///          article: entry.id.clone(),
@@ -421,10 +446,46 @@ impl<'a> PageContext<'a> {
 /// ```
 /// Allows to access content and assets in a dynamic route's pages method.
 pub struct DynamicRouteContext<'a> {
-    pub content: &'a ContentSources,
+    pub(crate) content: &'a ContentSources,
     pub assets: &'a mut RouteAssets,
     /// The variant being generated, e.g. `Some("en")` for English variant, `None` for base route
     pub variant: Option<&'a str>,
+    pub(crate) access_log: std::rc::Rc<std::cell::RefCell<crate::content::tracked::ContentAccessLog>>,
+}
+
+impl<'a> DynamicRouteContext<'a> {
+    /// Create a new `DynamicRouteContext`.
+    pub fn new(
+        content: &'a ContentSources,
+        assets: &'a mut RouteAssets,
+        variant: Option<&'a str>,
+    ) -> Self {
+        Self {
+            content,
+            assets,
+            variant,
+            access_log: std::rc::Rc::new(std::cell::RefCell::new(crate::content::tracked::ContentAccessLog::default())),
+        }
+    }
+
+    /// Get a tracked content source by name. All accesses through the returned
+    /// handle are recorded for incremental build dependency tracking.
+    pub fn content<T: 'static>(
+        &self,
+        name: &str,
+    ) -> crate::content::tracked::TrackedContentSource<'a, T> {
+        crate::content::tracked::TrackedContentSource {
+            inner: self.content.get_source::<T>(name),
+            source_name: name.to_string(),
+            log: self.access_log.clone(),
+        }
+    }
+
+    /// Consume and return the access log. Called internally after pages() call.
+    #[allow(dead_code)]
+    pub(crate) fn take_access_log(&self) -> crate::content::tracked::ContentAccessLog {
+        self.access_log.take()
+    }
 }
 
 /// Must be implemented for every page of your website.

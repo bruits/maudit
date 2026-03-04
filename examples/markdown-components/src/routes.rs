@@ -10,7 +10,7 @@ pub struct IndexPage;
 
 impl Route for IndexPage {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-        let examples = ctx.content.get_source::<ComponentExample>("examples");
+        let examples = ctx.content::<ComponentExample>("examples");
         let example = examples.get_entry("showcase");
 
         let content_html = example.render(ctx);

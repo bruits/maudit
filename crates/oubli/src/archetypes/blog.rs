@@ -12,13 +12,11 @@ pub fn blog_index_content<T: FullRoute>(
     name: &str,
     stringified_ident: &str,
 ) -> Markup {
-    let blog_entries = ctx
-        .content
-        .get_source::<BlogEntryContent>(stringified_ident);
+    let blog_entries = ctx.content::<BlogEntryContent>(stringified_ident);
 
     let markup = html! {
         main {
-            @for entry in &blog_entries.entries {
+            @for entry in blog_entries.entries() {
                 a href=(route.url(&BlogEntryParams { entry: entry.id.clone() }.into())) {
                     h2 { (entry.data(ctx).title) }
                     p { (entry.data(ctx).description) }
@@ -44,7 +42,7 @@ pub struct BlogEntryParams {
 }
 
 pub fn blog_entry_routes(ctx: &mut DynamicRouteContext, name: &str) -> Pages<BlogEntryParams> {
-    let blog_entries = ctx.content.get_source::<BlogEntryContent>(name);
+    let blog_entries = ctx.content::<BlogEntryContent>(name);
 
     blog_entries.into_pages(|entry| {
         Page::from_params(BlogEntryParams {
@@ -55,9 +53,7 @@ pub fn blog_entry_routes(ctx: &mut DynamicRouteContext, name: &str) -> Pages<Blo
 
 pub fn blog_entry_render(ctx: &mut PageContext, name: &str, stringified_ident: &str) -> Markup {
     let params = ctx.params::<BlogEntryParams>();
-    let blog_entries = ctx
-        .content
-        .get_source::<BlogEntryContent>(stringified_ident);
+    let blog_entries = ctx.content::<BlogEntryContent>(stringified_ident);
     let blog_entry = blog_entries.get_entry(&params.entry);
 
     let headings = blog_entry.data(ctx).get_headings();

@@ -16,9 +16,9 @@ impl Route<ArticlesParams, PaginatedContentPage<ArticleContent>> for Articles {
         &self,
         ctx: &mut DynamicRouteContext,
     ) -> Pages<ArticlesParams, PaginatedContentPage<ArticleContent>> {
-        let articles = &ctx.content.get_source::<ArticleContent>("articles").entries;
+        let source = ctx.content::<ArticleContent>("articles");
 
-        let mut articles = articles.to_vec();
+        let mut articles = source.entries().to_vec();
         articles.sort_by(|a, b| b.data(ctx).date.cmp(&a.data(ctx).date));
 
         paginate(articles, 4, |page| ArticlesParams {
@@ -71,7 +71,7 @@ pub struct ArticleParams {
 
 impl Route<ArticleParams> for Article {
     fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<ArticleParams> {
-        let articles = ctx.content.get_source::<ArticleContent>("articles");
+        let articles = ctx.content::<ArticleContent>("articles");
 
         articles.into_pages(|entry| {
             Page::from_params(ArticleParams {
@@ -82,7 +82,7 @@ impl Route<ArticleParams> for Article {
 
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let params = ctx.params::<ArticleParams>();
-        let articles = ctx.content.get_source::<ArticleContent>("articles");
+        let articles = ctx.content::<ArticleContent>("articles");
         let article = articles.get_entry(&params.article);
 
         let content = article.render(ctx);

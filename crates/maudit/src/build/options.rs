@@ -58,7 +58,8 @@ pub struct BuildOptions {
 
     /// Whether to clean the output directory before building.
     ///
-    /// At the speed Maudit operates at, not cleaning the output directory may offer a significant performance improvement at the cost of potentially serving stale content.
+    /// When `incremental` is true, this is automatically overridden to false
+    /// since incremental builds need to preserve previous output.
     pub clean_output_dir: bool,
 
     pub assets: AssetsOptions,
@@ -67,6 +68,15 @@ pub struct BuildOptions {
 
     /// Options for sitemap generation. See [`SitemapOptions`] for configuration.
     pub sitemap: SitemapOptions,
+
+    /// Whether to use incremental builds. When enabled, only pages whose
+    /// dependencies have changed will be re-rendered on subsequent builds.
+    /// Defaults to `true`.
+    pub incremental: bool,
+
+    /// Directory for build cache storage.
+    /// Defaults to `target/maudit_cache`.
+    pub cache_dir: PathBuf,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -204,6 +214,12 @@ impl Default for BuildOptions {
             prefetch: PrefetchOptions::default(),
             assets: AssetsOptions::default(),
             sitemap: SitemapOptions::default(),
+            incremental: true,
+            cache_dir: {
+                let target_dir =
+                    env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string());
+                PathBuf::from(target_dir).join("maudit_cache")
+            },
         }
     }
 }
