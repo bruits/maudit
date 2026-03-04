@@ -1,12 +1,11 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use maudit::content::markdown_entry;
 use maudit::content::{ContentSource, ContentSources, glob_markdown};
 use maudit::route::prelude::*;
 use maudit::{BuildOptions, coronate};
-
-// -- Content types --
 
 #[markdown_entry]
 #[derive(Debug, Clone)]
@@ -14,8 +13,6 @@ pub struct ArticleContent {
     pub title: String,
     pub description: String,
 }
-
-// -- Routes --
 
 #[route("/")]
 pub struct IndexPage;
@@ -73,7 +70,117 @@ impl Route<ArticleParams> for ArticlePage {
     }
 }
 
-// -- Helpers --
+#[markdown_entry]
+#[derive(Debug, Clone)]
+pub struct ProjectContent {
+    pub title: String,
+    pub description: String,
+}
+
+// For asset tests: pass style path via static
+static STYLE_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+#[route("/styled")]
+pub struct StyledPage;
+
+impl Route for StyledPage {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let style_path = STYLE_PATH.lock().unwrap().clone().unwrap();
+        ctx.assets
+            .include_style(&style_path)
+            .expect("Failed to include style");
+        "<html><head></head><body><h1>Styled</h1></body></html>"
+    }
+}
+
+#[route("/featured")]
+pub struct FeaturedArticlePage;
+
+impl Route for FeaturedArticlePage {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let articles = ctx.content::<ArticleContent>("articles");
+        match articles.get_entry_safe("first") {
+            Some(entry) => {
+                let data = entry.data(ctx);
+                format!(
+                    "<html><body><h1>Featured: {}</h1></body></html>",
+                    data.title
+                )
+            }
+            None => "<html><body><h1>No featured article</h1></body></html>".to_string(),
+        }
+    }
+}
+
+static SAFE_ENTRY_ID: Mutex<Option<String>> = Mutex::new(None);
+
+#[route("/safe-lookup")]
+pub struct SafeLookupPage;
+
+impl Route for SafeLookupPage {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let articles = ctx.content::<ArticleContent>("articles");
+        let entry_id = SAFE_ENTRY_ID.lock().unwrap().clone().unwrap();
+        match articles.get_entry_safe(&entry_id) {
+            Some(entry) => {
+                let data = entry.data(ctx);
+                format!(
+                    "<html><body><h1>Found: {}</h1></body></html>",
+                    data.title
+                )
+            }
+            None => "<html><body><h1>Not found</h1></body></html>".to_string(),
+        }
+    }
+}
+
+#[route("/projects")]
+pub struct ProjectsIndexPage;
+
+impl Route for ProjectsIndexPage {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let projects = ctx.content::<ProjectContent>("projects");
+
+        let mut html = String::from("<html><body><h1>Projects</h1><ul>");
+        for entry in projects.entries() {
+            let data = entry.data(ctx);
+            html.push_str(&format!("<li>{}</li>", data.title));
+        }
+        html.push_str("</ul></body></html>");
+        html
+    }
+}
+
+#[route("/projects/[project]")]
+pub struct ProjectPage;
+
+#[derive(Params, Clone)]
+pub struct ProjectParams {
+    pub project: String,
+}
+
+impl Route<ProjectParams> for ProjectPage {
+    fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<ProjectParams> {
+        let projects = ctx.content::<ProjectContent>("projects");
+        projects.into_pages(|entry| {
+            Page::from_params(ProjectParams {
+                project: entry.id.clone(),
+            })
+        })
+    }
+
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let params = ctx.params::<ProjectParams>();
+        let projects = ctx.content::<ProjectContent>("projects");
+        let project = projects.get_entry(&params.project);
+        let data = project.data(ctx);
+        format!(
+            "<html><body><h1>{}</h1><p>{}</p></body></html>",
+            data.title, data.description
+        )
+    }
+}
+
 
 fn write_markdown(dir: &Path, filename: &str, title: &str, description: &str, body: &str) {
     let content = format!(
@@ -127,7 +234,48 @@ fn routes() -> &'static [&'static dyn FullRoute] {
     &[&IndexPage, &AboutPage, &ArticlePage]
 }
 
-// -- Tests --
+fn routes_with_featured() -> &'static [&'static dyn FullRoute] {
+    &[&IndexPage, &AboutPage, &ArticlePage, &FeaturedArticlePage]
+}
+
+fn routes_with_safe_lookup() -> &'static [&'static dyn FullRoute] {
+    &[&IndexPage, &AboutPage, &ArticlePage, &SafeLookupPage]
+}
+
+fn routes_with_assets() -> &'static [&'static dyn FullRoute] {
+    &[&IndexPage, &AboutPage, &ArticlePage, &StyledPage]
+}
+
+fn multi_routes() -> &'static [&'static dyn FullRoute] {
+    &[
+        &IndexPage,
+        &AboutPage,
+        &ArticlePage,
+        &ProjectsIndexPage,
+        &ProjectPage,
+    ]
+}
+
+fn make_multi_content_sources(content_dir: &Path) -> ContentSources {
+    let articles_pattern = content_dir
+        .join("articles/*.md")
+        .to_string_lossy()
+        .to_string();
+    let projects_pattern = content_dir
+        .join("projects/*.md")
+        .to_string_lossy()
+        .to_string();
+    ContentSources::new(vec![
+        Box::new(ContentSource::new(
+            "articles",
+            Box::new(move || glob_markdown::<ArticleContent>(&articles_pattern)),
+        )),
+        Box::new(ContentSource::new(
+            "projects",
+            Box::new(move || glob_markdown::<ProjectContent>(&projects_pattern)),
+        )),
+    ])
+}
 
 #[test]
 fn test_full_build_renders_all_pages() {
@@ -723,5 +871,536 @@ fn test_three_builds_progressive_caching() {
     assert!(
         rendered3.contains(&"/".to_string()),
         "build 3: index should be rendered"
+    );
+}
+
+#[test]
+fn test_asset_style_change_triggers_rebuild() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    // Create a CSS file
+    let style_file = tmp.path().join("test.css");
+    fs::write(&style_file, "body { color: red; }").unwrap();
+    *STYLE_PATH.lock().unwrap() = Some(style_file.clone());
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+
+    // Build 1: full build
+    let output1 = coronate(
+        routes_with_assets(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+    assert!(
+        output1.pages.iter().all(|p| !p.cached),
+        "build 1: all rendered"
+    );
+
+    // Build 2: no changes -> all cached
+    let output2 = coronate(
+        routes_with_assets(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+    assert!(
+        output2.pages.iter().all(|p| p.cached),
+        "build 2: all cached"
+    );
+
+    // Modify the CSS file
+    fs::write(&style_file, "body { color: blue; }").unwrap();
+
+    // Build 3: style changed
+    let output3 = coronate(
+        routes_with_assets(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let rendered3 = rendered_routes(&output3);
+    let cached3 = cached_routes(&output3);
+
+    // /styled should be re-rendered (its asset changed)
+    assert!(
+        rendered3.contains(&"/styled".to_string()),
+        "styled page should be re-rendered when CSS changes, rendered={:?}",
+        rendered3
+    );
+    // /about should be cached (no asset dependency)
+    assert!(
+        cached3.contains(&"/about".to_string()),
+        "about should be cached, cached={:?}",
+        cached3
+    );
+}
+
+#[test]
+fn test_asset_change_does_not_affect_unrelated_pages() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    let style_file = tmp.path().join("test2.css");
+    fs::write(&style_file, "h1 { font-size: 2em; }").unwrap();
+    *STYLE_PATH.lock().unwrap() = Some(style_file.clone());
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+
+    // Build 1
+    let _ = coronate(
+        routes_with_assets(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Modify CSS
+    fs::write(&style_file, "h1 { font-size: 3em; }").unwrap();
+
+    // Build 2
+    let output = coronate(
+        routes_with_assets(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let rendered = rendered_routes(&output);
+    let cached = cached_routes(&output);
+
+    // Only /styled should rebuild
+    assert!(
+        rendered.contains(&"/styled".to_string()),
+        "styled should be rendered"
+    );
+    // All other pages should be cached
+    assert!(
+        cached.contains(&"/about".to_string()),
+        "about should be cached"
+    );
+    assert!(
+        cached.contains(&"/".to_string()),
+        "index should be cached, cached={:?}",
+        cached
+    );
+}
+
+#[test]
+fn test_multiple_sources_independent_changes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+    fs::create_dir_all(content_dir.join("projects")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+    write_markdown(
+        &content_dir.join("projects"),
+        "alpha.md",
+        "Project Alpha",
+        "Alpha project",
+        "Alpha body",
+    );
+
+    // Build 1: full build
+    let _ = coronate(
+        multi_routes(),
+        make_multi_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Modify only the article
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post Updated",
+        "Updated description",
+        "Updated body",
+    );
+
+    // Build 2
+    let output = coronate(
+        multi_routes(),
+        make_multi_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let rendered = rendered_routes(&output);
+    let cached = cached_routes(&output);
+
+    // Article-dependent pages should re-render
+    assert!(
+        rendered.contains(&"/".to_string()),
+        "index (iterates articles) should be rendered, rendered={:?}",
+        rendered
+    );
+
+    // Project pages should be cached (different source, untouched)
+    assert!(
+        cached.contains(&"/projects".to_string()),
+        "projects index should be cached, cached={:?}",
+        cached
+    );
+
+    let project_alpha_cached = output.pages.iter().any(|p| {
+        p.cached
+            && p.params
+                .as_ref()
+                .and_then(|params| params.get("project"))
+                .and_then(|v| v.as_deref())
+                == Some("alpha")
+    });
+    assert!(
+        project_alpha_cached,
+        "project alpha should be cached when only articles changed"
+    );
+}
+
+#[test]
+fn test_multiple_sources_structural_change_in_one() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+    fs::create_dir_all(content_dir.join("projects")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello",
+    );
+    write_markdown(
+        &content_dir.join("projects"),
+        "alpha.md",
+        "Project Alpha",
+        "Alpha project",
+        "Alpha body",
+    );
+
+    // Build 1
+    let _ = coronate(
+        multi_routes(),
+        make_multi_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Add a new project (structural change in "projects" source)
+    write_markdown(
+        &content_dir.join("projects"),
+        "beta.md",
+        "Project Beta",
+        "Beta project",
+        "Beta body",
+    );
+
+    // Build 2
+    let output = coronate(
+        multi_routes(),
+        make_multi_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let rendered = rendered_routes(&output);
+    let cached = cached_routes(&output);
+
+    // Projects index should re-render (iterates projects, structural change)
+    assert!(
+        rendered.contains(&"/projects".to_string()),
+        "projects index should be rendered, rendered={:?}",
+        rendered
+    );
+
+    // New project page should exist
+    assert!(
+        tmp.path()
+            .join("dist/projects/beta/index.html")
+            .exists(),
+        "new project output should exist"
+    );
+
+    // Article pages should be cached (articles source untouched)
+    assert!(
+        cached.contains(&"/about".to_string()),
+        "about should be cached"
+    );
+
+    let first_article_cached = output.pages.iter().any(|p| {
+        p.cached
+            && p.params
+                .as_ref()
+                .and_then(|params| params.get("article"))
+                .and_then(|v| v.as_deref())
+                == Some("first")
+    });
+    assert!(
+        first_article_cached,
+        "first article should be cached when only projects changed"
+    );
+}
+
+#[test]
+fn test_get_entry_safe_tracks_dependencies() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+    write_markdown(
+        &content_dir.join("articles"),
+        "second.md",
+        "Second Post",
+        "The second post",
+        "Goodbye world",
+    );
+
+    // Build 1: full build
+    let _ = coronate(
+        routes_with_featured(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Change only the second article (featured depends on "first")
+    write_markdown(
+        &content_dir.join("articles"),
+        "second.md",
+        "Second Post Updated",
+        "Updated",
+        "Updated body",
+    );
+
+    // Build 2
+    let output = coronate(
+        routes_with_featured(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let cached = cached_routes(&output);
+
+    // /featured only depends on "first" via get_entry_safe, should be cached
+    assert!(
+        cached.contains(&"/featured".to_string()),
+        "featured should be cached when only second article changed, cached={:?}",
+        cached
+    );
+
+    // Now change the first article
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post Updated",
+        "Updated first",
+        "Updated first body",
+    );
+
+    // Build 3
+    let output = coronate(
+        routes_with_featured(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let rendered = rendered_routes(&output);
+
+    // /featured should now re-render (its dependency "first" changed)
+    assert!(
+        rendered.contains(&"/featured".to_string()),
+        "featured should be re-rendered when first article changed, rendered={:?}",
+        rendered
+    );
+}
+
+#[test]
+fn test_source_emptied_completely() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+    write_markdown(
+        &content_dir.join("articles"),
+        "second.md",
+        "Second Post",
+        "The second post",
+        "Goodbye world",
+    );
+
+    // Build 1
+    let _ = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    assert!(tmp.path().join("dist/articles/first/index.html").exists());
+    assert!(tmp.path().join("dist/articles/second/index.html").exists());
+
+    // Delete all articles
+    fs::remove_file(content_dir.join("articles/first.md")).unwrap();
+    fs::remove_file(content_dir.join("articles/second.md")).unwrap();
+
+    // Build 2
+    let output = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Article output files should be removed
+    assert!(
+        !tmp.path().join("dist/articles/first/index.html").exists(),
+        "first article output should be removed"
+    );
+    assert!(
+        !tmp.path().join("dist/articles/second/index.html").exists(),
+        "second article output should be removed"
+    );
+
+    // Only index + about remain (no article pages)
+    assert_eq!(output.pages.len(), 2, "should only have index + about");
+
+    let rendered = rendered_routes(&output);
+    // Index should re-render (structural change — source emptied)
+    assert!(
+        rendered.contains(&"/".to_string()),
+        "index should be rendered after source emptied, rendered={:?}",
+        rendered
+    );
+
+    let cached = cached_routes(&output);
+    // About should be cached
+    assert!(
+        cached.contains(&"/about".to_string()),
+        "about should be cached"
+    );
+}
+
+#[test]
+fn test_get_entry_safe_missing_entry_then_added() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    // "special" doesn't exist yet
+    *SAFE_ENTRY_ID.lock().unwrap() = Some("special".to_string());
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+
+    // Build 1: full build, safe-lookup renders "Not found"
+    let output1 = coronate(
+        routes_with_safe_lookup(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+    assert!(
+        output1.pages.iter().all(|p| !p.cached),
+        "build 1: all rendered"
+    );
+
+    let lookup_html =
+        fs::read_to_string(tmp.path().join("dist/safe-lookup/index.html")).unwrap();
+    assert!(
+        lookup_html.contains("Not found"),
+        "should render 'Not found' when entry doesn't exist"
+    );
+
+    // Build 2: no changes -> all cached
+    let output2 = coronate(
+        routes_with_safe_lookup(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+    assert!(
+        output2.pages.iter().all(|p| p.cached),
+        "build 2: all cached"
+    );
+
+    // Add "special.md" (structural change in source)
+    write_markdown(
+        &content_dir.join("articles"),
+        "special.md",
+        "Special Post",
+        "A special post",
+        "Special body",
+    );
+
+    // Build 3: safe-lookup should re-render
+    let output3 = coronate(
+        routes_with_safe_lookup(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let rendered3 = rendered_routes(&output3);
+
+    // safe-lookup depends on "special" via get_entry_safe — source structurally changed
+    // so it should re-render
+    assert!(
+        rendered3.contains(&"/safe-lookup".to_string()),
+        "safe-lookup should re-render when entry is added, rendered={:?}",
+        rendered3
+    );
+
+    // Verify the content updated
+    let lookup_html =
+        fs::read_to_string(tmp.path().join("dist/safe-lookup/index.html")).unwrap();
+    assert!(
+        lookup_html.contains("Found: Special Post"),
+        "should now render the found entry, got: {}",
+        lookup_html
     );
 }
