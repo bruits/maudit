@@ -232,19 +232,13 @@ impl ImageCacheInner {
         }
 
         let after = self.placeholders.len() + self.transformed.len();
-        let evicted = before - after;
-
-        evicted
+        before - after
     }
 }
 
-pub const DEFAULT_IMAGE_CACHE_DIR: &str = "target/maudit_cache/images";
-
 impl ImageCache {
     pub fn new() -> Self {
-        Self(Arc::new(Mutex::new(ImageCacheInner::new(
-            PathBuf::from(DEFAULT_IMAGE_CACHE_DIR),
-        ))))
+        Self::with_cache_dir("target/maudit/images")
     }
 
     pub fn with_cache_dir<P: AsRef<Path>>(cache_dir_path: P) -> Self {
@@ -345,12 +339,8 @@ mod tests {
 
     #[test]
     fn test_default_cache_dir() {
-        // Test that the default cache directory is used when no custom dir is set
-        let expected_default = PathBuf::from(DEFAULT_IMAGE_CACHE_DIR);
-
-        // Create a new cache instance (will use default)
         let cache = ImageCache::new();
-        assert_eq!(cache.get_cache_dir(), expected_default);
+        assert_eq!(cache.get_cache_dir(), PathBuf::from("target/maudit/images"));
     }
 
     #[test]

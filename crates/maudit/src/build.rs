@@ -596,14 +596,12 @@ pub async fn build(
         let mut compute_or_reuse = |path: &PathBuf| {
             cache.asset_file_hashes.entry(path.clone()).or_insert_with(|| {
                 // Try to reuse from previous cache if mtime+size still match (cheap stat check)
-                if let Some(prev) = previous_fingerprints {
-                    if let Some(fp) = prev.get(path) {
-                        if let Some((mtime, size)) = cache::file_fingerprint(path) {
-                            if mtime == fp.mtime_ns && size == fp.size {
-                                return fp.clone();
-                            }
-                        }
-                    }
+                if let Some(prev) = previous_fingerprints
+                    && let Some(fp) = prev.get(path)
+                    && let Some((mtime, size)) = cache::file_fingerprint(path)
+                    && mtime == fp.mtime_ns && size == fp.size
+                {
+                    return fp.clone();
                 }
                 cache::AssetFileFingerprint::from_path(path)
                     .unwrap_or(cache::AssetFileFingerprint { hash: String::new(), mtime_ns: 0, size: 0 })

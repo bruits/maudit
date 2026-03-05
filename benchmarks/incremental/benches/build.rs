@@ -16,7 +16,7 @@ fn main() {
 fn incremental_no_changes(bencher: Bencher) {
     // Start fresh: clean dist and cache, then do one full build to populate both.
     let dist_dir = Path::new("dist");
-    let cache_dir = Path::new("target/maudit_cache");
+    let cache_dir = Path::new("target/maudit");
     if dist_dir.exists() {
         let _ = fs::remove_dir_all(dist_dir);
     }

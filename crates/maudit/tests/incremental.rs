@@ -1843,7 +1843,7 @@ fn test_image_cache_persists_across_incremental_toggle() {
 
     // Build 3: back to incremental=true — image cache should still be intact
     *IMAGE_PATH.lock().unwrap() = Some(image_path.clone());
-    let output3 = coronate(
+    let _output3 = coronate(
         routes_with_image(),
         make_content_sources(&content_dir),
         build_options(tmp.path()),
