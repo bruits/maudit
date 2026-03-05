@@ -2,6 +2,44 @@ use std::{env, path::PathBuf};
 
 use crate::{assets::RouteAssetsOptions, is_dev, sitemap::SitemapOptions};
 
+/// Derive the default cache directory.
+///
+/// Walks up from the current directory to find `Cargo.lock` (which lives at
+/// the workspace/project root), then uses `<root>/target/maudit/<binary_name>`.
+///
+/// Falls back to `target/maudit/<binary_name>` if the root can't be found.
+fn default_cache_dir() -> PathBuf {
+    let binary_name = env::current_exe()
+        .ok()
+        .and_then(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
+        .unwrap_or_else(|| "unknown".to_string());
+
+    let target_dir = env::var("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| find_project_root().join("target"));
+
+    target_dir.join("maudit").join(binary_name)
+}
+
+/// Find the project/workspace root by walking up from the current directory
+/// looking for `Cargo.lock`.
+fn find_project_root() -> PathBuf {
+    let Ok(mut current) = env::current_dir() else {
+        return PathBuf::from(".");
+    };
+
+    for _ in 0..5 {
+        if current.join("Cargo.lock").exists() {
+            return current;
+        }
+        if !current.pop() {
+            break;
+        }
+    }
+
+    PathBuf::from(".")
+}
+
 /// Maudit build options. Should be passed to [`coronate()`](crate::coronate()).
 ///
 /// ## Examples
@@ -36,7 +74,6 @@ use crate::{assets::RouteAssetsOptions, is_dev, sitemap::SitemapOptions};
 ///       assets: AssetsOptions {
 ///         assets_dir: "_assets".into(),
 ///         tailwind_binary_path: "./node_modules/.bin/tailwindcss".into(),
-///         image_cache_dir: ".cache/maudit/images".into(),
 ///         ..Default::default()
 ///       },
 ///       prefetch: PrefetchOptions {
@@ -75,7 +112,7 @@ pub struct BuildOptions {
     pub incremental: bool,
 
     /// Directory for build cache storage.
-    /// Defaults to `target/maudit_cache`.
+    /// Defaults to `target/maudit/<binary_name>`.
     pub cache_dir: PathBuf,
 }
 
@@ -149,12 +186,6 @@ pub struct AssetsOptions {
     /// Note that this value is not automatically joined with the `output_dir` in `BuildOptions`. Use [`BuildOptions::route_assets_options()`] to get a `RouteAssetsOptions` with the correct final path.
     pub assets_dir: PathBuf,
 
-    /// Directory to use for image cache storage.
-    /// Defaults to `target/maudit_cache/images`.
-    ///
-    /// This cache is used to store processed images and their placeholders to speed up subsequent builds.
-    pub image_cache_dir: PathBuf,
-
     /// Strategy to use when hashing assets for fingerprinting.
     ///
     /// Defaults to [`AssetHashingStrategy::Precise`] in production builds, and [`AssetHashingStrategy::FastImprecise`] in development builds. Note that this means that the cache isn't shared between dev and prod builds by default, if you have a lot of assets you may want to set this to the same value in both environments.
@@ -174,11 +205,6 @@ impl Default for AssetsOptions {
         Self {
             tailwind_binary_path: "tailwindcss".into(),
             assets_dir: "_maudit".into(),
-            image_cache_dir: {
-                let target_dir =
-                    env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string());
-                PathBuf::from(target_dir).join("maudit_cache/images")
-            },
             hashing_strategy: if is_dev() {
                 AssetHashingStrategy::FastImprecise
             } else {
@@ -215,11 +241,7 @@ impl Default for BuildOptions {
             assets: AssetsOptions::default(),
             sitemap: SitemapOptions::default(),
             incremental: true,
-            cache_dir: {
-                let target_dir =
-                    env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string());
-                PathBuf::from(target_dir).join("maudit_cache")
-            },
+            cache_dir: default_cache_dir(),
         }
     }
 }

@@ -46,6 +46,37 @@ pub fn execute_build(
     async_runtime.block_on(async { build(routes, content_sources, options).await })
 }
 
+/// Try to serve a page from the incremental cache. Returns the cached entry if
+/// the page is clean and was found in the previous cache, or None if it needs rendering.
+/// On cache hit, restores assets and copies the entry into the new cache.
+fn try_cache_hit(
+    route: &dyn FullRoute,
+    page_key: &cache::PageKey,
+    incremental_state: &cache::IncrementalState,
+    new_cache: &mut Option<cache::BuildCache>,
+    route_assets_options: &assets::RouteAssetsOptions,
+    build_scripts: &mut FxHashSet<Script>,
+    build_styles: &mut FxHashSet<Style>,
+) -> bool {
+    let Some(cache) = new_cache else {
+        return false;
+    };
+    if route.always_revalidate() || incremental_state.is_page_dirty(page_key) {
+        return false;
+    }
+    let Some(cached_entry) = incremental_state
+        .previous_cache
+        .as_ref()
+        .and_then(|c| c.pages.get(page_key))
+    else {
+        return false;
+    };
+
+    restore_assets_from_cache(cached_entry, route_assets_options, build_scripts, build_styles);
+    cache.pages.insert(page_key.clone(), cached_entry.clone());
+    true
+}
+
 /// Record a rendered page's dependencies and assets into the build cache.
 /// No-op when `new_cache` is None (incremental builds disabled).
 fn record_page_cache_entry(
@@ -88,6 +119,7 @@ fn record_page_cache_entry(
                 .map(|img| cache::CachedImage {
                     path: img.path.clone(),
                     hash: img.hash.clone(),
+                    filename: img.filename.clone(),
                 })
                 .collect(),
             output_file,
@@ -155,17 +187,12 @@ pub async fn build(
         None
     };
 
-    // Load a previous build cache early so we can restore image cache data
+    // Load image cache from its own file (independent of build cache version / binary hash)
     let cache_load_start = Instant::now();
-    let previous_build_cache = cache::BuildCache::load(&options.cache_dir);
+    let image_cache_dir = options.cache_dir.join("images");
+    let image_cache = ImageCache::load(&image_cache_dir, &options.cache_dir);
 
-    // Create the image cache, restoring from build cache if available
-    let image_cache = if let Some(ref prev_cache) = previous_build_cache {
-        ImageCache::from_build_cache(prev_cache, &options.assets.image_cache_dir)
-    } else {
-        ImageCache::with_cache_dir(&options.assets.image_cache_dir)
-    };
-    let _ = fs::create_dir_all(image_cache.get_cache_dir());
+    let previous_build_cache = cache::BuildCache::load(&options.cache_dir);
 
     if previous_build_cache.is_some() {
         info!(target: "cache", "Build cache loaded in {}", format_elapsed_time(cache_load_start.elapsed(), &FormatElapsedTimeOptions::default()));
@@ -329,122 +356,44 @@ pub async fn build(
             if base_params.is_empty() {
                 let params = PageParams::default();
                 let (url, file_path) = cached_route.url_and_file_path(&params, &options.output_dir);
+                let page_key = if new_cache.is_some() { Some(cache::PageKey::new_static(base_path, None)) } else { None };
 
-                // Try incremental cache hit (only when incremental is enabled)
-                if new_cache.is_some() {
-                    let page_key = cache::PageKey::new_static(base_path, None);
+                let cache_hit = page_key.as_ref().is_some_and(|pk| try_cache_hit(
+                    *route, pk, &incremental_state, &mut new_cache,
+                    &route_assets_options, &mut build_pages_scripts, &mut build_pages_styles,
+                ));
 
-                    if !route.always_revalidate() && !incremental_state.is_page_dirty(&page_key) {
-                        if let Some(cached_entry) = incremental_state
-                            .previous_cache
-                            .as_ref()
-                            .and_then(|c| c.pages.get(&page_key))
-                        {
-                            restore_assets_from_cache(
-                                cached_entry,
-                                &route_assets_options,
-                                &mut build_pages_scripts,
-                                &mut build_pages_styles,
-                            );
-                            if let Some(ref mut cache) = new_cache {
-                                cache.pages.insert(page_key.clone(), cached_entry.clone());
-                            }
-
-                            info!(target: "pages", "{} -> {} (cached)", url, file_path.to_string_lossy().dimmed());
-
-                            build_metadata.add_page(
-                                base_path.clone(),
-                                file_path.to_string_lossy().to_string(),
-                                None,
-                                true,
-                            );
-
-                            add_sitemap_entry(
-                                &mut sitemap_entries,
-                                normalized_base_url,
-                                &url,
-                                base_path,
-                                &route.sitemap_metadata(),
-                                &options.sitemap,
-                            );
-
-                            cached_count += 1;
-                            // Skip to variants — use a block to scope the early exit
-                        } else {
-                            render_static_base_page(
-                                route,
-                                &cached_route,
-                                base_path,
-                                content_sources,
-                                &route_assets_options,
-                                &image_cache,
-                                &default_scripts,
-                                options,
-                                &route_format_options,
-                                normalized_base_url,
-                                &url,
-                                &file_path,
-                                Some(page_key),
-                                &mut build_pages_images,
-                                &mut build_pages_scripts,
-                                &mut build_pages_styles,
-                                &mut sitemap_entries,
-                                &mut build_metadata,
-                                &mut new_cache,
-                                &mut rendered_count,
-                                &mut created_dirs,
-                            )?;
-                        }
-                    } else {
-                        render_static_base_page(
-                            route,
-                            &cached_route,
-                            base_path,
-                            content_sources,
-                            &route_assets_options,
-                            &image_cache,
-                            &default_scripts,
-                            options,
-                            &route_format_options,
-                            normalized_base_url,
-                            &url,
-                            &file_path,
-                            Some(page_key),
-                            &mut build_pages_images,
-                            &mut build_pages_scripts,
-                            &mut build_pages_styles,
-                            &mut sitemap_entries,
-                            &mut build_metadata,
-                            &mut new_cache,
-                            &mut rendered_count,
-                            &mut created_dirs,
-                        )?;
-                    }
+                if cache_hit {
+                    info!(target: "pages", "{} -> {} (cached)", url, file_path.to_string_lossy().dimmed());
+                    build_metadata.add_page(base_path.clone(), file_path.to_string_lossy().to_string(), None, true);
+                    add_sitemap_entry(&mut sitemap_entries, normalized_base_url, &url, base_path, &route.sitemap_metadata(), &options.sitemap);
+                    cached_count += 1;
                 } else {
-                    // Non-incremental: render directly, no PageKey needed
-                    render_static_base_page(
-                        route,
-                        &cached_route,
-                        base_path,
-                        content_sources,
-                        &route_assets_options,
-                        &image_cache,
-                        &default_scripts,
-                        options,
-                        &route_format_options,
-                        normalized_base_url,
-                        &url,
-                        &file_path,
-                        None,
-                        &mut build_pages_images,
-                        &mut build_pages_scripts,
-                        &mut build_pages_styles,
-                        &mut sitemap_entries,
-                        &mut build_metadata,
-                        &mut new_cache,
-                        &mut rendered_count,
-                        &mut created_dirs,
-                    )?;
+                    let page_start = Instant::now();
+                    let mut route_assets = RouteAssets::with_default_assets(
+                        &route_assets_options, Some(image_cache.clone()), default_scripts.clone(), vec![],
+                    );
+
+                    let mut page_ctx = PageContext::from_static_route(
+                        content_sources, &mut route_assets, &url, &options.base_url, None,
+                    );
+                    let result = route.build(&mut page_ctx)?;
+                    let access_log = page_ctx.take_access_log();
+
+                    write_route_file(&result, &file_path, &mut created_dirs)?;
+                    info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), &route_format_options));
+
+                    if let Some(page_key) = page_key {
+                        record_page_cache_entry(&mut new_cache, page_key, access_log, &route_assets, file_path.clone());
+                    }
+
+                    build_pages_images.extend(route_assets.images);
+                    build_pages_scripts.extend(route_assets.scripts);
+                    build_pages_styles.extend(route_assets.styles);
+
+                    build_metadata.add_page(base_path.clone(), file_path.to_string_lossy().to_string(), None, false);
+                    add_sitemap_entry(&mut sitemap_entries, normalized_base_url, &url, base_path, &route.sitemap_metadata(), &options.sitemap);
+                    rendered_count += 1;
                 }
             } else {
                 // Dynamic base route
@@ -463,161 +412,52 @@ pub async fn build(
                 if pages.is_empty() {
                     warn!(target: "build", "{} is a dynamic route, but its implementation of Route::pages returned an empty Vec. No pages will be generated for this route.", base_path.bold());
                     continue;
-                } else {
-                    // Log the pattern first
-                    info!(target: "pages", "{}", base_path);
+                }
 
-                    if new_cache.is_some() {
-                        // Incremental: per-page RouteAssets for cache tracking
-                        for page in pages {
-                            let page_key = cache::PageKey::new(base_path, &page.0.0, None);
-                            let (url, file_path) =
-                                cached_route.url_and_file_path(&page.0, &options.output_dir);
+                info!(target: "pages", "{}", base_path);
 
-                            // Check if this page is clean
-                            if !route.always_revalidate()
-                                && !incremental_state.is_page_dirty(&page_key)
-                                && let Some(cached_entry) = incremental_state
-                                    .previous_cache
-                                    .as_ref()
-                                    .and_then(|c| c.pages.get(&page_key))
-                            {
-                                restore_assets_from_cache(
-                                    cached_entry,
-                                    &route_assets_options,
-                                    &mut build_pages_scripts,
-                                    &mut build_pages_styles,
-                                );
-                                if let Some(ref mut cache) = new_cache {
-                                    cache.pages.insert(page_key.clone(), cached_entry.clone());
-                                }
+                for page in pages {
+                    let page_key = if new_cache.is_some() { Some(cache::PageKey::new(base_path, &page.0.0, None)) } else { None };
+                    let (url, file_path) = cached_route.url_and_file_path(&page.0, &options.output_dir);
 
-                                info!(target: "pages", "├─ {} (cached)", file_path.to_string_lossy().dimmed());
+                    let cache_hit = page_key.as_ref().is_some_and(|pk| try_cache_hit(
+                        *route, pk, &incremental_state, &mut new_cache,
+                        &route_assets_options, &mut build_pages_scripts, &mut build_pages_styles,
+                    ));
 
-                                build_metadata.add_page(
-                                    base_path.clone(),
-                                    file_path.to_string_lossy().to_string(),
-                                    Some(page.0.0.clone()),
-                                    true,
-                                );
-
-                                add_sitemap_entry(
-                                    &mut sitemap_entries,
-                                    normalized_base_url,
-                                    &url,
-                                    base_path,
-                                    &route.sitemap_metadata(),
-                                    &options.sitemap,
-                                );
-
-                                cached_count += 1;
-                                continue;
-                            }
-
-                            // Dirty or not in cache — render with per-page assets
-                            let page_start = Instant::now();
-                            let mut route_assets = RouteAssets::with_default_assets(
-                                &route_assets_options,
-                                Some(image_cache.clone()),
-                                default_scripts.clone(),
-                                vec![],
-                            );
-
-                            let mut page_ctx = PageContext::from_dynamic_route(
-                                &page,
-                                content_sources,
-                                &mut route_assets,
-                                &url,
-                                &options.base_url,
-                                None,
-                            );
-                            let content = route.build(&mut page_ctx)?;
-                            let access_log = page_ctx.take_access_log();
-
-                            write_route_file(&content, &file_path, &mut created_dirs)?;
-
-                            info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), &route_format_options));
-
-                            record_page_cache_entry(
-                                &mut new_cache,
-                                page_key,
-                                access_log,
-                                &route_assets,
-                                file_path.clone(),
-                            );
-
-                            build_pages_images.extend(route_assets.images);
-                            build_pages_scripts.extend(route_assets.scripts);
-                            build_pages_styles.extend(route_assets.styles);
-
-                            build_metadata.add_page(
-                                base_path.clone(),
-                                file_path.to_string_lossy().to_string(),
-                                Some(page.0.0.clone()),
-                                false,
-                            );
-
-                            add_sitemap_entry(
-                                &mut sitemap_entries,
-                                normalized_base_url,
-                                &url,
-                                base_path,
-                                &route.sitemap_metadata(),
-                                &options.sitemap,
-                            );
-
-                            rendered_count += 1;
-                        }
-                    } else {
-                        // Non-incremental: shared RouteAssets, no PageKey overhead
-                        let mut route_assets = RouteAssets::with_default_assets(
-                            &route_assets_options,
-                            Some(image_cache.clone()),
-                            default_scripts.clone(),
-                            vec![],
-                        );
-
-                        for page in pages {
-                            let page_start = Instant::now();
-                            let (url, file_path) =
-                                cached_route.url_and_file_path(&page.0, &options.output_dir);
-
-                            let content = route.build(&mut PageContext::from_dynamic_route(
-                                &page,
-                                content_sources,
-                                &mut route_assets,
-                                &url,
-                                &options.base_url,
-                                None,
-                            ))?;
-
-                            write_route_file(&content, &file_path, &mut created_dirs)?;
-
-                            info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), &route_format_options));
-
-                            build_metadata.add_page(
-                                base_path.clone(),
-                                file_path.to_string_lossy().to_string(),
-                                Some(page.0.0.clone()),
-                                false,
-                            );
-
-                            add_sitemap_entry(
-                                &mut sitemap_entries,
-                                normalized_base_url,
-                                &url,
-                                base_path,
-                                &route.sitemap_metadata(),
-                                &options.sitemap,
-                            );
-
-                            rendered_count += 1;
-                        }
-
-                        build_pages_images.extend(route_assets.images);
-                        build_pages_scripts.extend(route_assets.scripts);
-                        build_pages_styles.extend(route_assets.styles);
+                    if cache_hit {
+                        info!(target: "pages", "├─ {} (cached)", file_path.to_string_lossy().dimmed());
+                        build_metadata.add_page(base_path.clone(), file_path.to_string_lossy().to_string(), Some(page.0.0.clone()), true);
+                        add_sitemap_entry(&mut sitemap_entries, normalized_base_url, &url, base_path, &route.sitemap_metadata(), &options.sitemap);
+                        cached_count += 1;
+                        continue;
                     }
+
+                    let page_start = Instant::now();
+                    let mut route_assets = RouteAssets::with_default_assets(
+                        &route_assets_options, Some(image_cache.clone()), default_scripts.clone(), vec![],
+                    );
+
+                    let mut page_ctx = PageContext::from_dynamic_route(
+                        &page, content_sources, &mut route_assets, &url, &options.base_url, None,
+                    );
+                    let content = route.build(&mut page_ctx)?;
+                    let access_log = page_ctx.take_access_log();
+
+                    write_route_file(&content, &file_path, &mut created_dirs)?;
+                    info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), &route_format_options));
+
+                    if let Some(page_key) = page_key {
+                        record_page_cache_entry(&mut new_cache, page_key, access_log, &route_assets, file_path.clone());
+                    }
+
+                    build_pages_images.extend(route_assets.images);
+                    build_pages_scripts.extend(route_assets.scripts);
+                    build_pages_styles.extend(route_assets.styles);
+
+                    build_metadata.add_page(base_path.clone(), file_path.to_string_lossy().to_string(), Some(page.0.0.clone()), false);
+                    add_sitemap_entry(&mut sitemap_entries, normalized_base_url, &url, base_path, &route.sitemap_metadata(), &options.sitemap);
+                    rendered_count += 1;
                 }
             }
         }
@@ -630,309 +470,108 @@ pub async fn build(
                 // Static variant
                 let params = PageParams::default();
                 let (url, file_path) = cached_route.variant_url_and_file_path(
-                    &params,
-                    &options.output_dir,
-                    &variant_id,
+                    &params, &options.output_dir, &variant_id,
                 )?;
+                let page_key = if new_cache.is_some() { Some(cache::PageKey::new_static(&variant_path, Some(&variant_id))) } else { None };
 
-                // Try incremental cache hit
-                if new_cache.is_some() {
-                    let page_key = cache::PageKey::new_static(&variant_path, Some(&variant_id));
+                let cache_hit = page_key.as_ref().is_some_and(|pk| try_cache_hit(
+                    *route, pk, &incremental_state, &mut new_cache,
+                    &route_assets_options, &mut build_pages_scripts, &mut build_pages_styles,
+                ));
 
-                    if !route.always_revalidate()
-                        && !incremental_state.is_page_dirty(&page_key)
-                        && let Some(cached_entry) = incremental_state
-                            .previous_cache
-                            .as_ref()
-                            .and_then(|c| c.pages.get(&page_key))
-                    {
-                        restore_assets_from_cache(
-                            cached_entry,
-                            &route_assets_options,
-                            &mut build_pages_scripts,
-                            &mut build_pages_styles,
-                        );
-                        if let Some(ref mut cache) = new_cache {
-                            cache.pages.insert(page_key.clone(), cached_entry.clone());
-                        }
-
-                        info!(target: "pages", "├─ {} (cached)", file_path.to_string_lossy().dimmed());
-
-                        build_metadata.add_page(
-                            variant_path.clone(),
-                            file_path.to_string_lossy().to_string(),
-                            None,
-                            true,
-                        );
-
-                        add_sitemap_entry(
-                            &mut sitemap_entries,
-                            normalized_base_url,
-                            &url,
-                            &variant_path,
-                            &route.sitemap_metadata(),
-                            &options.sitemap,
-                        );
-
-                        cached_count += 1;
-                        continue;
-                    }
-
-                    // Dirty or not in cache — render
-                    let variant_start = Instant::now();
-                    let mut route_assets = RouteAssets::with_default_assets(
-                        &route_assets_options,
-                        Some(image_cache.clone()),
-                        default_scripts.clone(),
-                        vec![],
-                    );
-
-                    let mut page_ctx = PageContext::from_static_route(
-                        content_sources,
-                        &mut route_assets,
-                        &url,
-                        &options.base_url,
-                        Some(variant_id.clone()),
-                    );
-                    let result = route.build(&mut page_ctx)?;
-                    let access_log = page_ctx.take_access_log();
-
-                    write_route_file(&result, &file_path, &mut created_dirs)?;
-
-                    info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_start.elapsed(), &route_format_options));
-
-                    record_page_cache_entry(
-                        &mut new_cache,
-                        page_key,
-                        access_log,
-                        &route_assets,
-                        file_path.clone(),
-                    );
-
-                    build_pages_images.extend(route_assets.images);
-                    build_pages_scripts.extend(route_assets.scripts);
-                    build_pages_styles.extend(route_assets.styles);
-                } else {
-                    // Non-incremental: render directly
-                    let variant_start = Instant::now();
-                    let mut route_assets = RouteAssets::with_default_assets(
-                        &route_assets_options,
-                        Some(image_cache.clone()),
-                        default_scripts.clone(),
-                        vec![],
-                    );
-
-                    let mut page_ctx = PageContext::from_static_route(
-                        content_sources,
-                        &mut route_assets,
-                        &url,
-                        &options.base_url,
-                        Some(variant_id.clone()),
-                    );
-                    let result = route.build(&mut page_ctx)?;
-
-                    write_route_file(&result, &file_path, &mut created_dirs)?;
-
-                    info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_start.elapsed(), &route_format_options));
-
-                    build_pages_images.extend(route_assets.images);
-                    build_pages_scripts.extend(route_assets.scripts);
-                    build_pages_styles.extend(route_assets.styles);
+                if cache_hit {
+                    info!(target: "pages", "├─ {} (cached)", file_path.to_string_lossy().dimmed());
+                    build_metadata.add_page(variant_path.clone(), file_path.to_string_lossy().to_string(), None, true);
+                    add_sitemap_entry(&mut sitemap_entries, normalized_base_url, &url, &variant_path, &route.sitemap_metadata(), &options.sitemap);
+                    cached_count += 1;
+                    continue;
                 }
 
-                build_metadata.add_page(
-                    variant_path.clone(),
-                    file_path.to_string_lossy().to_string(),
-                    None,
-                    false,
+                let variant_start = Instant::now();
+                let mut route_assets = RouteAssets::with_default_assets(
+                    &route_assets_options, Some(image_cache.clone()), default_scripts.clone(), vec![],
                 );
 
-                add_sitemap_entry(
-                    &mut sitemap_entries,
-                    normalized_base_url,
-                    &url,
-                    &variant_path,
-                    &route.sitemap_metadata(),
-                    &options.sitemap,
+                let mut page_ctx = PageContext::from_static_route(
+                    content_sources, &mut route_assets, &url, &options.base_url, Some(variant_id.clone()),
                 );
+                let result = route.build(&mut page_ctx)?;
+                let access_log = page_ctx.take_access_log();
 
+                write_route_file(&result, &file_path, &mut created_dirs)?;
+                info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_start.elapsed(), &route_format_options));
+
+                if let Some(page_key) = page_key {
+                    record_page_cache_entry(&mut new_cache, page_key, access_log, &route_assets, file_path.clone());
+                }
+
+                build_pages_images.extend(route_assets.images);
+                build_pages_scripts.extend(route_assets.scripts);
+                build_pages_styles.extend(route_assets.styles);
+
+                build_metadata.add_page(variant_path.clone(), file_path.to_string_lossy().to_string(), None, false);
+                add_sitemap_entry(&mut sitemap_entries, normalized_base_url, &url, &variant_path, &route.sitemap_metadata(), &options.sitemap);
                 rendered_count += 1;
             } else {
                 // Dynamic variant
                 let mut pages_route_assets = RouteAssets::with_default_assets(
-                    &route_assets_options,
-                    Some(image_cache.clone()),
-                    default_scripts.clone(),
-                    vec![],
+                    &route_assets_options, Some(image_cache.clone()), default_scripts.clone(), vec![],
                 );
                 let pages = route.get_pages(&mut DynamicRouteContext::new(
-                    content_sources,
-                    &mut pages_route_assets,
-                    Some(&variant_id),
+                    content_sources, &mut pages_route_assets, Some(&variant_id),
                 ));
 
                 if pages.is_empty() {
                     warn!(target: "build", "Variant {} has dynamic parameters but Route::pages returned an empty Vec.", variant_id.bold());
-                } else {
-                    // Log the variant pattern first
-                    info!(target: "pages", "├─ {}", variant_path);
+                    continue;
+                }
 
-                    if new_cache.is_some() {
-                        // Incremental: per-page RouteAssets for cache tracking
-                        for page in pages {
-                            let page_key =
-                                cache::PageKey::new(&variant_path, &page.0.0, Some(&variant_id));
-                            let (url, file_path) = cached_route.variant_url_and_file_path(
-                                &page.0,
-                                &options.output_dir,
-                                &variant_id,
-                            )?;
+                info!(target: "pages", "├─ {}", variant_path);
 
-                            if !route.always_revalidate()
-                                && !incremental_state.is_page_dirty(&page_key)
-                                && let Some(cached_entry) = incremental_state
-                                    .previous_cache
-                                    .as_ref()
-                                    .and_then(|c| c.pages.get(&page_key))
-                            {
-                                restore_assets_from_cache(
-                                    cached_entry,
-                                    &route_assets_options,
-                                    &mut build_pages_scripts,
-                                    &mut build_pages_styles,
-                                );
-                                if let Some(ref mut cache) = new_cache {
-                                    cache.pages.insert(page_key.clone(), cached_entry.clone());
-                                }
+                for page in pages {
+                    let page_key = if new_cache.is_some() { Some(cache::PageKey::new(&variant_path, &page.0.0, Some(&variant_id))) } else { None };
+                    let (url, file_path) = cached_route.variant_url_and_file_path(
+                        &page.0, &options.output_dir, &variant_id,
+                    )?;
 
-                                info!(target: "pages", "│  ├─ {} (cached)", file_path.to_string_lossy().dimmed());
+                    let cache_hit = page_key.as_ref().is_some_and(|pk| try_cache_hit(
+                        *route, pk, &incremental_state, &mut new_cache,
+                        &route_assets_options, &mut build_pages_scripts, &mut build_pages_styles,
+                    ));
 
-                                build_metadata.add_page(
-                                    variant_path.clone(),
-                                    file_path.to_string_lossy().to_string(),
-                                    Some(page.0.0.clone()),
-                                    true,
-                                );
-
-                                add_sitemap_entry(
-                                    &mut sitemap_entries,
-                                    normalized_base_url,
-                                    &url,
-                                    &variant_path,
-                                    &route.sitemap_metadata(),
-                                    &options.sitemap,
-                                );
-
-                                cached_count += 1;
-                                continue;
-                            }
-
-                            let variant_page_start = Instant::now();
-                            let mut route_assets = RouteAssets::with_default_assets(
-                                &route_assets_options,
-                                Some(image_cache.clone()),
-                                default_scripts.clone(),
-                                vec![],
-                            );
-
-                            let mut page_ctx = PageContext::from_dynamic_route(
-                                &page,
-                                content_sources,
-                                &mut route_assets,
-                                &url,
-                                &options.base_url,
-                                Some(variant_id.clone()),
-                            );
-                            let content = route.build(&mut page_ctx)?;
-                            let access_log = page_ctx.take_access_log();
-
-                            write_route_file(&content, &file_path, &mut created_dirs)?;
-
-                            info!(target: "pages", "│  ├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_page_start.elapsed(), &route_format_options));
-
-                            record_page_cache_entry(
-                                &mut new_cache,
-                                page_key,
-                                access_log,
-                                &route_assets,
-                                file_path.clone(),
-                            );
-
-                            build_pages_images.extend(route_assets.images);
-                            build_pages_scripts.extend(route_assets.scripts);
-                            build_pages_styles.extend(route_assets.styles);
-
-                            build_metadata.add_page(
-                                variant_path.clone(),
-                                file_path.to_string_lossy().to_string(),
-                                Some(page.0.0.clone()),
-                                false,
-                            );
-
-                            add_sitemap_entry(
-                                &mut sitemap_entries,
-                                normalized_base_url,
-                                &url,
-                                &variant_path,
-                                &route.sitemap_metadata(),
-                                &options.sitemap,
-                            );
-
-                            rendered_count += 1;
-                        }
-                    } else {
-                        // Non-incremental: shared RouteAssets
-                        let mut route_assets = RouteAssets::with_default_assets(
-                            &route_assets_options,
-                            Some(image_cache.clone()),
-                            default_scripts.clone(),
-                            vec![],
-                        );
-
-                        for page in pages {
-                            let variant_page_start = Instant::now();
-                            let (url, file_path) = cached_route.variant_url_and_file_path(
-                                &page.0,
-                                &options.output_dir,
-                                &variant_id,
-                            )?;
-
-                            let content = route.build(&mut PageContext::from_dynamic_route(
-                                &page,
-                                content_sources,
-                                &mut route_assets,
-                                &url,
-                                &options.base_url,
-                                Some(variant_id.clone()),
-                            ))?;
-
-                            write_route_file(&content, &file_path, &mut created_dirs)?;
-
-                            info!(target: "pages", "│  ├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_page_start.elapsed(), &route_format_options));
-
-                            build_metadata.add_page(
-                                variant_path.clone(),
-                                file_path.to_string_lossy().to_string(),
-                                Some(page.0.0.clone()),
-                                false,
-                            );
-
-                            add_sitemap_entry(
-                                &mut sitemap_entries,
-                                normalized_base_url,
-                                &url,
-                                &variant_path,
-                                &route.sitemap_metadata(),
-                                &options.sitemap,
-                            );
-
-                            rendered_count += 1;
-                        }
-
-                        build_pages_images.extend(route_assets.images);
-                        build_pages_scripts.extend(route_assets.scripts);
-                        build_pages_styles.extend(route_assets.styles);
+                    if cache_hit {
+                        info!(target: "pages", "│  ├─ {} (cached)", file_path.to_string_lossy().dimmed());
+                        build_metadata.add_page(variant_path.clone(), file_path.to_string_lossy().to_string(), Some(page.0.0.clone()), true);
+                        add_sitemap_entry(&mut sitemap_entries, normalized_base_url, &url, &variant_path, &route.sitemap_metadata(), &options.sitemap);
+                        cached_count += 1;
+                        continue;
                     }
+
+                    let variant_page_start = Instant::now();
+                    let mut route_assets = RouteAssets::with_default_assets(
+                        &route_assets_options, Some(image_cache.clone()), default_scripts.clone(), vec![],
+                    );
+
+                    let mut page_ctx = PageContext::from_dynamic_route(
+                        &page, content_sources, &mut route_assets, &url, &options.base_url, Some(variant_id.clone()),
+                    );
+                    let content = route.build(&mut page_ctx)?;
+                    let access_log = page_ctx.take_access_log();
+
+                    write_route_file(&content, &file_path, &mut created_dirs)?;
+                    info!(target: "pages", "│  ├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_page_start.elapsed(), &route_format_options));
+
+                    if let Some(page_key) = page_key {
+                        record_page_cache_entry(&mut new_cache, page_key, access_log, &route_assets, file_path.clone());
+                    }
+
+                    build_pages_images.extend(route_assets.images);
+                    build_pages_scripts.extend(route_assets.scripts);
+                    build_pages_styles.extend(route_assets.styles);
+
+                    build_metadata.add_page(variant_path.clone(), file_path.to_string_lossy().to_string(), Some(page.0.0.clone()), false);
+                    add_sitemap_entry(&mut sitemap_entries, normalized_base_url, &url, &variant_path, &route.sitemap_metadata(), &options.sitemap);
+                    rendered_count += 1;
                 }
             }
         }
@@ -1258,11 +897,40 @@ pub async fn build(
     // Save build cache. Always save image cache data even when incremental builds are disabled.
     {
         let cache_save_start = Instant::now();
-        let mut cache = new_cache.unwrap_or_default();
-        image_cache.write_to_build_cache(&mut cache);
-        if cache.version == 0 {
-            cache.version = cache::BUILD_CACHE_VERSION;
+
+        // GC stale image cache entries before saving.
+        // On incremental builds, use new_cache.pages (which has both rendered and
+        // cache-hit pages) to get the complete set of live images.
+        {
+            let mut live_src_paths = FxHashSet::default();
+            let mut live_transformed = FxHashSet::default();
+            if let Some(ref cache) = new_cache {
+                for img in cache.pages.values().flat_map(|p| &p.images) {
+                    live_src_paths.insert(img.path.clone());
+                    live_transformed.insert(img.filename.clone());
+                }
+            } else {
+                for img in &build_pages_images {
+                    live_src_paths.insert(img.path().to_path_buf());
+                    live_transformed.insert(img.filename().to_path_buf());
+                }
+            };
+            let evicted = image_cache.gc(&live_src_paths, &live_transformed);
+            if evicted > 0 {
+                info!(target: "cache", "Image cache GC: evicted {} stale entries", evicted);
+            }
         }
+
+        // Save image cache to its own file (survives build cache invalidation)
+        if let Err(e) = image_cache.save(&options.cache_dir) {
+            warn!(target: "cache", "Failed to save image cache: {}", e);
+        }
+
+        let cache = new_cache.unwrap_or_else(|| cache::BuildCache {
+            version: cache::BUILD_CACHE_VERSION,
+            binary_hash: cache::BuildCache::compute_binary_hash(),
+            ..Default::default()
+        });
         if let Err(e) = cache.save(&options.cache_dir) {
             warn!(target: "cache", "Failed to save build cache: {}", e);
         } else {
@@ -1275,88 +943,6 @@ pub async fn build(
     }
 
     Ok(build_metadata)
-}
-
-/// Render a static base page (extracted to reduce duplication between dirty/not-in-cache paths).
-#[allow(clippy::too_many_arguments, clippy::mutable_key_type)]
-fn render_static_base_page(
-    route: &&dyn FullRoute,
-    _cached_route: &CachedRoute,
-    base_path: &str,
-    content_sources: &ContentSources,
-    route_assets_options: &assets::RouteAssetsOptions,
-    image_cache: &ImageCache,
-    default_scripts: &[Script],
-    options: &BuildOptions,
-    route_format_options: &FormatElapsedTimeOptions,
-    normalized_base_url: Option<&str>,
-    url: &str,
-    file_path: &PathBuf,
-    page_key: Option<cache::PageKey>,
-    build_pages_images: &mut FxHashSet<assets::Image>,
-    build_pages_scripts: &mut FxHashSet<assets::Script>,
-    build_pages_styles: &mut FxHashSet<assets::Style>,
-    sitemap_entries: &mut Vec<SitemapEntry>,
-    build_metadata: &mut BuildOutput,
-    new_cache: &mut Option<cache::BuildCache>,
-    rendered_count: &mut usize,
-    created_dirs: &mut FxHashSet<PathBuf>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let page_start = Instant::now();
-    let mut route_assets = RouteAssets::with_default_assets(
-        route_assets_options,
-        Some(image_cache.clone()),
-        default_scripts.to_vec(),
-        vec![],
-    );
-
-    let url_string = url.to_string();
-    let mut page_ctx = PageContext::from_static_route(
-        content_sources,
-        &mut route_assets,
-        &url_string,
-        &options.base_url,
-        None,
-    );
-    let result = route.build(&mut page_ctx)?;
-    let access_log = page_ctx.take_access_log();
-
-    write_route_file(&result, file_path, created_dirs)?;
-
-    info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), route_format_options));
-
-    if let Some(page_key) = page_key {
-        record_page_cache_entry(
-            new_cache,
-            page_key,
-            access_log,
-            &route_assets,
-            file_path.clone(),
-        );
-    }
-
-    build_pages_images.extend(route_assets.images);
-    build_pages_scripts.extend(route_assets.scripts);
-    build_pages_styles.extend(route_assets.styles);
-
-    build_metadata.add_page(
-        base_path.to_string(),
-        file_path.to_string_lossy().to_string(),
-        None,
-        false,
-    );
-
-    add_sitemap_entry(
-        sitemap_entries,
-        normalized_base_url,
-        url,
-        base_path,
-        &route.sitemap_metadata(),
-        &options.sitemap,
-    );
-
-    *rendered_count += 1;
-    Ok(())
 }
 
 fn add_sitemap_entry(

@@ -1661,13 +1661,205 @@ fn test_image_placeholder_cached_across_builds() {
         cached2
     );
 
-    // Build cache should exist and contain image data
-    let cache_path = tmp.path().join("cache/build_cache.bin");
-    assert!(cache_path.exists(), "build cache should exist");
-    let cache_size = fs::metadata(&cache_path).unwrap().len();
+    // Image cache should exist as its own file
+    let image_cache_path = tmp.path().join("cache/image_cache.bin");
+    assert!(image_cache_path.exists(), "image cache file should exist");
+    let cache_size = fs::metadata(&image_cache_path).unwrap().len();
     assert!(
-        cache_size > 100,
-        "build cache should contain meaningful data (got {} bytes)",
+        cache_size > 50,
+        "image cache should contain meaningful data (got {} bytes)",
         cache_size
+    );
+}
+
+#[test]
+fn test_image_cache_survives_build_cache_invalidation() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    let image_path = tmp.path().join("test_image.png");
+    write_minimal_png(&image_path);
+    *IMAGE_PATH.lock().unwrap() = Some(image_path.clone());
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+
+    // Build 1: generates placeholder from scratch
+    let _ = coronate(
+        routes_with_image(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let image_cache_path = tmp.path().join("cache/image_cache.bin");
+    assert!(image_cache_path.exists(), "image cache should exist after build 1");
+    let image_cache_size_1 = fs::metadata(&image_cache_path).unwrap().len();
+
+    // Corrupt the build cache to simulate a version bump / binary change
+    let build_cache_path = tmp.path().join("cache/build_cache.bin");
+    fs::write(&build_cache_path, b"corrupted").unwrap();
+
+    // Build 2: build cache is invalid, but image cache should survive
+    *IMAGE_PATH.lock().unwrap() = Some(image_path.clone());
+    let output2 = coronate(
+        routes_with_image(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // All pages re-rendered (full build due to corrupt cache)
+    assert!(
+        output2.pages.iter().all(|p| !p.cached),
+        "build 2: all rendered due to corrupt build cache"
+    );
+
+    // Image cache file should still exist with same or similar size
+    // (it was loaded from its own file, not from the build cache)
+    assert!(image_cache_path.exists(), "image cache should survive build cache corruption");
+    let image_cache_size_2 = fs::metadata(&image_cache_path).unwrap().len();
+    assert!(
+        image_cache_size_2 >= image_cache_size_1,
+        "image cache should not have shrunk (before={}, after={})",
+        image_cache_size_1,
+        image_cache_size_2
+    );
+
+    // The image page should still have placeholder data (served from image cache)
+    let image_html = fs::read_to_string(tmp.path().join("dist/with-image/index.html")).unwrap();
+    assert!(
+        image_html.contains("data-placeholder="),
+        "should have placeholder data even after build cache invalidation"
+    );
+}
+
+#[test]
+fn test_image_cache_gc_not_triggered_on_incremental_build() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    let image_path = tmp.path().join("test_image.png");
+    write_minimal_png(&image_path);
+    *IMAGE_PATH.lock().unwrap() = Some(image_path.clone());
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+
+    // Build 1: full build, image gets cached
+    let _ = coronate(
+        routes_with_image(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let image_cache_path = tmp.path().join("cache/image_cache.bin");
+    let size_after_build1 = fs::metadata(&image_cache_path).unwrap().len();
+
+    // Build 2: incremental, nothing changed — image cache should be preserved
+    *IMAGE_PATH.lock().unwrap() = Some(image_path.clone());
+    let output2 = coronate(
+        routes_with_image(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let cached2 = cached_routes(&output2);
+    assert!(
+        cached2.contains(&"/with-image".to_string()),
+        "image page should be cached"
+    );
+
+    let size_after_build2 = fs::metadata(&image_cache_path).unwrap().len();
+    assert_eq!(
+        size_after_build1, size_after_build2,
+        "image cache size should not change on incremental build with no changes"
+    );
+}
+
+#[test]
+fn test_image_cache_persists_across_incremental_toggle() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    let image_path = tmp.path().join("test_image.png");
+    write_minimal_png(&image_path);
+    *IMAGE_PATH.lock().unwrap() = Some(image_path.clone());
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+
+    // Build 1: incremental=true
+    let _ = coronate(
+        routes_with_image(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let image_cache_path = tmp.path().join("cache/image_cache.bin");
+    assert!(image_cache_path.exists(), "image cache should exist after incremental build");
+    let size_after_incremental = fs::metadata(&image_cache_path).unwrap().len();
+
+    // Build 2: incremental=false — image cache should NOT be wiped
+    *IMAGE_PATH.lock().unwrap() = Some(image_path.clone());
+    let non_incremental_options = BuildOptions {
+        incremental: false,
+        ..build_options(tmp.path())
+    };
+    let _ = coronate(
+        routes_with_image(),
+        make_content_sources(&content_dir),
+        non_incremental_options,
+    )
+    .unwrap();
+
+    assert!(image_cache_path.exists(), "image cache should survive incremental=false build");
+    let size_after_non_incremental = fs::metadata(&image_cache_path).unwrap().len();
+    assert_eq!(
+        size_after_incremental, size_after_non_incremental,
+        "image cache should not change when toggling incremental mode"
+    );
+
+    // Build 3: back to incremental=true — image cache should still be intact
+    *IMAGE_PATH.lock().unwrap() = Some(image_path.clone());
+    let output3 = coronate(
+        routes_with_image(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Image page should render correctly with cached placeholder
+    let image_html = fs::read_to_string(tmp.path().join("dist/with-image/index.html")).unwrap();
+    assert!(
+        image_html.contains("data-placeholder="),
+        "should have placeholder data after toggling incremental modes"
+    );
+
+    let size_after_back_to_incremental = fs::metadata(&image_cache_path).unwrap().len();
+    assert_eq!(
+        size_after_incremental, size_after_back_to_incremental,
+        "image cache should remain stable across incremental mode toggles"
     );
 }

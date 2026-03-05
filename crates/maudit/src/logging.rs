@@ -31,6 +31,7 @@ pub fn init_logging() {
     let logging_env = Env::default().filter_or("RUST_LOG", default_level);
 
     let _ = Builder::from_env(logging_env)
+        .filter_module("oxipng", log::LevelFilter::Warn)
         .format(|buf, record| {
             if record.target() == "SKIP_FORMAT" {
                 return writeln!(buf, "{}", record.args());

@@ -8,7 +8,7 @@ use log::{debug, info};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
-pub const BUILD_CACHE_VERSION: u32 = 4;
+pub const BUILD_CACHE_VERSION: u32 = 6;
 pub const BUILD_CACHE_FILENAME: &str = "build_cache.bin";
 
 /// Fingerprint for an asset file (script, style, image) used for fast change detection.
@@ -44,18 +44,12 @@ pub struct BuildCache {
     pub content_sources: FxHashMap<String, ContentSourceState>,
     /// Per-page dependency information.
     pub pages: FxHashMap<PageKey, PageCacheEntry>,
-    /// Per-route-pattern: info from the pages() call for dynamic routes.
-    pub route_pages: FxHashMap<String, RoutePagesInfo>,
     /// Fingerprints of asset files (scripts, styles, images) used across the build.
     pub asset_file_hashes: FxHashMap<PathBuf, AssetFileFingerprint>,
     /// The set of bundled script inputs from the last build.
     pub bundled_scripts: Vec<SerializedAssetRef>,
     /// The set of bundled style inputs from the last build.
     pub bundled_styles: Vec<SerializedAssetRef>,
-    /// Cached image placeholder thumbhashes (src_path → thumbhash bytes).
-    pub image_placeholders: FxHashMap<PathBuf, Vec<u8>>,
-    /// Cached transformed image paths (final_filename → cached_file_path).
-    pub image_transformed: FxHashMap<PathBuf, PathBuf>,
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -64,7 +58,9 @@ pub struct ContentSourceState {
     pub files: FxHashMap<PathBuf, String>,
     /// Sorted list of entry IDs — used to detect structural changes.
     pub entry_ids: Vec<String>,
-    /// Reverse map from file_path to entry_id. Not serialized — rebuilt each run.
+    /// Reverse map from file_path to entry_id. Not serialized — rebuilt each run
+    /// by `compute_content_source_state()`. WARNING: this field is empty on
+    /// deserialized (cached) instances — only use it on freshly-computed states.
     #[serde(skip)]
     pub file_to_entry: FxHashMap<PathBuf, String>,
 }
@@ -142,15 +138,7 @@ pub struct CachedStyle {
 pub struct CachedImage {
     pub path: PathBuf,
     pub hash: String,
-}
-
-/// Info from a dynamic route's pages() call.
-#[derive(Serialize, Deserialize, Clone)]
-pub struct RoutePagesInfo {
-    /// Content sources accessed during pages().
-    pub sources_accessed: Vec<String>,
-    /// The resulting page keys.
-    pub page_keys: Vec<PageKey>,
+    pub filename: PathBuf,
 }
 
 /// A serializable reference to an asset file.
@@ -374,6 +362,10 @@ pub fn file_fingerprint(path: &Path) -> Option<(u64, u64)> {
 
 /// Diff asset files using mtime+size fingerprints for fast filtering.
 /// Only re-hashes files whose metadata changed.
+///
+/// Note: this only detects changes to previously-cached files — entirely new asset files
+/// are invisible here. In practice, new assets are only introduced via content or code
+/// changes, both of which trigger dirty pages through other mechanisms.
 pub fn diff_asset_files(cached: &FxHashMap<PathBuf, AssetFileFingerprint>) -> FxHashSet<PathBuf> {
     let mut changed = FxHashSet::default();
     for (path, cached_fp) in cached {
@@ -484,13 +476,11 @@ pub fn needs_rebundle(
     current_scripts: &FxHashSet<SerializedAssetRef>,
     current_styles: &FxHashSet<SerializedAssetRef>,
 ) -> bool {
-    let cached_scripts_set: FxHashSet<&SerializedAssetRef> = cached_scripts.iter().collect();
-    let cached_styles_set: FxHashSet<&SerializedAssetRef> = cached_styles.iter().collect();
+    fn sets_differ(cached: &[SerializedAssetRef], current: &FxHashSet<SerializedAssetRef>) -> bool {
+        cached.len() != current.len() || cached.iter().any(|item| !current.contains(item))
+    }
 
-    let current_scripts_ref: FxHashSet<&SerializedAssetRef> = current_scripts.iter().collect();
-    let current_styles_ref: FxHashSet<&SerializedAssetRef> = current_styles.iter().collect();
-
-    cached_scripts_set != current_scripts_ref || cached_styles_set != current_styles_ref
+    sets_differ(cached_scripts, current_scripts) || sets_differ(cached_styles, current_styles)
 }
 
 /// Compute incremental state from a previously loaded cache and current content.
@@ -836,6 +826,7 @@ mod tests {
                 images: vec![CachedImage {
                     path: PathBuf::from("images/logo.png"),
                     hash: "img_hash".to_string(),
+                    filename: PathBuf::from("logo.img_hash.png"),
                 }],
                 ..page_entry(vec![], vec![], "dist/index.html")
             },
@@ -907,6 +898,7 @@ mod tests {
                 images: vec![CachedImage {
                     path: PathBuf::from("images/hero.jpg"),
                     hash: "img123".to_string(),
+                    filename: PathBuf::from("hero.img123.jpg"),
                 }],
                 scripts: vec![CachedScript {
                     path: PathBuf::from("script.js"),
@@ -1103,6 +1095,7 @@ mod tests {
                 images: vec![CachedImage {
                     path: PathBuf::from("logo.png"),
                     hash: "abc".to_string(),
+                    filename: PathBuf::from("logo.abc.png"),
                 }],
                 ..page_entry(
                     vec![("articles".to_string(), "foo".to_string())],
