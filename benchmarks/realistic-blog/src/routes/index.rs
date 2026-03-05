@@ -16,10 +16,7 @@ pub struct Index;
 impl Route for Index {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let source = ctx.content::<ArticleContent>("articles");
-        let mut articles = source
-            .entries()
-            .iter()
-            .collect::<Vec<_>>(); // Collect into a Vec to allow sorting
+        let mut articles: Vec<_> = source.entries().collect(); // Collect into a Vec to allow sorting
 
         // Sort by date, newest first
         articles.sort_by(|a, b| b.data(ctx).date.cmp(&a.data(ctx).date));

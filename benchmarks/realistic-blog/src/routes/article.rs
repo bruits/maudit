@@ -18,7 +18,7 @@ impl Route<ArticlesParams, PaginatedContentPage<ArticleContent>> for Articles {
     ) -> Pages<ArticlesParams, PaginatedContentPage<ArticleContent>> {
         let source = ctx.content::<ArticleContent>("articles");
 
-        let mut articles = source.entries().to_vec();
+        let mut articles: Vec<_> = source.entries().cloned().collect();
         articles.sort_by(|a, b| b.data(ctx).date.cmp(&a.data(ctx).date));
 
         paginate(articles, 4, |page| ArticlesParams {
