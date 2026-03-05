@@ -23,6 +23,10 @@ fn markdown(bencher: Bencher, markdown_count: usize) {
             if dist_dir.exists() {
                 let _ = fs::remove_dir_all(dist_dir);
             }
+            let cache_dir = Path::new("target/maudit_cache");
+            if cache_dir.exists() {
+                let _ = fs::remove_dir_all(cache_dir);
+            }
             markdown_count
         })
         .bench_values(|markdown_count| {

@@ -23,6 +23,10 @@ fn realistic_blog(bencher: Bencher) {
             if dist_dir.exists() {
                 let _ = fs::remove_dir_all(dist_dir);
             }
+            let cache_dir = Path::new("target/maudit_cache");
+            if cache_dir.exists() {
+                let _ = fs::remove_dir_all(cache_dir);
+            }
         })
         .bench_values(|()| {
             build_website();

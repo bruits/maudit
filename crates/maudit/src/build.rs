@@ -47,14 +47,18 @@ pub fn execute_build(
 }
 
 /// Record a rendered page's dependencies and assets into the build cache.
+/// No-op when `new_cache` is None (incremental builds disabled).
 fn record_page_cache_entry(
-    new_cache: &mut cache::BuildCache,
+    new_cache: &mut Option<cache::BuildCache>,
     page_key: cache::PageKey,
     access_log: crate::content::tracked::ContentAccessLog,
     route_assets: &RouteAssets,
     output_file: PathBuf,
 ) {
-    new_cache.pages.insert(
+    let Some(cache) = new_cache.as_mut() else {
+        return;
+    };
+    cache.pages.insert(
         page_key,
         cache::PageCacheEntry {
             content_entries_read: access_log.entries_read,
@@ -175,29 +179,34 @@ pub async fn build(
     )).bold());
 
     // --- Incremental build: compute state ---
-    let current_content_states: FxHashMap<String, cache::ContentSourceState> = content_sources
-        .sources()
-        .iter()
-        .map(|s| {
-            let entries = s.entry_file_info();
-            (
-                s.get_name().to_string(),
-                cache::compute_content_source_state(&entries),
-            )
-        })
-        .collect();
+    let incremental_state;
+    let mut new_cache: Option<cache::BuildCache>;
 
-    let incremental_state = if options.incremental {
-        cache::load_incremental_state(&options.cache_dir, &current_content_states)
+    if options.incremental {
+        let current_content_states: FxHashMap<String, cache::ContentSourceState> = content_sources
+            .sources()
+            .iter()
+            .map(|s| {
+                let entries = s.entry_file_info();
+                (
+                    s.get_name().to_string(),
+                    cache::compute_content_source_state(&entries),
+                )
+            })
+            .collect();
+
+        incremental_state =
+            cache::load_incremental_state(&options.cache_dir, &current_content_states);
+
+        new_cache = Some(cache::BuildCache {
+            version: cache::BUILD_CACHE_VERSION,
+            binary_hash: cache::BuildCache::compute_binary_hash(),
+            content_sources: current_content_states,
+            ..Default::default()
+        });
     } else {
-        cache::IncrementalState::full_build()
-    };
-
-    let mut new_cache = cache::BuildCache {
-        version: cache::BUILD_CACHE_VERSION,
-        binary_hash: cache::BuildCache::compute_binary_hash(),
-        content_sources: current_content_states,
-        ..Default::default()
+        incremental_state = cache::IncrementalState::full_build();
+        new_cache = None;
     };
 
     // --- Generate pages ---
@@ -303,9 +312,11 @@ pub async fn build(
                             &mut build_pages_scripts,
                             &mut build_pages_styles,
                         );
-                        new_cache
-                            .pages
-                            .insert(page_key.clone(), cached_entry.clone());
+                        if let Some(ref mut cache) = new_cache {
+                            cache
+                                .pages
+                                .insert(page_key.clone(), cached_entry.clone());
+                        }
 
                         info!(target: "pages", "{} -> {} (cached)", url, file_path.to_string_lossy().dimmed());
 
@@ -417,9 +428,11 @@ pub async fn build(
                                 &mut build_pages_scripts,
                                 &mut build_pages_styles,
                             );
-                            new_cache
-                                .pages
-                                .insert(page_key.clone(), cached_entry.clone());
+                            if let Some(ref mut cache) = new_cache {
+                                cache
+                                    .pages
+                                    .insert(page_key.clone(), cached_entry.clone());
+                            }
 
                             info!(target: "pages", "├─ {} (cached)", file_path.to_string_lossy().dimmed());
 
@@ -526,9 +539,11 @@ pub async fn build(
                         &mut build_pages_scripts,
                         &mut build_pages_styles,
                     );
-                    new_cache
-                        .pages
-                        .insert(page_key.clone(), cached_entry.clone());
+                    if let Some(ref mut cache) = new_cache {
+                        cache
+                            .pages
+                            .insert(page_key.clone(), cached_entry.clone());
+                    }
 
                     info!(target: "pages", "├─ {} (cached)", file_path.to_string_lossy().dimmed());
 
@@ -648,9 +663,11 @@ pub async fn build(
                                 &mut build_pages_scripts,
                                 &mut build_pages_styles,
                             );
-                            new_cache
-                                .pages
-                                .insert(page_key.clone(), cached_entry.clone());
+                            if let Some(ref mut cache) = new_cache {
+                                cache
+                                    .pages
+                                    .insert(page_key.clone(), cached_entry.clone());
+                            }
 
                             info!(target: "pages", "│  ├─ {} (cached)", file_path.to_string_lossy().dimmed());
 
@@ -741,24 +758,32 @@ pub async fn build(
     }
 
     // Populate asset_file_hashes in the new cache from all pages (cached + rendered)
-    for page_entry in new_cache.pages.values() {
-        for img in &page_entry.images {
-            new_cache
-                .asset_file_hashes
-                .entry(img.path.clone())
-                .or_insert_with(|| cache::hash_file_content(&img.path).unwrap_or_default());
-        }
-        for script in &page_entry.scripts {
-            new_cache
-                .asset_file_hashes
-                .entry(script.path.clone())
-                .or_insert_with(|| cache::hash_file_content(&script.path).unwrap_or_default());
-        }
-        for style in &page_entry.styles {
-            new_cache
-                .asset_file_hashes
-                .entry(style.path.clone())
-                .or_insert_with(|| cache::hash_file_content(&style.path).unwrap_or_default());
+    if let Some(ref mut cache) = new_cache {
+        for page_entry in cache.pages.values() {
+            for img in &page_entry.images {
+                cache
+                    .asset_file_hashes
+                    .entry(img.path.clone())
+                    .or_insert_with(|| {
+                        cache::hash_file_content(&img.path).unwrap_or_default()
+                    });
+            }
+            for script in &page_entry.scripts {
+                cache
+                    .asset_file_hashes
+                    .entry(script.path.clone())
+                    .or_insert_with(|| {
+                        cache::hash_file_content(&script.path).unwrap_or_default()
+                    });
+            }
+            for style in &page_entry.styles {
+                cache
+                    .asset_file_hashes
+                    .entry(style.path.clone())
+                    .or_insert_with(|| {
+                        cache::hash_file_content(&style.path).unwrap_or_default()
+                    });
+            }
         }
     }
 
@@ -805,26 +830,30 @@ pub async fn build(
         };
 
         // Save current bundle state in new cache
-        new_cache.bundled_scripts = current_bundled_scripts.into_iter().collect();
-        new_cache.bundled_styles = current_bundled_styles.into_iter().collect();
+        if let Some(ref mut cache) = new_cache {
+            cache.bundled_scripts = current_bundled_scripts.into_iter().collect();
+            cache.bundled_styles = current_bundled_styles.into_iter().collect();
+        }
 
         needs_bundle
     } else {
         // Full build: save bundle state and always bundle
-        new_cache.bundled_scripts = build_pages_scripts
-            .iter()
-            .map(|s| cache::SerializedAssetRef {
-                path: s.path.clone(),
-                hash: s.hash.clone(),
-            })
-            .collect();
-        new_cache.bundled_styles = build_pages_styles
-            .iter()
-            .map(|s| cache::SerializedAssetRef {
-                path: s.path.clone(),
-                hash: s.hash.clone(),
-            })
-            .collect();
+        if let Some(ref mut cache) = new_cache {
+            cache.bundled_scripts = build_pages_scripts
+                .iter()
+                .map(|s| cache::SerializedAssetRef {
+                    path: s.path.clone(),
+                    hash: s.hash.clone(),
+                })
+                .collect();
+            cache.bundled_styles = build_pages_styles
+                .iter()
+                .map(|s| cache::SerializedAssetRef {
+                    path: s.path.clone(),
+                    hash: s.hash.clone(),
+                })
+                .collect();
+        }
         true
     };
 
@@ -1007,31 +1036,33 @@ pub async fn build(
 
     // Delete stale output files (pages that existed in previous cache but no longer generated)
     if !incremental_state.is_full_build() {
-        let current_page_keys: FxHashSet<cache::PageKey> =
-            new_cache.pages.keys().cloned().collect();
-        if let Some(prev_cache) = &incremental_state.previous_cache {
-            let stale = cache::find_stale_pages(&prev_cache.pages, &current_page_keys);
-            for stale_key in &stale {
-                if let Some(entry) = prev_cache.pages.get(stale_key)
-                    && fs::remove_file(&entry.output_file).is_ok()
-                {
-                    info!(target: "build", "Removed stale output: {}", entry.output_file.display());
+        if let Some(ref cache) = new_cache {
+            let current_page_keys: FxHashSet<cache::PageKey> =
+                cache.pages.keys().cloned().collect();
+            if let Some(prev_cache) = &incremental_state.previous_cache {
+                let stale = cache::find_stale_pages(&prev_cache.pages, &current_page_keys);
+                for stale_key in &stale {
+                    if let Some(entry) = prev_cache.pages.get(stale_key)
+                        && fs::remove_file(&entry.output_file).is_ok()
+                    {
+                        info!(target: "build", "Removed stale output: {}", entry.output_file.display());
+                    }
                 }
             }
         }
     }
 
-    // Save build cache
-    if options.incremental {
-        if let Err(e) = new_cache.save(&options.cache_dir) {
+    info!(target: "SKIP_FORMAT", "{}", "");
+    info!(target: "build", "{}", format!("Build completed in {}", format_elapsed_time(build_start.elapsed(), &section_format_options)).bold());
+
+    // Save build cache (after timing, since this is a post-build bookkeeping step)
+    if let Some(cache) = new_cache {
+        if let Err(e) = cache.save(&options.cache_dir) {
             warn!(target: "build", "Failed to save build cache: {}", e);
         } else {
             debug!(target: "build", "Build cache saved to {}", options.cache_dir.display());
         }
     }
-
-    info!(target: "SKIP_FORMAT", "{}", "");
-    info!(target: "build", "{}", format!("Build completed in {}", format_elapsed_time(build_start.elapsed(), &section_format_options)).bold());
 
     if let Some(clean_up_handle) = clean_up_handle {
         clean_up_handle.await?;
@@ -1061,7 +1092,7 @@ fn render_static_base_page(
     build_pages_styles: &mut FxHashSet<assets::Style>,
     sitemap_entries: &mut Vec<SitemapEntry>,
     build_metadata: &mut BuildOutput,
-    new_cache: &mut cache::BuildCache,
+    new_cache: &mut Option<cache::BuildCache>,
     rendered_count: &mut usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let page_start = Instant::now();

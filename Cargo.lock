@@ -2220,6 +2220,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7c5cedc30da3a610cac6b4ba17597bdf7152cf974e8aab3afb3d54455e371c8"
 
 [[package]]
+name = "incremental-benchmark"
+version = "0.1.0"
+dependencies = [
+ "codspeed-divan-compat",
+ "itoa",
+ "maudit",
+]
+
+[[package]]
 name = "indexmap"
 version = "2.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

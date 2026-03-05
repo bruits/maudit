@@ -77,19 +77,32 @@ pub struct ProjectContent {
     pub description: String,
 }
 
-// For asset tests: pass style path via static
-static STYLE_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
+static STYLE_PATH_1: Mutex<Option<PathBuf>> = Mutex::new(None);
+static STYLE_PATH_2: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 #[route("/styled")]
 pub struct StyledPage;
 
 impl Route for StyledPage {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-        let style_path = STYLE_PATH.lock().unwrap().clone().unwrap();
+        let style_path = STYLE_PATH_1.lock().unwrap().clone().unwrap();
         ctx.assets
             .include_style(&style_path)
             .expect("Failed to include style");
         "<html><head></head><body><h1>Styled</h1></body></html>"
+    }
+}
+
+#[route("/styled2")]
+pub struct StyledPage2;
+
+impl Route for StyledPage2 {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let style_path = STYLE_PATH_2.lock().unwrap().clone().unwrap();
+        ctx.assets
+            .include_style(&style_path)
+            .expect("Failed to include style");
+        "<html><head></head><body><h1>Styled 2</h1></body></html>"
     }
 }
 
@@ -242,8 +255,12 @@ fn routes_with_safe_lookup() -> &'static [&'static dyn FullRoute] {
     &[&IndexPage, &AboutPage, &ArticlePage, &SafeLookupPage]
 }
 
-fn routes_with_assets() -> &'static [&'static dyn FullRoute] {
+fn routes_with_styled1() -> &'static [&'static dyn FullRoute] {
     &[&IndexPage, &AboutPage, &ArticlePage, &StyledPage]
+}
+
+fn routes_with_styled2() -> &'static [&'static dyn FullRoute] {
+    &[&IndexPage, &AboutPage, &ArticlePage, &StyledPage2]
 }
 
 fn multi_routes() -> &'static [&'static dyn FullRoute] {
@@ -880,10 +897,9 @@ fn test_asset_style_change_triggers_rebuild() {
     let content_dir = tmp.path().join("content");
     fs::create_dir_all(content_dir.join("articles")).unwrap();
 
-    // Create a CSS file
-    let style_file = tmp.path().join("test.css");
+    let style_file = tmp.path().join("test1.css");
     fs::write(&style_file, "body { color: red; }").unwrap();
-    *STYLE_PATH.lock().unwrap() = Some(style_file.clone());
+    *STYLE_PATH_1.lock().unwrap() = Some(style_file.clone());
 
     write_markdown(
         &content_dir.join("articles"),
@@ -895,7 +911,7 @@ fn test_asset_style_change_triggers_rebuild() {
 
     // Build 1: full build
     let output1 = coronate(
-        routes_with_assets(),
+        routes_with_styled1(),
         make_content_sources(&content_dir),
         build_options(tmp.path()),
     )
@@ -907,7 +923,7 @@ fn test_asset_style_change_triggers_rebuild() {
 
     // Build 2: no changes -> all cached
     let output2 = coronate(
-        routes_with_assets(),
+        routes_with_styled1(),
         make_content_sources(&content_dir),
         build_options(tmp.path()),
     )
@@ -922,7 +938,7 @@ fn test_asset_style_change_triggers_rebuild() {
 
     // Build 3: style changed
     let output3 = coronate(
-        routes_with_assets(),
+        routes_with_styled1(),
         make_content_sources(&content_dir),
         build_options(tmp.path()),
     )
@@ -953,7 +969,7 @@ fn test_asset_change_does_not_affect_unrelated_pages() {
 
     let style_file = tmp.path().join("test2.css");
     fs::write(&style_file, "h1 { font-size: 2em; }").unwrap();
-    *STYLE_PATH.lock().unwrap() = Some(style_file.clone());
+    *STYLE_PATH_2.lock().unwrap() = Some(style_file.clone());
 
     write_markdown(
         &content_dir.join("articles"),
@@ -965,7 +981,7 @@ fn test_asset_change_does_not_affect_unrelated_pages() {
 
     // Build 1
     let _ = coronate(
-        routes_with_assets(),
+        routes_with_styled2(),
         make_content_sources(&content_dir),
         build_options(tmp.path()),
     )
@@ -976,7 +992,7 @@ fn test_asset_change_does_not_affect_unrelated_pages() {
 
     // Build 2
     let output = coronate(
-        routes_with_assets(),
+        routes_with_styled2(),
         make_content_sources(&content_dir),
         build_options(tmp.path()),
     )
@@ -985,10 +1001,10 @@ fn test_asset_change_does_not_affect_unrelated_pages() {
     let rendered = rendered_routes(&output);
     let cached = cached_routes(&output);
 
-    // Only /styled should rebuild
+    // Only /styled2 should rebuild
     assert!(
-        rendered.contains(&"/styled".to_string()),
-        "styled should be rendered"
+        rendered.contains(&"/styled2".to_string()),
+        "styled2 should be rendered"
     );
     // All other pages should be cached
     assert!(
