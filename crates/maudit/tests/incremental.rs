@@ -156,10 +156,7 @@ impl Route for SafeLookupPage {
         match articles.get_entry_safe(&entry_id) {
             Some(entry) => {
                 let data = entry.data(ctx);
-                format!(
-                    "<html><body><h1>Found: {}</h1></body></html>",
-                    data.title
-                )
+                format!("<html><body><h1>Found: {}</h1></body></html>", data.title)
             }
             None => "<html><body><h1>Not found</h1></body></html>".to_string(),
         }
@@ -212,7 +209,6 @@ impl Route<ProjectParams> for ProjectPage {
         )
     }
 }
-
 
 fn write_markdown(dir: &Path, filename: &str, title: &str, description: &str, body: &str) {
     let content = format!(
@@ -776,22 +772,12 @@ fn test_incremental_disabled_always_renders_all() {
     // First build
     let mut options = build_options(tmp.path());
     options.incremental = false;
-    let _ = coronate(
-        routes(),
-        make_content_sources(&content_dir),
-        options,
-    )
-    .unwrap();
+    let _ = coronate(routes(), make_content_sources(&content_dir), options).unwrap();
 
     // Second build with no changes, incremental disabled
     let mut options = build_options(tmp.path());
     options.incremental = false;
-    let output = coronate(
-        routes(),
-        make_content_sources(&content_dir),
-        options,
-    )
-    .unwrap();
+    let output = coronate(routes(), make_content_sources(&content_dir), options).unwrap();
 
     // All pages should be rendered (not cached) since incremental is off
     assert!(
@@ -847,16 +833,13 @@ fn test_second_article_cached_when_first_changes() {
     .unwrap();
 
     // Find the second article in the output
-    let second_article = output
-        .pages
-        .iter()
-        .find(|p| {
-            p.params
-                .as_ref()
-                .and_then(|params| params.get("article"))
-                .and_then(|v| v.as_deref())
-                == Some("second")
-        });
+    let second_article = output.pages.iter().find(|p| {
+        p.params
+            .as_ref()
+            .and_then(|params| params.get("article"))
+            .and_then(|v| v.as_deref())
+            == Some("second")
+    });
 
     assert!(
         second_article.is_some(),
@@ -868,16 +851,13 @@ fn test_second_article_cached_when_first_changes() {
     );
 
     // The first article should have been re-rendered
-    let first_article = output
-        .pages
-        .iter()
-        .find(|p| {
-            p.params
-                .as_ref()
-                .and_then(|params| params.get("article"))
-                .and_then(|v| v.as_deref())
-                == Some("first")
-        });
+    let first_article = output.pages.iter().find(|p| {
+        p.params
+            .as_ref()
+            .and_then(|params| params.get("article"))
+            .and_then(|v| v.as_deref())
+            == Some("first")
+    });
 
     assert!(first_article.is_some(), "first article should be in output");
     assert!(
@@ -907,7 +887,10 @@ fn test_three_builds_progressive_caching() {
         build_options(tmp.path()),
     )
     .unwrap();
-    assert!(output1.pages.iter().all(|p| !p.cached), "build 1: all rendered");
+    assert!(
+        output1.pages.iter().all(|p| !p.cached),
+        "build 1: all rendered"
+    );
 
     // Build 2: no changes -> all cached
     let output2 = coronate(
@@ -916,7 +899,10 @@ fn test_three_builds_progressive_caching() {
         build_options(tmp.path()),
     )
     .unwrap();
-    assert!(output2.pages.iter().all(|p| p.cached), "build 2: all cached");
+    assert!(
+        output2.pages.iter().all(|p| p.cached),
+        "build 2: all cached"
+    );
 
     // Modify the article
     write_markdown(
@@ -1215,9 +1201,7 @@ fn test_multiple_sources_structural_change_in_one() {
 
     // New project page should exist
     assert!(
-        tmp.path()
-            .join("dist/projects/beta/index.html")
-            .exists(),
+        tmp.path().join("dist/projects/beta/index.html").exists(),
         "new project output should exist"
     );
 
@@ -1425,8 +1409,7 @@ fn test_get_entry_safe_missing_entry_then_added() {
         "build 1: all rendered"
     );
 
-    let lookup_html =
-        fs::read_to_string(tmp.path().join("dist/safe-lookup/index.html")).unwrap();
+    let lookup_html = fs::read_to_string(tmp.path().join("dist/safe-lookup/index.html")).unwrap();
     assert!(
         lookup_html.contains("Not found"),
         "should render 'Not found' when entry doesn't exist"
@@ -1472,8 +1455,7 @@ fn test_get_entry_safe_missing_entry_then_added() {
     );
 
     // Verify the content updated
-    let lookup_html =
-        fs::read_to_string(tmp.path().join("dist/safe-lookup/index.html")).unwrap();
+    let lookup_html = fs::read_to_string(tmp.path().join("dist/safe-lookup/index.html")).unwrap();
     assert!(
         lookup_html.contains("Found: Special Post"),
         "should now render the found entry, got: {}",
@@ -1702,7 +1684,10 @@ fn test_image_cache_survives_build_cache_invalidation() {
     .unwrap();
 
     let image_cache_path = tmp.path().join("cache/image_cache.bin");
-    assert!(image_cache_path.exists(), "image cache should exist after build 1");
+    assert!(
+        image_cache_path.exists(),
+        "image cache should exist after build 1"
+    );
     let image_cache_size_1 = fs::metadata(&image_cache_path).unwrap().len();
 
     // Corrupt the build cache to simulate a version bump / binary change
@@ -1726,7 +1711,10 @@ fn test_image_cache_survives_build_cache_invalidation() {
 
     // Image cache file should still exist with same or similar size
     // (it was loaded from its own file, not from the build cache)
-    assert!(image_cache_path.exists(), "image cache should survive build cache corruption");
+    assert!(
+        image_cache_path.exists(),
+        "image cache should survive build cache corruption"
+    );
     let image_cache_size_2 = fs::metadata(&image_cache_path).unwrap().len();
     assert!(
         image_cache_size_2 >= image_cache_size_1,
@@ -1821,7 +1809,10 @@ fn test_image_cache_persists_across_incremental_toggle() {
     .unwrap();
 
     let image_cache_path = tmp.path().join("cache/image_cache.bin");
-    assert!(image_cache_path.exists(), "image cache should exist after incremental build");
+    assert!(
+        image_cache_path.exists(),
+        "image cache should exist after incremental build"
+    );
     let size_after_incremental = fs::metadata(&image_cache_path).unwrap().len();
 
     // Build 2: incremental=false — image cache should NOT be wiped
@@ -1837,7 +1828,10 @@ fn test_image_cache_persists_across_incremental_toggle() {
     )
     .unwrap();
 
-    assert!(image_cache_path.exists(), "image cache should survive incremental=false build");
+    assert!(
+        image_cache_path.exists(),
+        "image cache should survive incremental=false build"
+    );
     let size_after_non_incremental = fs::metadata(&image_cache_path).unwrap().len();
     assert_eq!(
         size_after_incremental, size_after_non_incremental,

@@ -51,11 +51,6 @@ impl Default for ImageCache {
 
 impl ImageCacheInner {
     pub fn new(cache_dir: PathBuf) -> Self {
-        // Create cache directory if it doesn't exist
-        if let Err(e) = fs::create_dir_all(&cache_dir) {
-            debug!("Failed to create cache directory: {}", e);
-        }
-
         Self {
             placeholders: FxHashMap::default(),
             transformed: FxHashMap::default(),
@@ -64,11 +59,6 @@ impl ImageCacheInner {
     }
 
     pub fn load(cache_dir: PathBuf, persisted_dir: &Path) -> Self {
-        // Create cache directory if it doesn't exist
-        if let Err(e) = fs::create_dir_all(&cache_dir) {
-            debug!("Failed to create cache directory: {}", e);
-        }
-
         let path = persisted_dir.join(IMAGE_CACHE_FILENAME);
         let persisted = fs::read(&path)
             .ok()
@@ -198,8 +188,10 @@ impl ImageCacheInner {
         &self.cache_dir
     }
 
-    /// Generate a cache path for a transformed image
+    /// Generate a cache path for a transformed image, creating the cache
+    /// directory if it doesn't exist yet.
     pub fn generate_cache_path(&self, final_filename: &Path) -> PathBuf {
+        let _ = fs::create_dir_all(&self.cache_dir);
         self.cache_dir.join(final_filename)
     }
 
