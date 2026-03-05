@@ -192,11 +192,15 @@ pub async fn build(
     let image_cache_dir = options.cache_dir.join("images");
     let image_cache = ImageCache::load(&image_cache_dir, &options.cache_dir);
 
-    let previous_build_cache = cache::BuildCache::load(&options.cache_dir);
-
-    if previous_build_cache.is_some() {
-        info!(target: "cache", "Build cache loaded in {}", format_elapsed_time(cache_load_start.elapsed(), &FormatElapsedTimeOptions::default()));
-    }
+    let previous_build_cache = if options.incremental {
+        let cache = cache::BuildCache::load(&options.cache_dir);
+        if cache.is_some() {
+            info!(target: "cache", "Build cache loaded in {}", format_elapsed_time(cache_load_start.elapsed(), &FormatElapsedTimeOptions::default()));
+        }
+        cache
+    } else {
+        None
+    };
 
     // Create route_assets_options with the image cache
     let route_assets_options = options.route_assets_options();

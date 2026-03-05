@@ -6,6 +6,7 @@ use maudit::content::markdown_entry;
 use maudit::content::{ContentSource, ContentSources, glob_markdown};
 use maudit::route::prelude::*;
 use maudit::{BuildOptions, coronate};
+use serial_test::serial;
 
 #[markdown_entry]
 #[derive(Debug, Clone)]
@@ -1609,6 +1610,7 @@ fn test_build_cache_saved_without_incremental() {
 }
 
 #[test]
+#[serial]
 fn test_image_placeholder_cached_across_builds() {
     let tmp = tempfile::tempdir().unwrap();
     let content_dir = tmp.path().join("content");
@@ -1673,6 +1675,7 @@ fn test_image_placeholder_cached_across_builds() {
 }
 
 #[test]
+#[serial]
 fn test_image_cache_survives_build_cache_invalidation() {
     let tmp = tempfile::tempdir().unwrap();
     let content_dir = tmp.path().join("content");

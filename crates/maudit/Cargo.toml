@@ -53,3 +53,4 @@ rolldown_plugin_replace = { package = "brk_rolldown_plugin_replace", version = "
 
 [dev-dependencies]
 tempfile = "3.24.0"
+serial_test = "3"
