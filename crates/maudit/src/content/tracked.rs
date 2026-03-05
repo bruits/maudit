@@ -1,8 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::Arc;
-
-use crate::content::{ContentSource, Entry, EntryInner};
+use crate::content::{ContentSource, Entry};
 use crate::route::{Page, PageParams, Pages};
 
 /// Records content access patterns during page rendering.
@@ -56,12 +54,12 @@ impl<'a, T> TrackedContentSource<'a, T> {
 
     /// Access all entries. Marks this source as fully iterated —
     /// any change to any entry in this source will trigger a rebuild.
-    pub fn entries(&self) -> &'a Vec<Arc<EntryInner<T>>> {
+    pub fn entries(&self) -> impl Iterator<Item = &'a Entry<T>> {
         self.log
             .borrow_mut()
             .sources_iterated
             .push(self.source_name.clone());
-        &self.inner.entries
+        self.inner.entries.values()
     }
 
     /// Convert entries to pages. Marks this source as fully iterated.

@@ -339,7 +339,7 @@ type ContentSourceInitMethod<T> = Box<dyn Fn() -> Vec<Arc<EntryInner<T>>> + Send
 /// A source of content such as articles, blog posts, etc.
 pub struct ContentSource<T = Untyped> {
     pub name: String,
-    pub entries: Vec<Arc<EntryInner<T>>>,
+    pub entries: FxHashMap<String, Arc<EntryInner<T>>>,
     pub(crate) init_method: ContentSourceInitMethod<T>,
 }
 
@@ -350,27 +350,26 @@ impl<T> ContentSource<T> {
     {
         Self {
             name: name.into(),
-            entries: vec![],
+            entries: FxHashMap::default(),
             init_method: entries,
         }
     }
 
     pub fn get_entry(&self, id: &str) -> &Entry<T> {
         self.entries
-            .iter()
-            .find(|entry| entry.id == id)
+            .get(id)
             .unwrap_or_else(|| panic!("Entry with id '{}' not found", id))
     }
 
     pub fn get_entry_safe(&self, id: &str) -> Option<&Entry<T>> {
-        self.entries.iter().find(|entry| entry.id == id)
+        self.entries.get(id)
     }
 
     pub fn into_params<P>(&self, cb: impl FnMut(&Entry<T>) -> P) -> Vec<P>
     where
         P: Into<PageParams>,
     {
-        self.entries.iter().map(cb).collect()
+        self.entries.values().map(cb).collect()
     }
 
     pub fn into_pages<Params, Props>(
@@ -380,7 +379,7 @@ impl<T> ContentSource<T> {
     where
         Params: Into<PageParams>,
     {
-        self.entries.iter().map(cb).collect()
+        self.entries.values().map(cb).collect()
     }
 }
 
@@ -402,7 +401,10 @@ pub trait ContentSourceInternal: Send + Sync {
 
 impl<T: 'static + Sync + Send> ContentSourceInternal for ContentSource<T> {
     fn init(&mut self) {
-        self.entries = (self.init_method)();
+        self.entries = (self.init_method)()
+            .into_iter()
+            .map(|e| (e.id.clone(), e))
+            .collect();
     }
     fn get_name(&self) -> &str {
         &self.name
@@ -412,12 +414,12 @@ impl<T: 'static + Sync + Send> ContentSourceInternal for ContentSource<T> {
     }
     fn entry_file_info(&self) -> Vec<(String, Option<PathBuf>)> {
         self.entries
-            .iter()
+            .values()
             .map(|e| (e.id.clone(), e.file_path.clone()))
             .collect()
     }
     fn entry_ids(&self) -> Vec<String> {
-        let mut ids: Vec<String> = self.entries.iter().map(|e| e.id.clone()).collect();
+        let mut ids: Vec<String> = self.entries.keys().cloned().collect();
         ids.sort();
         ids
     }
