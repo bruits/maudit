@@ -1,7 +1,7 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 use crate::content::{ContentSource, Entry};
 use crate::route::{Page, PageParams, Pages};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 /// Records content access patterns during page rendering.
 ///
@@ -101,24 +101,27 @@ mod tests {
     use crate::content::{ContentEntry, ContentSource, ContentSourceInternal};
 
     fn make_test_source() -> ContentSource<String> {
-        let mut source = ContentSource::new("test_source", Box::new(|| {
-            vec![
-                Entry::<String>::create(
-                    "entry1".to_string(),
-                    None,
-                    None,
-                    "data1".to_string(),
-                    vec![],
-                ),
-                Entry::<String>::create(
-                    "entry2".to_string(),
-                    None,
-                    None,
-                    "data2".to_string(),
-                    vec![],
-                ),
-            ]
-        }));
+        let mut source = ContentSource::new(
+            "test_source",
+            Box::new(|| {
+                vec![
+                    Entry::<String>::create(
+                        "entry1".to_string(),
+                        None,
+                        None,
+                        "data1".to_string(),
+                        vec![],
+                    ),
+                    Entry::<String>::create(
+                        "entry2".to_string(),
+                        None,
+                        None,
+                        "data2".to_string(),
+                        vec![],
+                    ),
+                ]
+            }),
+        );
         source.init();
         source
     }

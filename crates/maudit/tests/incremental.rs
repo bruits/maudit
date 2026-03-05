@@ -1583,11 +1583,18 @@ fn test_build_cache_saved_without_incremental() {
     )
     .unwrap();
 
-    // Build cache should still exist (for image cache persistence)
+    // Build cache should NOT exist when incremental is disabled
     let cache_path = tmp.path().join("cache/build_cache.bin");
     assert!(
-        cache_path.exists(),
-        "build cache should exist even without incremental builds (for image cache)"
+        !cache_path.exists(),
+        "build cache should not be saved when incremental is disabled"
+    );
+
+    // Image cache should not be saved either (no images in this build)
+    let image_cache_path = tmp.path().join("cache/image_cache.bin");
+    assert!(
+        !image_cache_path.exists(),
+        "empty image cache should not be saved"
     );
 }
 
@@ -1732,6 +1739,7 @@ fn test_image_cache_survives_build_cache_invalidation() {
 }
 
 #[test]
+#[serial]
 fn test_image_cache_gc_not_triggered_on_incremental_build() {
     let tmp = tempfile::tempdir().unwrap();
     let content_dir = tmp.path().join("content");
@@ -1783,6 +1791,7 @@ fn test_image_cache_gc_not_triggered_on_incremental_build() {
 }
 
 #[test]
+#[serial]
 fn test_image_cache_persists_across_incremental_toggle() {
     let tmp = tempfile::tempdir().unwrap();
     let content_dir = tmp.path().join("content");
