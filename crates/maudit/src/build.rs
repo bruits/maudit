@@ -242,6 +242,7 @@ pub async fn build(
     let mut sitemap_entries: Vec<SitemapEntry> = Vec::new();
     let mut rendered_count: usize = 0;
     let mut cached_count: usize = 0;
+    let mut created_dirs: FxHashSet<PathBuf> = FxHashSet::default();
 
     // Normalize base_url once to avoid repeated trimming
     let normalized_base_url = options
@@ -359,6 +360,7 @@ pub async fn build(
                             &mut build_metadata,
                             &mut new_cache,
                             &mut rendered_count,
+                            &mut created_dirs,
                         )?;
                     }
                 } else {
@@ -384,6 +386,7 @@ pub async fn build(
                         &mut build_metadata,
                         &mut new_cache,
                         &mut rendered_count,
+                        &mut created_dirs,
                     )?;
                 }
             } else {
@@ -472,7 +475,7 @@ pub async fn build(
                         let content = route.build(&mut page_ctx)?;
                         let access_log = page_ctx.take_access_log();
 
-                        write_route_file(&content, &file_path)?;
+                        write_route_file(&content, &file_path, &mut created_dirs)?;
 
                         info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), &route_format_options));
 
@@ -580,7 +583,7 @@ pub async fn build(
                 let result = route.build(&mut page_ctx)?;
                 let access_log = page_ctx.take_access_log();
 
-                write_route_file(&result, &file_path)?;
+                write_route_file(&result, &file_path, &mut created_dirs)?;
 
                 info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_start.elapsed(), &route_format_options));
 
@@ -703,7 +706,7 @@ pub async fn build(
                         let content = route.build(&mut page_ctx)?;
                         let access_log = page_ctx.take_access_log();
 
-                        write_route_file(&content, &file_path)?;
+                        write_route_file(&content, &file_path, &mut created_dirs)?;
 
                         info!(target: "pages", "│  ├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_page_start.elapsed(), &route_format_options));
 
@@ -1079,6 +1082,7 @@ fn render_static_base_page(
     build_metadata: &mut BuildOutput,
     new_cache: &mut Option<cache::BuildCache>,
     rendered_count: &mut usize,
+    created_dirs: &mut FxHashSet<PathBuf>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let page_start = Instant::now();
     let mut route_assets = RouteAssets::with_default_assets(
@@ -1099,7 +1103,7 @@ fn render_static_base_page(
     let result = route.build(&mut page_ctx)?;
     let access_log = page_ctx.take_access_log();
 
-    write_route_file(&result, file_path)?;
+    write_route_file(&result, file_path, created_dirs)?;
 
     info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), route_format_options));
 
@@ -1204,10 +1208,15 @@ fn copy_recursively(
     Ok(())
 }
 
-fn write_route_file(content: &[u8], file_path: &PathBuf) -> Result<(), io::Error> {
-    // Create the parent directories if it doesn't exist
+fn write_route_file(
+    content: &[u8],
+    file_path: &PathBuf,
+    created_dirs: &mut FxHashSet<PathBuf>,
+) -> Result<(), io::Error> {
     if let Some(parent_dir) = file_path.parent() {
-        fs::create_dir_all(parent_dir)?
+        if created_dirs.insert(parent_dir.to_path_buf()) {
+            fs::create_dir_all(parent_dir)?;
+        }
     }
 
     fs::write(file_path, content)?;

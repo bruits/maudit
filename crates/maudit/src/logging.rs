@@ -25,20 +25,16 @@ impl Default for FormatElapsedTimeOptions<'_> {
 }
 
 pub fn init_logging() {
-    let logging_env = Env::default().filter_or("RUST_LOG", "info");
+    let is_quiet =
+        std::env::args().any(|arg| arg == "--quiet") || std::env::var("MAUDIT_QUIET").is_ok();
+    let default_level = if is_quiet { "error" } else { "info" };
+    let logging_env = Env::default().filter_or("RUST_LOG", default_level);
 
     let _ = Builder::from_env(logging_env)
         .format(|buf, record| {
-            if std::env::args().any(|arg| arg == "--quiet") || std::env::var("MAUDIT_QUIET").is_ok()
-            {
-                return Ok(());
-            }
-
             if record.target() == "SKIP_FORMAT" {
                 return writeln!(buf, "{}", record.args());
             }
-
-            // TODO: Add different formatting for warn, error, etc.
 
             writeln!(
                 buf,
