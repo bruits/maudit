@@ -23,6 +23,10 @@ export interface DevServer {
 	port: number;
 	/** Stop the dev server */
 	stop: () => Promise<void>;
+	/** Get the last N lines of captured stdout/stderr output */
+	getLogs: (limit?: number) => string[];
+	/** Clear all captured log lines */
+	clearLogs: () => void;
 }
 
 /**
@@ -54,6 +58,18 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
 		stdio: ["ignore", "pipe", "pipe"],
 	});
 
+	// Capture all output lines for getLogs/clearLogs
+	let capturedLogs: string[] = [];
+
+	function appendLines(data: Buffer) {
+		const lines = data.toString().split("\n");
+		for (const line of lines) {
+			if (line.trim() !== "") {
+				capturedLogs.push(line);
+			}
+		}
+	}
+
 	// Capture output to detect when server is ready
 	let serverReady = false;
 
@@ -63,6 +79,7 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
 		}, 30000);
 
 		childProcess.stdout?.on("data", (data: Buffer) => {
+			appendLines(data);
 			const output = data.toString();
 
 			// Look for "waiting for requests" to know server is ready
@@ -75,6 +92,7 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
 		});
 
 		childProcess.stderr?.on("data", (data: Buffer) => {
+			appendLines(data);
 			// Only log errors, not all stderr output
 			const output = data.toString();
 			if (output.toLowerCase().includes("error")) {
@@ -100,6 +118,15 @@ export async function startDevServer(options: DevServerOptions): Promise<DevServ
 	return {
 		url: `http://127.0.0.1:${port}`,
 		port,
+		getLogs: (limit?: number) => {
+			if (limit !== undefined) {
+				return capturedLogs.slice(-limit);
+			}
+			return [...capturedLogs];
+		},
+		clearLogs: () => {
+			capturedLogs = [];
+		},
 		stop: async () => {
 			return new Promise((resolve) => {
 				childProcess.on("exit", () => resolve());

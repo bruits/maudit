@@ -34,3 +34,7 @@ quanta = "0.12.6"
 serde_json = "1.0"
 tokio-util = "0.7"
 cargo_metadata = "0.23.1"
+depinfo = "0.7"
+
+[dev-dependencies]
+tempfile = "3.24.0"
