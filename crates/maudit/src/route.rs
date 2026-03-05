@@ -719,7 +719,11 @@ pub fn build_url_with_params(
     is_endpoint: bool,
 ) -> String {
     if params_def.is_empty() {
-        return route_template.to_string();
+        let mut result = route_template.to_string();
+        if !is_endpoint && !result.ends_with('/') {
+            result.push('/');
+        }
+        return result;
     }
 
     // Pre-calculate capacity: template length - placeholder lengths + value lengths
@@ -783,18 +787,26 @@ fn push_collapsing_slashes(result: &mut String, s: &str) {
 }
 
 /// Build a file path by deriving it from an already-built URL, avoiding duplicate template substitution.
+/// Builds the path as a single String concatenation instead of per-segment PathBuf::push calls.
+/// The URL is already normalized (leading `/`, no consecutive slashes, trailing `/` for non-endpoints),
+/// so we can just concatenate: output_dir + url + optional "index.html".
 pub fn build_file_path_from_url(url: &str, output_dir: &Path, is_endpoint: bool) -> PathBuf {
-    let mut path = PathBuf::from(output_dir);
-    path.extend(url.split('/').filter(|s| !s.is_empty()));
+    let dir = output_dir
+        .to_str()
+        .expect("output_dir must be valid UTF-8");
+    let dir = dir.trim_end_matches('/');
 
-    if !is_endpoint {
-        path.push("index.html");
+    // Non-endpoints: url ends with '/', so "index.html" joins cleanly.
+    // Endpoints: url has no trailing slash, nothing appended.
+    let suffix = if is_endpoint { "" } else { "index.html" };
+    let capacity = dir.len() + url.len() + suffix.len();
 
-        // TODO: Trailing slash behavior should be respected per route, so for instance if the user define `/blog` (no trailing slash) it should generate `/blog.html` instead of `/blog/index.html`.
-        // However, right now we don't support pretty URLs, a lot of servers don't support it either and so it's better to have a consistent behavior of always generating `index.html` files.
-    }
+    let mut result = String::with_capacity(capacity);
+    result.push_str(dir);
+    result.push_str(url); // url starts with '/', acts as separator
+    result.push_str(suffix);
 
-    path
+    PathBuf::from(result)
 }
 
 /// Wrapper around a route that caches its parameter extraction and endpoint status to avoid redundant computations.
@@ -1101,7 +1113,7 @@ mod tests {
 
         let route_params = PageParams(FxHashMap::default());
 
-        assert_eq!(page.url(&route_params), "/about");
+        assert_eq!(page.url(&route_params), "/about/");
     }
 
     #[test]
