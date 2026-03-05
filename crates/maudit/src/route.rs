@@ -577,6 +577,10 @@ pub trait InternalRoute {
         crate::sitemap::RouteSitemapMetadata::default()
     }
 
+    fn always_revalidate(&self) -> bool {
+        false
+    }
+
     fn is_endpoint(&self) -> bool {
         self.route_raw()
             .as_ref()

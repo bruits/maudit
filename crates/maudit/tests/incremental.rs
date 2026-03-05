@@ -243,8 +243,28 @@ fn cached_routes(output: &maudit::BuildOutput) -> Vec<String> {
         .collect()
 }
 
+#[route("/feed.xml", always_revalidate)]
+pub struct FeedPage;
+
+impl Route for FeedPage {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let articles = ctx.content::<ArticleContent>("articles");
+        let mut xml = String::from("<rss><channel>");
+        for entry in articles.entries() {
+            let data = entry.data(ctx);
+            xml.push_str(&format!("<item><title>{}</title></item>", data.title));
+        }
+        xml.push_str("</channel></rss>");
+        xml
+    }
+}
+
 fn routes() -> &'static [&'static dyn FullRoute] {
     &[&IndexPage, &AboutPage, &ArticlePage]
+}
+
+fn routes_with_feed() -> &'static [&'static dyn FullRoute] {
+    &[&IndexPage, &AboutPage, &ArticlePage, &FeedPage]
 }
 
 fn routes_with_featured() -> &'static [&'static dyn FullRoute] {
@@ -1418,5 +1438,54 @@ fn test_get_entry_safe_missing_entry_then_added() {
         lookup_html.contains("Found: Special Post"),
         "should now render the found entry, got: {}",
         lookup_html
+    );
+}
+
+#[test]
+fn test_always_revalidate_rebuilds_even_when_clean() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "First description",
+        "Hello",
+    );
+
+    // Build 1: full build, everything rendered
+    let output1 = coronate(
+        routes_with_feed(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let rendered1 = rendered_routes(&output1);
+    assert!(rendered1.contains(&"/feed.xml".to_string()));
+    assert!(rendered1.contains(&"/about".to_string()));
+
+    // Build 2: no changes — about should be cached, but feed.xml should always re-render
+    let output2 = coronate(
+        routes_with_feed(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let rendered2 = rendered_routes(&output2);
+    let cached2 = cached_routes(&output2);
+
+    assert!(
+        rendered2.contains(&"/feed.xml".to_string()),
+        "feed.xml should always re-render, rendered={:?}",
+        rendered2
+    );
+    assert!(
+        cached2.contains(&"/about".to_string()),
+        "about should be cached, cached={:?}",
+        cached2
     );
 }

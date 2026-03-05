@@ -103,6 +103,7 @@ struct RouteArgs {
     path: Option<Expr>,
     locales: Vec<LocaleVariant>,
     sitemap: Option<SitemapArgs>,
+    always_revalidate: bool,
 }
 
 impl Parse for RouteArgs {
@@ -110,12 +111,14 @@ impl Parse for RouteArgs {
         let mut path = None;
         let mut locales = Vec::new();
         let mut sitemap = None;
+        let mut always_revalidate = false;
 
         if input.is_empty() {
             return Ok(RouteArgs {
                 path,
                 locales,
                 sitemap,
+                always_revalidate,
             });
         }
 
@@ -156,7 +159,7 @@ impl Parse for RouteArgs {
                 break;
             }
 
-            // All subsequent arguments must be named (e.g., locales(...), the path must be first)
+            // All subsequent arguments must be named (e.g., locales(...), always_revalidate, the path must be first)
             if input.peek(Ident) && input.peek2(syn::token::Paren) {
                 let ident: Ident = input.parse()?;
                 let ident_str = ident.to_string();
@@ -189,10 +192,22 @@ impl Parse for RouteArgs {
                         format!("unknown argument '{}'", ident_str),
                     ));
                 }
+            } else if input.peek(Ident) {
+                let ident: Ident = input.parse()?;
+                let ident_str = ident.to_string();
+
+                if ident_str == "always_revalidate" {
+                    always_revalidate = true;
+                } else {
+                    return Err(syn::Error::new_spanned(
+                        ident,
+                        format!("unknown argument '{}'", ident_str),
+                    ));
+                }
             } else {
                 return Err(syn::Error::new(
                     input.span(),
-                    "expected named argument (e.g., locales(...)), path must be first argument",
+                    "expected named argument (e.g., locales(...), always_revalidate), path must be first argument",
                 ));
             }
         }
@@ -204,6 +219,7 @@ impl Parse for RouteArgs {
             path,
             locales,
             sitemap,
+            always_revalidate,
         })
     }
 }
@@ -326,6 +342,16 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
+    let revalidate_method = if args.always_revalidate {
+        quote! {
+            fn always_revalidate(&self) -> bool {
+                true
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     let expanded = quote! {
         impl maudit::route::InternalRoute for #struct_name {
             #route_raw_impl
@@ -333,6 +359,8 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
             #variant_method
 
             #sitemap_method
+
+            #revalidate_method
         }
 
         impl maudit::route::FullRoute for #struct_name {

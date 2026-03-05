@@ -302,7 +302,7 @@ pub async fn build(
                 if new_cache.is_some() {
                     let page_key = cache::PageKey::new_static(base_path, None);
 
-                    if !incremental_state.is_page_dirty(&page_key) {
+                    if !route.always_revalidate() && !incremental_state.is_page_dirty(&page_key) {
                         if let Some(cached_entry) = incremental_state
                             .previous_cache
                             .as_ref()
@@ -442,7 +442,8 @@ pub async fn build(
                             let (url, file_path) = cached_route.url_and_file_path(&page.0, &options.output_dir);
 
                             // Check if this page is clean
-                            if !incremental_state.is_page_dirty(&page_key)
+                            if !route.always_revalidate()
+                                && !incremental_state.is_page_dirty(&page_key)
                                 && let Some(cached_entry) = incremental_state
                                     .previous_cache
                                     .as_ref()
@@ -600,7 +601,8 @@ pub async fn build(
                 if new_cache.is_some() {
                     let page_key = cache::PageKey::new_static(&variant_path, Some(&variant_id));
 
-                    if !incremental_state.is_page_dirty(&page_key)
+                    if !route.always_revalidate()
+                        && !incremental_state.is_page_dirty(&page_key)
                         && let Some(cached_entry) = incremental_state
                             .previous_cache
                             .as_ref()
@@ -744,7 +746,8 @@ pub async fn build(
                                 cache::PageKey::new(&variant_path, &page.0.0, Some(&variant_id));
                             let (url, file_path) = cached_route.variant_url_and_file_path(&page.0, &options.output_dir, &variant_id)?;
 
-                            if !incremental_state.is_page_dirty(&page_key)
+                            if !route.always_revalidate()
+                                && !incremental_state.is_page_dirty(&page_key)
                                 && let Some(cached_entry) = incremental_state
                                     .previous_cache
                                     .as_ref()
