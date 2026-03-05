@@ -296,8 +296,7 @@ pub async fn build(
             // Static base route
             if base_params.is_empty() {
                 let params = PageParams::default();
-                let url = cached_route.url(&params);
-                let file_path = cached_route.file_path(&params, &options.output_dir);
+                let (url, file_path) = cached_route.url_and_file_path(&params, &options.output_dir);
 
                 // Try incremental cache hit (only when incremental is enabled)
                 if new_cache.is_some() {
@@ -440,8 +439,7 @@ pub async fn build(
                         // Incremental: per-page RouteAssets for cache tracking
                         for page in pages {
                             let page_key = cache::PageKey::new(base_path, &page.0.0, None);
-                            let url = cached_route.url(&page.0);
-                            let file_path = cached_route.file_path(&page.0, &options.output_dir);
+                            let (url, file_path) = cached_route.url_and_file_path(&page.0, &options.output_dir);
 
                             // Check if this page is clean
                             if !incremental_state.is_page_dirty(&page_key)
@@ -547,8 +545,7 @@ pub async fn build(
 
                         for page in pages {
                             let page_start = Instant::now();
-                            let url = cached_route.url(&page.0);
-                            let file_path = cached_route.file_path(&page.0, &options.output_dir);
+                            let (url, file_path) = cached_route.url_and_file_path(&page.0, &options.output_dir);
 
                             let content = route.build(&mut PageContext::from_dynamic_route(
                                 &page,
@@ -597,9 +594,7 @@ pub async fn build(
             if variant_params.is_empty() {
                 // Static variant
                 let params = PageParams::default();
-                let url = cached_route.variant_url(&params, &variant_id)?;
-                let file_path =
-                    cached_route.variant_file_path(&params, &options.output_dir, &variant_id)?;
+                let (url, file_path) = cached_route.variant_url_and_file_path(&params, &options.output_dir, &variant_id)?;
 
                 // Try incremental cache hit
                 if new_cache.is_some() {
@@ -747,12 +742,7 @@ pub async fn build(
                         for page in pages {
                             let page_key =
                                 cache::PageKey::new(&variant_path, &page.0.0, Some(&variant_id));
-                            let url = cached_route.variant_url(&page.0, &variant_id)?;
-                            let file_path = cached_route.variant_file_path(
-                                &page.0,
-                                &options.output_dir,
-                                &variant_id,
-                            )?;
+                            let (url, file_path) = cached_route.variant_url_and_file_path(&page.0, &options.output_dir, &variant_id)?;
 
                             if !incremental_state.is_page_dirty(&page_key)
                                 && let Some(cached_entry) = incremental_state
@@ -856,12 +846,7 @@ pub async fn build(
 
                         for page in pages {
                             let variant_page_start = Instant::now();
-                            let url = cached_route.variant_url(&page.0, &variant_id)?;
-                            let file_path = cached_route.variant_file_path(
-                                &page.0,
-                                &options.output_dir,
-                                &variant_id,
-                            )?;
+                            let (url, file_path) = cached_route.variant_url_and_file_path(&page.0, &options.output_dir, &variant_id)?;
 
                             let content = route.build(&mut PageContext::from_dynamic_route(
                                 &page,
