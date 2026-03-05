@@ -58,7 +58,9 @@ impl RouteAssets {
         Self {
             options: assets_options.clone(),
             image_cache,
-            ..Default::default()
+            images: FxHashSet::default(),
+            scripts: FxHashSet::default(),
+            styles: FxHashSet::default(),
         }
     }
 
