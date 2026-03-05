@@ -307,7 +307,8 @@ pub struct PageContext<'a> {
     pub base_url: &'a Option<String>,
     /// The variant being rendered, e.g. `Some("en")` for English variant, `None` for base route
     pub variant: Option<String>,
-    pub(crate) access_log: std::rc::Rc<std::cell::RefCell<crate::content::tracked::ContentAccessLog>>,
+    pub(crate) access_log:
+        std::rc::Rc<std::cell::RefCell<crate::content::tracked::ContentAccessLog>>,
 }
 
 impl<'a> PageContext<'a> {
@@ -450,7 +451,8 @@ pub struct DynamicRouteContext<'a> {
     pub assets: &'a mut RouteAssets,
     /// The variant being generated, e.g. `Some("en")` for English variant, `None` for base route
     pub variant: Option<&'a str>,
-    pub(crate) access_log: std::rc::Rc<std::cell::RefCell<crate::content::tracked::ContentAccessLog>>,
+    pub(crate) access_log:
+        std::rc::Rc<std::cell::RefCell<crate::content::tracked::ContentAccessLog>>,
 }
 
 impl<'a> DynamicRouteContext<'a> {
@@ -464,7 +466,9 @@ impl<'a> DynamicRouteContext<'a> {
             content,
             assets,
             variant,
-            access_log: std::rc::Rc::new(std::cell::RefCell::new(crate::content::tracked::ContentAccessLog::default())),
+            access_log: std::rc::Rc::new(std::cell::RefCell::new(
+                crate::content::tracked::ContentAccessLog::default(),
+            )),
         }
     }
 
@@ -578,28 +582,6 @@ pub trait InternalRoute {
             .as_ref()
             .map(|path| guess_if_route_is_endpoint(path))
             .unwrap_or(false)
-    }
-
-    #[deprecated]
-    fn route_type(&self) -> RouteType {
-        let path = self.route_raw().unwrap_or_default();
-        let params_def = extract_params_from_raw_route(&path);
-
-        // Check if base route is dynamic
-        if !params_def.is_empty() {
-            return RouteType::Dynamic;
-        }
-
-        // Check if any variant is dynamic
-        let variants = self.variants();
-        for (_id, variant_path) in variants {
-            let variant_params = extract_params_from_raw_route(&variant_path);
-            if !variant_params.is_empty() {
-                return RouteType::Dynamic;
-            }
-        }
-
-        RouteType::Static
     }
 
     fn url(&self, params: &PageParams) -> String {
@@ -720,6 +702,9 @@ pub fn build_url_with_params(
 ) -> String {
     if params_def.is_empty() {
         let mut result = route_template.to_string();
+        if !result.starts_with('/') {
+            result.insert(0, '/');
+        }
         if !is_endpoint && !result.ends_with('/') {
             result.push('/');
         }
@@ -791,9 +776,7 @@ fn push_collapsing_slashes(result: &mut String, s: &str) {
 /// The URL is already normalized (leading `/`, no consecutive slashes, trailing `/` for non-endpoints),
 /// so we can just concatenate: output_dir + url + optional "index.html".
 pub fn build_file_path_from_url(url: &str, output_dir: &Path, is_endpoint: bool) -> PathBuf {
-    let dir = output_dir
-        .to_str()
-        .expect("output_dir must be valid UTF-8");
+    let dir = output_dir.to_str().expect("output_dir must be valid UTF-8");
     let dir = dir.trim_end_matches('/');
 
     // Non-endpoints: url ends with '/', so "index.html" joins cleanly.
@@ -861,25 +844,6 @@ impl<'a> InternalRoute for CachedRoute<'a> {
 
     fn variants(&self) -> Vec<(String, String)> {
         self.inner.variants()
-    }
-
-    fn route_type(&self) -> RouteType {
-        // Check if base route is dynamic
-        let params_def = self.get_cached_params();
-        if !params_def.is_empty() {
-            return RouteType::Dynamic;
-        }
-
-        // Check if any variant is dynamic
-        let variants = self.variants();
-        for (_id, variant_path) in variants {
-            let variant_params = extract_params_from_raw_route(&variant_path);
-            if !variant_params.is_empty() {
-                return RouteType::Dynamic;
-            }
-        }
-
-        RouteType::Static
     }
 
     fn url(&self, params: &PageParams) -> String {
@@ -1199,6 +1163,37 @@ mod tests {
         let expected = Path::new("/dist/api/data.json");
 
         assert_eq!(page.file_path(&route_params, output_dir), expected);
+    }
+
+    #[test]
+    fn test_file_path_endpoint_no_leading_slash() {
+        let page = TestPage {
+            route: "404.html".to_string(),
+        };
+
+        let route_params = PageParams(FxHashMap::default());
+        let output_dir = Path::new("dist");
+
+        assert_eq!(page.url(&route_params), "/404.html");
+        assert_eq!(
+            page.file_path(&route_params, output_dir),
+            Path::new("dist/404.html")
+        );
+    }
+
+    #[test]
+    fn test_url_no_leading_slash_non_endpoint() {
+        let page = TestPage {
+            route: "about".to_string(),
+        };
+
+        let route_params = PageParams(FxHashMap::default());
+
+        assert_eq!(page.url(&route_params), "/about/");
+        assert_eq!(
+            page.file_path(&route_params, Path::new("dist")),
+            Path::new("dist/about/index.html")
+        );
     }
 
     #[test]
