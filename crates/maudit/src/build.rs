@@ -928,15 +928,12 @@ pub async fn build(
             warn!(target: "cache", "Failed to save image cache: {}", e);
         }
 
-        let cache = new_cache.unwrap_or_else(|| cache::BuildCache {
-            version: cache::BUILD_CACHE_VERSION,
-            binary_hash: cache::BuildCache::compute_binary_hash(),
-            ..Default::default()
-        });
-        if let Err(e) = cache.save(&options.cache_dir) {
-            warn!(target: "cache", "Failed to save build cache: {}", e);
-        } else {
-            info!(target: "cache", "Build cache saved in {}", format_elapsed_time(cache_save_start.elapsed(), &FormatElapsedTimeOptions::default()));
+        if let Some(cache) = new_cache {
+            if let Err(e) = cache.save(&options.cache_dir) {
+                warn!(target: "cache", "Failed to save build cache: {}", e);
+            } else {
+                info!(target: "cache", "Build cache saved in {}", format_elapsed_time(cache_save_start.elapsed(), &FormatElapsedTimeOptions::default()));
+            }
         }
     }
 
