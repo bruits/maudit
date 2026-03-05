@@ -8,8 +8,30 @@ use log::{debug, info};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
-pub const BUILD_CACHE_VERSION: u32 = 1;
+pub const BUILD_CACHE_VERSION: u32 = 4;
 pub const BUILD_CACHE_FILENAME: &str = "build_cache.bin";
+
+/// Fingerprint for an asset file (script, style, image) used for fast change detection.
+/// On incremental rebuilds, we stat the file first; if mtime+size match the cached
+/// values, we skip re-hashing.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AssetFileFingerprint {
+    pub hash: String,
+    pub mtime_ns: u64,
+    pub size: u64,
+}
+
+impl AssetFileFingerprint {
+    pub fn from_path(path: &Path) -> Option<Self> {
+        let hash = hash_file_content(path)?;
+        let (mtime_ns, size) = file_fingerprint(path)?;
+        Some(Self {
+            hash,
+            mtime_ns,
+            size,
+        })
+    }
+}
 
 /// The full build cache, persisted to disk between builds.
 #[derive(Serialize, Deserialize, Default)]
@@ -24,12 +46,16 @@ pub struct BuildCache {
     pub pages: FxHashMap<PageKey, PageCacheEntry>,
     /// Per-route-pattern: info from the pages() call for dynamic routes.
     pub route_pages: FxHashMap<String, RoutePagesInfo>,
-    /// Hashes of asset files (scripts, styles, images) used across the build.
-    pub asset_file_hashes: FxHashMap<PathBuf, String>,
+    /// Fingerprints of asset files (scripts, styles, images) used across the build.
+    pub asset_file_hashes: FxHashMap<PathBuf, AssetFileFingerprint>,
     /// The set of bundled script inputs from the last build.
     pub bundled_scripts: Vec<SerializedAssetRef>,
     /// The set of bundled style inputs from the last build.
     pub bundled_styles: Vec<SerializedAssetRef>,
+    /// Cached image placeholder thumbhashes (src_path → thumbhash bytes).
+    pub image_placeholders: FxHashMap<PathBuf, Vec<u8>>,
+    /// Cached transformed image paths (final_filename → cached_file_path).
+    pub image_transformed: FxHashMap<PathBuf, PathBuf>,
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -38,6 +64,9 @@ pub struct ContentSourceState {
     pub files: FxHashMap<PathBuf, String>,
     /// Sorted list of entry IDs — used to detect structural changes.
     pub entry_ids: Vec<String>,
+    /// Reverse map from file_path to entry_id. Not serialized — rebuilt each run.
+    #[serde(skip)]
+    pub file_to_entry: FxHashMap<PathBuf, String>,
 }
 
 /// Canonical key for a generated page. Must be stable across builds.
@@ -221,36 +250,65 @@ impl IncrementalState {
     }
 }
 
-/// Hash file content using rapidhash for speed.
-pub fn hash_file_content(path: &Path) -> Option<String> {
+/// Hash raw bytes using rapidhash for speed.
+pub fn hash_bytes(content: &[u8]) -> String {
     use rapidhash::fast::RapidHasher;
     use std::hash::Hasher;
 
-    let content = fs::read(path).ok()?;
     let mut hasher = RapidHasher::default();
-    hasher.write(&content);
-    Some(format!("{:016x}", hasher.finish()))
+    hasher.write(content);
+    format!("{:016x}", hasher.finish())
+}
+
+/// Hash file content using rapidhash for speed.
+pub fn hash_file_content(path: &Path) -> Option<String> {
+    let content = fs::read(path).ok()?;
+    Some(hash_bytes(&content))
 }
 
 /// Compute the current ContentSourceState for a single content source.
+///
+/// `raw_content_by_entry` maps entry IDs to their already-loaded raw content.
+/// When an entry has exactly one file dep and its content is available, we hash
+/// from memory instead of re-reading from disk.
 pub fn compute_content_source_state(
-    entry_file_info: &[(String, Option<PathBuf>)],
+    entry_file_info: &[(String, Vec<PathBuf>)],
+    raw_content_by_entry: &FxHashMap<String, &str>,
 ) -> ContentSourceState {
     let mut files = FxHashMap::default();
     let mut entry_ids: Vec<String> = Vec::with_capacity(entry_file_info.len());
+    let mut file_to_entry = FxHashMap::default();
 
-    for (id, file_path) in entry_file_info {
+    for (id, file_paths) in entry_file_info {
         entry_ids.push(id.clone());
-        if let Some(fp) = file_path
-            && let Some(hash) = hash_file_content(fp)
-        {
-            files.insert(fp.clone(), hash);
+
+        // If the entry has exactly one file dep and we have its raw_content, hash from memory
+        let in_memory_hash = if file_paths.len() == 1 {
+            raw_content_by_entry
+                .get(id.as_str())
+                .map(|content| hash_bytes(content.as_bytes()))
+        } else {
+            None
+        };
+
+        for (i, fp) in file_paths.iter().enumerate() {
+            let hash = if i == 0 { in_memory_hash.clone() } else { None }
+                .or_else(|| hash_file_content(fp));
+
+            if let Some(hash) = hash {
+                files.insert(fp.clone(), hash);
+                file_to_entry.insert(fp.clone(), id.clone());
+            }
         }
     }
 
     entry_ids.sort();
 
-    ContentSourceState { files, entry_ids }
+    ContentSourceState {
+        files,
+        entry_ids,
+        file_to_entry,
+    }
 }
 
 /// Diff content sources between cached and current state.
@@ -281,10 +339,9 @@ pub fn diff_content_sources(
                             // Unchanged
                         }
                         _ => {
-                            // File changed or new file — find which entry ID this corresponds to
-                            // The entry ID is derived from the filename in glob_markdown
-                            if let Some(stem) = file_path.file_stem().and_then(|s| s.to_str()) {
-                                changed_entries.insert((name.clone(), stem.to_string()));
+                            // File changed or new — look up the owning entry via reverse map
+                            if let Some(entry_id) = current_state.file_to_entry.get(file_path) {
+                                changed_entries.insert((name.clone(), entry_id.clone()));
                             }
                         }
                     }
@@ -303,13 +360,38 @@ pub fn diff_content_sources(
     (structurally_changed, changed_entries)
 }
 
-/// Diff asset files: re-hash each path from the previous cache and return those that changed.
-pub fn diff_asset_files(cached: &FxHashMap<PathBuf, String>) -> FxHashSet<PathBuf> {
+/// Get file mtime (nanoseconds since epoch) and size for fast change detection.
+pub fn file_fingerprint(path: &Path) -> Option<(u64, u64)> {
+    let meta = fs::metadata(path).ok()?;
+    let mtime = meta
+        .modified()
+        .ok()?
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_nanos() as u64;
+    Some((mtime, meta.len()))
+}
+
+/// Diff asset files using mtime+size fingerprints for fast filtering.
+/// Only re-hashes files whose metadata changed.
+pub fn diff_asset_files(cached: &FxHashMap<PathBuf, AssetFileFingerprint>) -> FxHashSet<PathBuf> {
     let mut changed = FxHashSet::default();
-    for (path, cached_hash) in cached {
-        match hash_file_content(path) {
-            Some(current_hash) if current_hash == *cached_hash => {}
-            _ => {
+    for (path, cached_fp) in cached {
+        match file_fingerprint(path) {
+            Some((mtime, size)) if mtime == cached_fp.mtime_ns && size == cached_fp.size => {
+                // mtime+size match → assume unchanged
+            }
+            Some(_) => {
+                // Metadata changed → re-hash to confirm (handles touch without content change)
+                match hash_file_content(path) {
+                    Some(hash) if hash == cached_fp.hash => {}
+                    _ => {
+                        changed.insert(path.clone());
+                    }
+                }
+            }
+            None => {
+                // File missing or unreadable
                 changed.insert(path.clone());
             }
         }
@@ -411,26 +493,26 @@ pub fn needs_rebundle(
     cached_scripts_set != current_scripts_ref || cached_styles_set != current_styles_ref
 }
 
-/// Load incremental state from cache and diff against current content.
+/// Compute incremental state from a previously loaded cache and current content.
 ///
 /// `current_content_states` should be pre-computed via `compute_content_source_state()`
-/// for each content source.
+/// for each content source. `current_binary_hash` is the hash of the running executable.
 pub fn load_incremental_state(
-    cache_dir: &Path,
+    previous_cache: Option<BuildCache>,
     current_content_states: &FxHashMap<String, ContentSourceState>,
+    current_binary_hash: &str,
 ) -> IncrementalState {
-    let cache = match BuildCache::load(cache_dir) {
+    let cache = match previous_cache {
         Some(c) => c,
         None => {
-            info!(target: "build", "No valid build cache found, performing full build");
+            info!(target: "cache", "No valid build cache found, performing full build");
             return IncrementalState::full_build();
         }
     };
 
     // Check binary hash
-    let current_binary_hash = BuildCache::compute_binary_hash();
     if cache.binary_hash != current_binary_hash {
-        info!(target: "build", "Binary changed, performing full build");
+        info!(target: "cache", "Binary changed, performing full build");
         return IncrementalState::full_build();
     }
 
@@ -440,7 +522,7 @@ pub fn load_incremental_state(
 
     if !structurally_changed_sources.is_empty() {
         info!(
-            target: "build",
+            target: "cache",
             "Content sources with structural changes: {:?}",
             structurally_changed_sources
         );
@@ -448,7 +530,7 @@ pub fn load_incremental_state(
 
     if !changed_entries.is_empty() {
         info!(
-            target: "build",
+            target: "cache",
             "Changed content entries: {:?}",
             changed_entries
         );
@@ -459,7 +541,7 @@ pub fn load_incremental_state(
 
     if !changed_asset_files.is_empty() {
         info!(
-            target: "build",
+            target: "cache",
             "Changed asset files: {:?}",
             changed_asset_files
         );
@@ -472,24 +554,6 @@ pub fn load_incremental_state(
         &changed_entries,
         &changed_asset_files,
     );
-
-    let dirty_count = dirty_pages.len();
-    let total_count = cache.pages.len();
-
-    if dirty_count == 0 {
-        info!(
-            target: "build",
-            "Incremental build: all {} pages are clean",
-            total_count
-        );
-    } else {
-        info!(
-            target: "build",
-            "Incremental build: {}/{} pages need re-rendering",
-            dirty_count,
-            total_count
-        );
-    }
 
     IncrementalState {
         mode: IncrementalMode::Incremental,
@@ -554,6 +618,7 @@ mod tests {
                     m
                 },
                 entry_ids: vec!["a".to_string()],
+                ..Default::default()
             },
         );
 
@@ -576,6 +641,7 @@ mod tests {
                     m
                 },
                 entry_ids: vec!["a".to_string()],
+                ..Default::default()
             },
         );
 
@@ -589,6 +655,11 @@ mod tests {
                     m
                 },
                 entry_ids: vec!["a".to_string()],
+                file_to_entry: {
+                    let mut m = FxHashMap::default();
+                    m.insert(PathBuf::from("content/a.md"), "a".to_string());
+                    m
+                },
             },
         );
 
@@ -606,6 +677,7 @@ mod tests {
             ContentSourceState {
                 files: FxHashMap::default(),
                 entry_ids: vec!["a".to_string()],
+                ..Default::default()
             },
         );
 
@@ -615,6 +687,7 @@ mod tests {
             ContentSourceState {
                 files: FxHashMap::default(),
                 entry_ids: vec!["a".to_string(), "b".to_string()],
+                ..Default::default()
             },
         );
 
@@ -928,17 +1001,33 @@ mod tests {
 
     #[test]
     fn test_compute_content_source_state() {
+        let empty_raw: FxHashMap<String, &str> = FxHashMap::default();
+
         // Test with empty entries
-        let entries: Vec<(String, Option<PathBuf>)> = vec![];
-        let state = compute_content_source_state(&entries);
+        let entries: Vec<(String, Vec<PathBuf>)> = vec![];
+        let state = compute_content_source_state(&entries, &empty_raw);
         assert!(state.files.is_empty());
         assert!(state.entry_ids.is_empty());
 
         // Test with entries without file paths
-        let entries = vec![("entry1".to_string(), None)];
-        let state = compute_content_source_state(&entries);
+        let entries = vec![("entry1".to_string(), vec![])];
+        let state = compute_content_source_state(&entries, &empty_raw);
         assert!(state.files.is_empty());
         assert_eq!(state.entry_ids, vec!["entry1".to_string()]);
+
+        // Test with raw content (should hash from memory, not read from disk)
+        let mut raw = FxHashMap::default();
+        raw.insert("entry1".to_string(), "hello world");
+        let entries = vec![(
+            "entry1".to_string(),
+            vec![PathBuf::from("nonexistent/file.md")],
+        )];
+        let state = compute_content_source_state(&entries, &raw);
+        let expected_hash = hash_bytes(b"hello world");
+        assert_eq!(
+            state.files.get(&PathBuf::from("nonexistent/file.md")),
+            Some(&expected_hash)
+        );
     }
 
     #[test]
@@ -950,6 +1039,7 @@ mod tests {
             ContentSourceState {
                 files: FxHashMap::default(),
                 entry_ids: vec!["a".to_string()],
+                ..Default::default()
             },
         );
 
@@ -966,6 +1056,7 @@ mod tests {
             ContentSourceState {
                 files: FxHashMap::default(),
                 entry_ids: vec!["a".to_string()],
+                ..Default::default()
             },
         );
         let current = FxHashMap::default();
@@ -1113,10 +1204,16 @@ mod tests {
         fs::write(&file_a, "body { color: red; }").unwrap();
         fs::write(&file_b, "console.log('hi');").unwrap();
 
-        // Build cached hashes
+        // Build cached fingerprints
         let mut cached = FxHashMap::default();
-        cached.insert(file_a.clone(), hash_file_content(&file_a).unwrap());
-        cached.insert(file_b.clone(), hash_file_content(&file_b).unwrap());
+        cached.insert(
+            file_a.clone(),
+            AssetFileFingerprint::from_path(&file_a).unwrap(),
+        );
+        cached.insert(
+            file_b.clone(),
+            AssetFileFingerprint::from_path(&file_b).unwrap(),
+        );
 
         // No changes → empty diff
         assert!(diff_asset_files(&cached).is_empty());
@@ -1135,7 +1232,10 @@ mod tests {
         fs::write(&file, "body {}").unwrap();
 
         let mut cached = FxHashMap::default();
-        cached.insert(file.clone(), hash_file_content(&file).unwrap());
+        cached.insert(
+            file.clone(),
+            AssetFileFingerprint::from_path(&file).unwrap(),
+        );
 
         fs::remove_file(&file).unwrap();
         let changed = diff_asset_files(&cached);

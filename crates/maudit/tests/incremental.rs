@@ -77,6 +77,24 @@ pub struct ProjectContent {
     pub description: String,
 }
 
+static IMAGE_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+#[route("/with-image")]
+pub struct ImagePage;
+
+impl Route for ImagePage {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let image_path = IMAGE_PATH.lock().unwrap().clone().unwrap();
+        let image = ctx.assets.add_image_unchecked(&image_path);
+        let placeholder = image.placeholder().unwrap();
+        format!(
+            "<html><body><img src=\"{}\" data-placeholder=\"{}\" /></body></html>",
+            image.url(),
+            placeholder.thumbhash_base64
+        )
+    }
+}
+
 static STYLE_PATH_1: Mutex<Option<PathBuf>> = Mutex::new(None);
 static STYLE_PATH_2: Mutex<Option<PathBuf>> = Mutex::new(None);
 
@@ -201,6 +219,27 @@ fn write_markdown(dir: &Path, filename: &str, title: &str, description: &str, bo
         title, description, body
     );
     fs::write(dir.join(filename), content).unwrap();
+}
+
+/// Create a minimal valid 1x1 red PNG file.
+fn write_minimal_png(path: &Path) {
+    #[rustfmt::skip]
+    let png: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+        0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+        0x00, 0x03, 0x01, 0x01, 0x00, 0xC9, 0xFE, 0x92,
+        0xEF, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E,
+        0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+    fs::write(path, png).unwrap();
+}
+
+fn routes_with_image() -> &'static [&'static dyn FullRoute] {
+    &[&IndexPage, &AboutPage, &ArticlePage, &ImagePage]
 }
 
 fn build_options(tmp: &Path) -> BuildOptions {
@@ -1487,5 +1526,148 @@ fn test_always_revalidate_rebuilds_even_when_clean() {
         cached2.contains(&"/about".to_string()),
         "about should be cached, cached={:?}",
         cached2
+    );
+}
+
+#[test]
+fn test_build_cache_saved_with_incremental() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+
+    // Build with incremental enabled
+    let _ = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Build cache should exist
+    let cache_path = tmp.path().join("cache/build_cache.bin");
+    assert!(cache_path.exists(), "build cache should exist after build");
+
+    // Second build should also succeed and keep the cache
+    let _ = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    assert!(
+        cache_path.exists(),
+        "build cache should still exist after second build"
+    );
+}
+
+#[test]
+fn test_build_cache_saved_without_incremental() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+
+    let non_incremental_options = BuildOptions {
+        output_dir: tmp.path().join("dist"),
+        static_dir: tmp.path().join("static"),
+        clean_output_dir: false,
+        incremental: false,
+        cache_dir: tmp.path().join("cache"),
+        ..Default::default()
+    };
+
+    // Build without incremental
+    let _ = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        non_incremental_options,
+    )
+    .unwrap();
+
+    // Build cache should still exist (for image cache persistence)
+    let cache_path = tmp.path().join("cache/build_cache.bin");
+    assert!(
+        cache_path.exists(),
+        "build cache should exist even without incremental builds (for image cache)"
+    );
+}
+
+#[test]
+fn test_image_placeholder_cached_across_builds() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    // Create a test image
+    let image_path = tmp.path().join("test_image.png");
+    write_minimal_png(&image_path);
+    *IMAGE_PATH.lock().unwrap() = Some(image_path.clone());
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+
+    // Build 1: generates placeholder from scratch
+    let output1 = coronate(
+        routes_with_image(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+    assert!(
+        output1.pages.iter().all(|p| !p.cached),
+        "build 1: all rendered"
+    );
+
+    // Verify the image page was rendered with placeholder data
+    let image_html = fs::read_to_string(tmp.path().join("dist/with-image/index.html")).unwrap();
+    assert!(
+        image_html.contains("data-placeholder="),
+        "should have placeholder data in output"
+    );
+
+    // Build 2: placeholder should come from cache (no recomputation)
+    let output2 = coronate(
+        routes_with_image(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let cached2 = cached_routes(&output2);
+    assert!(
+        cached2.contains(&"/with-image".to_string()),
+        "image page should be cached on second build, cached={:?}",
+        cached2
+    );
+
+    // Build cache should exist and contain image data
+    let cache_path = tmp.path().join("cache/build_cache.bin");
+    assert!(cache_path.exists(), "build cache should exist");
+    let cache_size = fs::metadata(&cache_path).unwrap().len();
+    assert!(
+        cache_size > 100,
+        "build cache should contain meaningful data (got {} bytes)",
+        cache_size
     );
 }

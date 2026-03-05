@@ -108,14 +108,14 @@ mod tests {
                     None,
                     None,
                     "data1".to_string(),
-                    None,
+                    vec![],
                 ),
                 Entry::<String>::create(
                     "entry2".to_string(),
                     None,
                     None,
                     "data2".to_string(),
-                    None,
+                    vec![],
                 ),
             ]
         }));

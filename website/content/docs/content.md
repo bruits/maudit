@@ -120,7 +120,7 @@ pub fn my_loader(path: &str) -> Vec<Entry<MyType>> {
     let response = reqwest::blocking::get(path).unwrap();
     let data = response.json::<MyType>().unwrap();
 
-    vec![Entry::create(data.id.into(), None, None, data, None)]
+    vec![Entry::create(data.id.into(), None, None, data, vec![])]
 }
 
 // Use it as a content source:
@@ -165,7 +165,7 @@ Entry::create(
   })),
   None,
   data,
-  None,
+  vec![],
 )
 ```
 

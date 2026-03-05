@@ -116,13 +116,20 @@ pub use maudit_macros::markdown_entry;
 ///   }
 /// }
 /// ```
+/// A dependency of a content entry, used for incremental build change detection.
+#[derive(Debug, Clone)]
+pub enum Dependency {
+    /// A file on disk. Changes to this file will trigger a rebuild of pages that depend on this entry.
+    File(PathBuf),
+}
+
 pub struct EntryInner<T> {
     pub id: String,
     render: OptionalContentRenderFn,
     pub raw_content: Option<String>,
     data_loader: Option<DataLoadingFn<T>>,
     cached_data: std::sync::OnceLock<T>,
-    pub file_path: Option<PathBuf>,
+    pub dependencies: Vec<Dependency>,
 }
 
 /// Helper type for easier usage of `EntryInner`. Content sources always return Arc-wrapped entries, but the user ergonomics of writing `Arc<EntryInner<T>>` is not great.
@@ -134,7 +141,7 @@ pub trait ContentEntry<T> {
         render: OptionalContentRenderFn,
         raw_content: Option<String>,
         data: T,
-        file_path: Option<PathBuf>,
+        dependencies: Vec<Dependency>,
     ) -> Entry<T> {
         Arc::new(EntryInner {
             id,
@@ -142,7 +149,7 @@ pub trait ContentEntry<T> {
             raw_content,
             data_loader: None,
             cached_data: std::sync::OnceLock::from(data),
-            file_path,
+            dependencies,
         })
     }
 
@@ -151,7 +158,7 @@ pub trait ContentEntry<T> {
         render: OptionalContentRenderFn,
         raw_content: Option<String>,
         data_loader: DataLoadingFn<T>,
-        file_path: Option<PathBuf>,
+        dependencies: Vec<Dependency>,
     ) -> Entry<T> {
         Arc::new(EntryInner {
             id,
@@ -159,7 +166,7 @@ pub trait ContentEntry<T> {
             raw_content,
             data_loader: Some(data_loader),
             cached_data: std::sync::OnceLock::new(),
-            file_path,
+            dependencies,
         })
     }
 }
@@ -391,9 +398,15 @@ pub trait ContentSourceInternal: Send + Sync {
     fn get_name(&self) -> &str;
     fn as_any(&self) -> &dyn Any; // Used for type checking at runtime
 
-    /// Return (entry_id, file_path) for each entry.
+    /// Return (entry_id, file_paths) for each entry.
     /// Used by the incremental build system to track file hashes.
-    fn entry_file_info(&self) -> Vec<(String, Option<PathBuf>)>;
+    fn entry_file_info(&self) -> Vec<(String, Vec<PathBuf>)>;
+
+    /// Return (entry_id, raw_content) for entries that have raw content loaded.
+    /// Used to hash content without re-reading files from disk.
+    fn entry_raw_content(&self) -> FxHashMap<String, &str> {
+        FxHashMap::default()
+    }
 
     /// Return sorted entry IDs for structural change detection.
     fn entry_ids(&self) -> Vec<String>;
@@ -412,10 +425,25 @@ impl<T: 'static + Sync + Send> ContentSourceInternal for ContentSource<T> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn entry_file_info(&self) -> Vec<(String, Option<PathBuf>)> {
+    fn entry_file_info(&self) -> Vec<(String, Vec<PathBuf>)> {
         self.entries
             .values()
-            .map(|e| (e.id.clone(), e.file_path.clone()))
+            .map(|e| {
+                let files = e
+                    .dependencies
+                    .iter()
+                    .map(|d| match d {
+                        Dependency::File(p) => p.clone(),
+                    })
+                    .collect();
+                (e.id.clone(), files)
+            })
+            .collect()
+    }
+    fn entry_raw_content(&self) -> FxHashMap<String, &str> {
+        self.entries
+            .values()
+            .filter_map(|e| e.raw_content.as_deref().map(|rc| (e.id.clone(), rc)))
             .collect()
     }
     fn entry_ids(&self) -> Vec<String> {

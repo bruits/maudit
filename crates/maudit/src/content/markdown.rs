@@ -13,7 +13,7 @@ use components::{LinkType, ListType, MarkdownComponents, TableAlignment};
 use crate::{
     assets::Asset,
     content::{
-        ContentContext, ContentEntry, Entry,
+        ContentContext, ContentEntry, Dependency, Entry,
         shortcodes::{MarkdownShortcodes, preprocess_shortcodes},
     },
     route::PageContext,
@@ -225,7 +225,6 @@ where
 
         let id = entry.file_stem().unwrap().to_str().unwrap().to_string();
         let content = std::fs::read_to_string(&entry).unwrap();
-
         // Clone content for the closure
         let content_clone = content.clone();
         let data_loader = Box::new(move |_: &mut dyn ContentContext| {
@@ -244,7 +243,7 @@ where
             })),
             Some(content),
             data_loader,
-            Some(entry),
+            vec![Dependency::File(entry)],
         ));
     }
 

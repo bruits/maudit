@@ -155,9 +155,21 @@ pub async fn build(
         None
     };
 
-    // Create the image cache early so it can be shared across routes
-    let image_cache = ImageCache::with_cache_dir(&options.assets.image_cache_dir);
+    // Load a previous build cache early so we can restore image cache data
+    let cache_load_start = Instant::now();
+    let previous_build_cache = cache::BuildCache::load(&options.cache_dir);
+
+    // Create the image cache, restoring from build cache if available
+    let image_cache = if let Some(ref prev_cache) = previous_build_cache {
+        ImageCache::from_build_cache(prev_cache, &options.assets.image_cache_dir)
+    } else {
+        ImageCache::with_cache_dir(&options.assets.image_cache_dir)
+    };
     let _ = fs::create_dir_all(image_cache.get_cache_dir());
+
+    if previous_build_cache.is_some() {
+        info!(target: "cache", "Build cache loaded in {}", format_elapsed_time(cache_load_start.elapsed(), &FormatElapsedTimeOptions::default()));
+    }
 
     // Create route_assets_options with the image cache
     let route_assets_options = options.route_assets_options();
@@ -183,27 +195,35 @@ pub async fn build(
     let mut new_cache: Option<cache::BuildCache>;
 
     if options.incremental {
+        let incremental_start = Instant::now();
+        let current_binary_hash = cache::BuildCache::compute_binary_hash();
         let current_content_states: FxHashMap<String, cache::ContentSourceState> = content_sources
             .sources()
             .iter()
             .map(|s| {
                 let entries = s.entry_file_info();
+                let raw_content = s.entry_raw_content();
                 (
                     s.get_name().to_string(),
-                    cache::compute_content_source_state(&entries),
+                    cache::compute_content_source_state(&entries, &raw_content),
                 )
             })
             .collect();
 
-        incremental_state =
-            cache::load_incremental_state(&options.cache_dir, &current_content_states);
+        incremental_state = cache::load_incremental_state(
+            previous_build_cache,
+            &current_content_states,
+            &current_binary_hash,
+        );
 
         new_cache = Some(cache::BuildCache {
             version: cache::BUILD_CACHE_VERSION,
-            binary_hash: cache::BuildCache::compute_binary_hash(),
+            binary_hash: current_binary_hash,
             content_sources: current_content_states,
             ..Default::default()
         });
+
+        info!(target: "cache", "Incremental state computed in {}", format_elapsed_time(incremental_start.elapsed(), &FormatElapsedTimeOptions::default()));
     } else {
         incremental_state = cache::IncrementalState::full_build();
         new_cache = None;
@@ -211,6 +231,18 @@ pub async fn build(
 
     // --- Generate pages ---
     print_title("generating pages");
+
+    if !incremental_state.is_full_build() {
+        let dirty_count = incremental_state.dirty_pages.len();
+        if dirty_count == 0 {
+            if let Some(prev) = &incremental_state.previous_cache {
+                info!(target: "cache", "all {} pages are clean", prev.pages.len());
+            }
+        } else if let Some(prev) = &incremental_state.previous_cache {
+            info!(target: "cache", "{}/{} pages need re-rendering", dirty_count, prev.pages.len());
+        }
+    }
+
     let pages_start = Instant::now();
 
     let route_format_options = FormatElapsedTimeOptions {
@@ -439,7 +471,8 @@ pub async fn build(
                         // Incremental: per-page RouteAssets for cache tracking
                         for page in pages {
                             let page_key = cache::PageKey::new(base_path, &page.0.0, None);
-                            let (url, file_path) = cached_route.url_and_file_path(&page.0, &options.output_dir);
+                            let (url, file_path) =
+                                cached_route.url_and_file_path(&page.0, &options.output_dir);
 
                             // Check if this page is clean
                             if !route.always_revalidate()
@@ -546,7 +579,8 @@ pub async fn build(
 
                         for page in pages {
                             let page_start = Instant::now();
-                            let (url, file_path) = cached_route.url_and_file_path(&page.0, &options.output_dir);
+                            let (url, file_path) =
+                                cached_route.url_and_file_path(&page.0, &options.output_dir);
 
                             let content = route.build(&mut PageContext::from_dynamic_route(
                                 &page,
@@ -595,7 +629,11 @@ pub async fn build(
             if variant_params.is_empty() {
                 // Static variant
                 let params = PageParams::default();
-                let (url, file_path) = cached_route.variant_url_and_file_path(&params, &options.output_dir, &variant_id)?;
+                let (url, file_path) = cached_route.variant_url_and_file_path(
+                    &params,
+                    &options.output_dir,
+                    &variant_id,
+                )?;
 
                 // Try incremental cache hit
                 if new_cache.is_some() {
@@ -744,7 +782,11 @@ pub async fn build(
                         for page in pages {
                             let page_key =
                                 cache::PageKey::new(&variant_path, &page.0.0, Some(&variant_id));
-                            let (url, file_path) = cached_route.variant_url_and_file_path(&page.0, &options.output_dir, &variant_id)?;
+                            let (url, file_path) = cached_route.variant_url_and_file_path(
+                                &page.0,
+                                &options.output_dir,
+                                &variant_id,
+                            )?;
 
                             if !route.always_revalidate()
                                 && !incremental_state.is_page_dirty(&page_key)
@@ -849,7 +891,11 @@ pub async fn build(
 
                         for page in pages {
                             let variant_page_start = Instant::now();
-                            let (url, file_path) = cached_route.variant_url_and_file_path(&page.0, &options.output_dir, &variant_id)?;
+                            let (url, file_path) = cached_route.variant_url_and_file_path(
+                                &page.0,
+                                &options.output_dir,
+                                &variant_id,
+                            )?;
 
                             let content = route.build(&mut PageContext::from_dynamic_route(
                                 &page,
@@ -899,28 +945,47 @@ pub async fn build(
         info!(target: "pages", "{}", format!("generated {} pages in {}", page_count, format_elapsed_time(pages_start.elapsed(), &section_format_options)).bold());
     }
 
-    // Populate asset_file_hashes in the new cache from all pages (cached + rendered)
+    // Populate asset_file_hashes in the new cache from all pages (cached + rendered).
+    // Carry forward fingerprints from the previous cache to avoid re-reading unchanged files.
     if let Some(ref mut cache) = new_cache {
-        for page_entry in cache.pages.values() {
-            for img in &page_entry.images {
-                cache
-                    .asset_file_hashes
-                    .entry(img.path.clone())
-                    .or_insert_with(|| cache::hash_file_content(&img.path).unwrap_or_default());
-            }
-            for script in &page_entry.scripts {
-                cache
-                    .asset_file_hashes
-                    .entry(script.path.clone())
-                    .or_insert_with(|| cache::hash_file_content(&script.path).unwrap_or_default());
-            }
-            for style in &page_entry.styles {
-                cache
-                    .asset_file_hashes
-                    .entry(style.path.clone())
-                    .or_insert_with(|| cache::hash_file_content(&style.path).unwrap_or_default());
-            }
+        let asset_hash_start = Instant::now();
+        let previous_fingerprints = incremental_state
+            .previous_cache
+            .as_ref()
+            .map(|c| &c.asset_file_hashes);
+
+        let mut compute_or_reuse = |path: &PathBuf| {
+            cache.asset_file_hashes.entry(path.clone()).or_insert_with(|| {
+                // Try to reuse from previous cache if mtime+size still match (cheap stat check)
+                if let Some(prev) = previous_fingerprints {
+                    if let Some(fp) = prev.get(path) {
+                        if let Some((mtime, size)) = cache::file_fingerprint(path) {
+                            if mtime == fp.mtime_ns && size == fp.size {
+                                return fp.clone();
+                            }
+                        }
+                    }
+                }
+                cache::AssetFileFingerprint::from_path(path)
+                    .unwrap_or(cache::AssetFileFingerprint { hash: String::new(), mtime_ns: 0, size: 0 })
+            });
+        };
+
+        let asset_paths: Vec<PathBuf> = cache
+            .pages
+            .values()
+            .flat_map(|page_entry| {
+                page_entry.images.iter().map(|a| a.path.clone())
+                    .chain(page_entry.scripts.iter().map(|a| a.path.clone()))
+                    .chain(page_entry.styles.iter().map(|a| a.path.clone()))
+            })
+            .collect();
+
+        for path in asset_paths {
+            compute_or_reuse(&path);
         }
+
+        info!(target: "cache", "Asset fingerprints computed in {}", format_elapsed_time(asset_hash_start.elapsed(), &FormatElapsedTimeOptions::default()));
     }
 
     if (!build_pages_images.is_empty())
@@ -1181,7 +1246,7 @@ pub async fn build(
                 if let Some(entry) = prev_cache.pages.get(stale_key)
                     && fs::remove_file(&entry.output_file).is_ok()
                 {
-                    info!(target: "build", "Removed stale output: {}", entry.output_file.display());
+                    info!(target: "cache", "Removed stale output: {}", entry.output_file.display());
                 }
             }
         }
@@ -1190,12 +1255,18 @@ pub async fn build(
     info!(target: "SKIP_FORMAT", "{}", "");
     info!(target: "build", "{}", format!("Build completed in {}", format_elapsed_time(build_start.elapsed(), &section_format_options)).bold());
 
-    // Save build cache (after timing, since this is a post-build bookkeeping step)
-    if let Some(cache) = new_cache {
+    // Save build cache. Always save image cache data even when incremental builds are disabled.
+    {
+        let cache_save_start = Instant::now();
+        let mut cache = new_cache.unwrap_or_default();
+        image_cache.write_to_build_cache(&mut cache);
+        if cache.version == 0 {
+            cache.version = cache::BUILD_CACHE_VERSION;
+        }
         if let Err(e) = cache.save(&options.cache_dir) {
-            warn!(target: "build", "Failed to save build cache: {}", e);
+            warn!(target: "cache", "Failed to save build cache: {}", e);
         } else {
-            debug!(target: "build", "Build cache saved to {}", options.cache_dir.display());
+            info!(target: "cache", "Build cache saved in {}", format_elapsed_time(cache_save_start.elapsed(), &FormatElapsedTimeOptions::default()));
         }
     }
 

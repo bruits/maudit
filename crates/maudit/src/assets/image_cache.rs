@@ -4,12 +4,10 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
-use base64::Engine;
 use log::debug;
 use rustc_hash::FxHashMap;
 
-pub const DEFAULT_IMAGE_CACHE_DIR: &str = "target/maudit_cache/images";
-pub const MANIFEST_VERSION: u32 = 1;
+use crate::build::cache::BuildCache;
 
 #[derive(Debug, Clone)]
 pub struct PlaceholderCacheEntry {
@@ -22,19 +20,14 @@ pub struct TransformedImageCacheEntry {
     pub cached_path: PathBuf,
 }
 
-#[derive(Debug, Default)]
-struct CacheManifest {
-    /// Cache for placeholder data (thumbhash, etc.)
-    placeholders: FxHashMap<PathBuf, PlaceholderCacheEntry>,
-    /// Cache for transformed images (path + options -> cached file path)
-    transformed: FxHashMap<PathBuf, TransformedImageCacheEntry>,
-}
-
 #[derive(Debug)]
 struct ImageCacheInner {
-    manifest: CacheManifest,
+    /// Cache for placeholder data (thumbhash, etc.)
+    placeholders: FxHashMap<PathBuf, PlaceholderCacheEntry>,
+    /// Cache for transformed images (final_filename -> cached file path)
+    transformed: FxHashMap<PathBuf, TransformedImageCacheEntry>,
+    /// Directory where actual processed image files are stored
     cache_dir: PathBuf,
-    manifest_path: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -47,140 +40,81 @@ impl Default for ImageCache {
 }
 
 impl ImageCacheInner {
-    pub fn new() -> Self {
-        Self::with_cache_dir(DEFAULT_IMAGE_CACHE_DIR)
-    }
-
-    pub fn with_cache_dir<P: AsRef<Path>>(cache_dir_path: P) -> Self {
-        let cache_dir = cache_dir_path.as_ref().to_path_buf();
-        let manifest_path = cache_dir.join("manifest");
-
+    pub fn new(cache_dir: PathBuf) -> Self {
         // Create cache directory if it doesn't exist
         if let Err(e) = fs::create_dir_all(&cache_dir) {
             debug!("Failed to create cache directory: {}", e);
         }
 
-        // Load existing manifest or create new one
-        let manifest = if manifest_path.exists() {
-            Self::load_manifest(&manifest_path).unwrap_or_default()
-        } else {
-            CacheManifest::default()
-        };
+        Self {
+            placeholders: FxHashMap::default(),
+            transformed: FxHashMap::default(),
+            cache_dir,
+        }
+    }
+
+    pub fn from_build_cache(cache: &BuildCache, cache_dir: PathBuf) -> Self {
+        // Create cache directory if it doesn't exist
+        if let Err(e) = fs::create_dir_all(&cache_dir) {
+            debug!("Failed to create cache directory: {}", e);
+        }
+
+        let placeholders = cache
+            .image_placeholders
+            .iter()
+            .map(|(path, thumbhash)| {
+                (
+                    path.clone(),
+                    PlaceholderCacheEntry {
+                        thumbhash: thumbhash.clone(),
+                    },
+                )
+            })
+            .collect();
+
+        let transformed = cache
+            .image_transformed
+            .iter()
+            .map(|(key, cached_path)| {
+                (
+                    key.clone(),
+                    TransformedImageCacheEntry {
+                        cached_path: cached_path.clone(),
+                    },
+                )
+            })
+            .collect();
 
         debug!(
-            "Image cache initialized with {} placeholders and {} transformed images",
-            manifest.placeholders.len(),
-            manifest.transformed.len()
+            "Image cache initialized from build cache with {} placeholders and {} transformed images",
+            cache.image_placeholders.len(),
+            cache.image_transformed.len()
         );
 
         Self {
-            manifest,
+            placeholders,
+            transformed,
             cache_dir,
-            manifest_path,
         }
     }
 
-    fn load_manifest(path: &Path) -> Option<CacheManifest> {
-        let content = fs::read_to_string(path).ok()?;
-        let mut manifest = CacheManifest::default();
-        let mut found_version = None;
+    pub fn write_to_build_cache(&self, cache: &mut BuildCache) {
+        cache.image_placeholders = self
+            .placeholders
+            .iter()
+            .map(|(path, entry)| (path.clone(), entry.thumbhash.clone()))
+            .collect();
 
-        let mut current_section = "";
-        for line in content.lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-
-            // Check for version line
-            if line.starts_with("version = ") {
-                if let Some(version_str) = line.strip_prefix("version = ")
-                    && let Ok(version) = version_str.parse::<u32>()
-                {
-                    found_version = Some(version);
-                }
-                continue;
-            }
-
-            if line == "[placeholders]" {
-                current_section = "placeholders";
-                continue;
-            } else if line == "[transformed]" {
-                current_section = "transformed";
-                continue;
-            }
-
-            match current_section {
-                "placeholders" => {
-                    if let Some((path_str, thumbhash_b64)) = line.split_once('=')
-                        && let Ok(thumbhash) =
-                            base64::engine::general_purpose::STANDARD.decode(thumbhash_b64)
-                    {
-                        let entry = PlaceholderCacheEntry { thumbhash };
-                        manifest.placeholders.insert(PathBuf::from(path_str), entry);
-                    }
-                }
-                "transformed" => {
-                    if let Some((cache_key, cached_path_str)) = line.split_once('=') {
-                        let entry = TransformedImageCacheEntry {
-                            cached_path: PathBuf::from(cached_path_str),
-                        };
-                        manifest.transformed.insert(PathBuf::from(cache_key), entry);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        // Check version compatibility
-        if let Some(version) = found_version {
-            if version != MANIFEST_VERSION {
-                debug!(
-                    "Manifest version mismatch: found {}, expected {}. Invalidating cache.",
-                    version, MANIFEST_VERSION
-                );
-                // Delete the manifest file to invalidate the cache
-                let _ = fs::remove_file(path);
-                return None;
-            }
-        } else {
-            debug!("No version found in manifest. Invalidating cache.");
-            let _ = fs::remove_file(path);
-            return None;
-        }
-
-        Some(manifest)
-    }
-
-    pub fn save_manifest(&self) {
-        let mut content = String::new();
-        content.push_str("# Maudit Image Cache Manifest\n");
-        content.push_str(&format!("version = {}\n\n", MANIFEST_VERSION));
-
-        // Write placeholders section
-        content.push_str("[placeholders]\n");
-        for (path, entry) in &self.manifest.placeholders {
-            let thumbhash_b64 = base64::engine::general_purpose::STANDARD.encode(&entry.thumbhash);
-            content.push_str(&format!("{}={}\n", path.to_string_lossy(), thumbhash_b64));
-        }
-
-        content.push_str("\n[transformed]\n");
-        for (cache_key, entry) in &self.manifest.transformed {
-            content.push_str(&format!(
-                "{}={}\n",
-                cache_key.to_string_lossy(),
-                entry.cached_path.to_string_lossy()
-            ));
-        }
-
-        if let Err(e) = fs::write(&self.manifest_path, content) {
-            debug!("Failed to save cache manifest: {}", e);
-        }
+        cache.image_transformed = self
+            .transformed
+            .iter()
+            .map(|(key, entry)| (key.clone(), entry.cached_path.clone()))
+            .collect();
     }
 
     /// Get cached placeholder or None if not found
     pub fn get_placeholder(&self, src_path: &Path) -> Option<PlaceholderCacheEntry> {
-        let entry = self.manifest.placeholders.get(src_path)?;
+        let entry = self.placeholders.get(src_path)?;
 
         debug!("Placeholder cache hit for {}", src_path.display());
         Some(entry.clone())
@@ -190,16 +124,13 @@ impl ImageCacheInner {
     pub fn cache_placeholder(&mut self, src_path: &Path, thumbhash: Vec<u8>) {
         let entry = PlaceholderCacheEntry { thumbhash };
 
-        self.manifest
-            .placeholders
-            .insert(src_path.to_path_buf(), entry);
-        self.save_manifest();
+        self.placeholders.insert(src_path.to_path_buf(), entry);
         debug!("Cached placeholder for {}", src_path.display());
     }
 
     /// Get cached transformed image path or None if not found
     pub fn get_transformed_image(&self, final_filename: &Path) -> Option<PathBuf> {
-        let entry = self.manifest.transformed.get(final_filename)?;
+        let entry = self.transformed.get(final_filename)?;
 
         // Check if cached file still exists
         if !entry.cached_path.exists() {
@@ -224,10 +155,8 @@ impl ImageCacheInner {
             cached_path: cached_path.clone(),
         };
 
-        self.manifest
-            .transformed
+        self.transformed
             .insert(final_filename.to_path_buf(), entry);
-        self.save_manifest();
         debug!(
             "Cached transformed image {} -> {}",
             final_filename.display(),
@@ -246,15 +175,30 @@ impl ImageCacheInner {
     }
 }
 
+pub const DEFAULT_IMAGE_CACHE_DIR: &str = "target/maudit_cache/images";
+
 impl ImageCache {
     pub fn new() -> Self {
-        Self(Arc::new(Mutex::new(ImageCacheInner::new())))
+        Self(Arc::new(Mutex::new(ImageCacheInner::new(
+            PathBuf::from(DEFAULT_IMAGE_CACHE_DIR),
+        ))))
     }
 
     pub fn with_cache_dir<P: AsRef<Path>>(cache_dir_path: P) -> Self {
-        Self(Arc::new(Mutex::new(ImageCacheInner::with_cache_dir(
-            cache_dir_path,
+        Self(Arc::new(Mutex::new(ImageCacheInner::new(
+            cache_dir_path.as_ref().to_path_buf(),
         ))))
+    }
+
+    pub fn from_build_cache<P: AsRef<Path>>(cache: &BuildCache, cache_dir_path: P) -> Self {
+        Self(Arc::new(Mutex::new(ImageCacheInner::from_build_cache(
+            cache,
+            cache_dir_path.as_ref().to_path_buf(),
+        ))))
+    }
+
+    pub fn write_to_build_cache(&self, cache: &mut BuildCache) {
+        self.lock_inner().write_to_build_cache(cache);
     }
 
     fn lock_inner(&'_ self) -> MutexGuard<'_, ImageCacheInner> {
@@ -297,11 +241,6 @@ impl ImageCache {
     /// Generate a cache path for a transformed image
     pub fn generate_cache_path(&self, final_filename: &Path) -> PathBuf {
         self.lock_inner().generate_cache_path(final_filename)
-    }
-
-    /// Save the manifest to disk
-    pub fn save_manifest(&self) {
-        self.lock_inner().save_manifest()
     }
 }
 
@@ -375,5 +314,43 @@ mod tests {
         let entry = cache.get_placeholder(Path::new("test.jpg"));
         assert!(entry.is_some());
         assert_eq!(entry.unwrap().thumbhash, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_build_cache_roundtrip() {
+        use crate::build::cache::BUILD_CACHE_VERSION;
+
+        let image_cache = ImageCache::new();
+        image_cache.cache_placeholder(Path::new("test.png"), vec![10, 20, 30]);
+        image_cache.cache_transformed_image(
+            Path::new("test.abc123.webp"),
+            PathBuf::from("/tmp/cached/test.abc123.webp"),
+        );
+
+        // Write to build cache
+        let mut build_cache = BuildCache {
+            version: BUILD_CACHE_VERSION,
+            ..Default::default()
+        };
+        image_cache.write_to_build_cache(&mut build_cache);
+
+        // Verify data is in build cache
+        assert_eq!(
+            build_cache.image_placeholders.get(Path::new("test.png")),
+            Some(&vec![10u8, 20, 30])
+        );
+        assert_eq!(
+            build_cache
+                .image_transformed
+                .get(Path::new("test.abc123.webp")),
+            Some(&PathBuf::from("/tmp/cached/test.abc123.webp"))
+        );
+
+        // Reconstruct from build cache
+        let restored = ImageCache::from_build_cache(&build_cache, PathBuf::from(DEFAULT_IMAGE_CACHE_DIR));
+
+        let placeholder = restored.get_placeholder(Path::new("test.png"));
+        assert!(placeholder.is_some());
+        assert_eq!(placeholder.unwrap().thumbhash, vec![10, 20, 30]);
     }
 }

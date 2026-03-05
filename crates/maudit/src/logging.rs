@@ -49,7 +49,16 @@ pub fn init_logging() {
 
 pub fn format_elapsed_time(elapsed: Duration, options: &FormatElapsedTimeOptions) -> ColoredString {
     let result = match elapsed.as_secs() {
-        secs if secs > options.sec_red_threshold => format!("{}m", secs / 60).red(),
+        secs if secs > options.sec_red_threshold => {
+            let mins = secs / 60;
+            let remaining = secs % 60;
+            if mins > 0 {
+                format!("{}m{}s", mins, remaining)
+            } else {
+                format!("{}s", secs)
+            }
+        }
+        .red(),
         secs if secs > options.sec_yellow_threshold => format!("{}s", secs).yellow(),
         secs if secs > 0 => format!("{}s", secs).normal(),
         _ => match elapsed.as_millis() {
