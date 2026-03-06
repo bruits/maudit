@@ -55,10 +55,8 @@ pub struct SomeArticlePage;
 
 impl Route for SomeArticlePage {
   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-    let entry = ctx
-      .content
-      .get_source::<BlogPost>("source_name")
-      .get_entry("entry_id");
+    let source = ctx.collection::<BlogPost>("source_name");
+    let entry = source.get_entry("entry_id");
 
     let entry_data = entry.data(ctx);
 
@@ -122,7 +120,7 @@ pub fn my_loader(path: &str) -> Vec<Entry<MyType>> {
     let response = reqwest::blocking::get(path).unwrap();
     let data = response.json::<MyType>().unwrap();
 
-    vec![Entry::create(data.id.into(), None, None, data, None)]
+    vec![Entry::create(data.id.into(), None, None, data, vec![])]
 }
 
 // Use it as a content source:
@@ -143,10 +141,8 @@ pub struct DataPage;
 
 impl Route for DataPage {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-        let entry = ctx
-            .content
-            .get_source::<MyType>("my_data")
-            .get_entry("0");
+        let source = ctx.collection::<MyType>("my_data");
+        let entry = source.get_entry("0");
 
         let entry_data = entry.data();
 
@@ -169,7 +165,7 @@ Entry::create(
   })),
   None,
   data,
-  None,
+  vec![],
 )
 ```
 

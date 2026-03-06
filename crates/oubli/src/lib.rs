@@ -174,7 +174,7 @@ fn generate_archetype_store(archetypes: &Vec<ArchetypeTuple>) -> Box<dyn Content
                     ArchetypeStoreEntry {
                         title: name.to_string(),
                     },
-                    None,
+                    vec![],
                 ));
             }
             entries

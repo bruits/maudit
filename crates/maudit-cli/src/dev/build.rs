@@ -227,10 +227,7 @@ impl BuildManager {
                 let dep_count = tracker.get_dependencies().len();
                 let mut dep_tracker = self.dep_tracker.write().await;
                 *dep_tracker = Some(tracker);
-                debug!(
-                    "Updated dependency tracker with {} dependencies",
-                    dep_count
-                );
+                debug!("Updated dependency tracker with {} dependencies", dep_count);
             }
             Err(e) => {
                 warn!("Failed to load dependency tracker: {}", e);
@@ -354,7 +351,12 @@ impl BuildManager {
                 let stderr_data = stderr_task.await.unwrap_or_default();
 
                 Ok::<
-                    (std::process::Output, Vec<String>, Option<PathBuf>, Option<String>),
+                    (
+                        std::process::Output,
+                        Vec<String>,
+                        Option<PathBuf>,
+                        Option<String>,
+                    ),
                     Box<dyn std::error::Error + Send + Sync>,
                 >((
                     std::process::Output {
@@ -416,7 +418,8 @@ impl BuildManager {
         });
 
         // Wait for the build result
-        let (success, binary_path, binary_name) = result_rx.recv().await.unwrap_or((false, None, None));
+        let (success, binary_path, binary_name) =
+            result_rx.recv().await.unwrap_or((false, None, None));
 
         // Cache the binary path and name if we got them
         if let Some(path) = binary_path {

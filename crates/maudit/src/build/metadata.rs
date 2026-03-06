@@ -8,6 +8,9 @@ pub struct PageOutput {
     pub route: String,
     pub file_path: String,
     pub params: Option<FxHashMap<String, Option<String>>>,
+    /// Whether this page was served from the incremental build cache
+    /// (i.e., not re-rendered because its dependencies didn't change).
+    pub cached: bool,
 }
 
 /// Metadata returned by [`coronate()`](crate::coronate) for a single static asset after a successful build.
@@ -43,11 +46,13 @@ impl BuildOutput {
         route: String,
         file_path: String,
         params: Option<FxHashMap<String, Option<String>>>,
+        cached: bool,
     ) {
         self.pages.push(PageOutput {
             route,
             file_path,
             params,
+            cached,
         });
     }
 

@@ -76,6 +76,9 @@ mod tests {
             props: &(),
             base_url: &None,
             variant: None,
+            access_log: std::rc::Rc::new(std::cell::RefCell::new(
+                crate::content::tracked::ContentAccessLog::new(),
+            )),
         };
 
         f(&mut ctx)

@@ -282,13 +282,13 @@ pub fn redirect(url: &str) -> RenderResult {
 /// impl Route for Index {
 ///   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
 ///     let logo = ctx.assets.add_image("logo.png")?;
-///     let last_entries = &ctx.content.get_source::<ArticleContent>("articles").entries;
+///     let articles = ctx.content::<ArticleContent>("articles");
 ///
 ///     Ok(html! {
 ///       main {
 ///         (logo.render("Maudit logo, a crudely drawn crown"))
 ///         ul {
-///           @for entry in last_entries {
+///           @for entry in articles.entries() {
 ///             li { (entry.data(ctx).title) }
 ///           }
 ///         }
@@ -299,7 +299,7 @@ pub fn redirect(url: &str) -> RenderResult {
 pub struct PageContext<'a> {
     pub params: &'a dyn Any,
     pub props: &'a dyn Any,
-    pub content: &'a ContentSources,
+    pub(crate) content: &'a ContentSources,
     pub assets: &'a mut RouteAssets,
     /// The current path being rendered, e.g. `/articles/my-article`.
     pub current_path: &'a String,
@@ -307,6 +307,8 @@ pub struct PageContext<'a> {
     pub base_url: &'a Option<String>,
     /// The variant being rendered, e.g. `Some("en")` for English variant, `None` for base route
     pub variant: Option<String>,
+    pub(crate) access_log:
+        std::rc::Rc<std::cell::RefCell<crate::content::tracked::ContentAccessLog>>,
 }
 
 impl<'a> PageContext<'a> {
@@ -325,6 +327,9 @@ impl<'a> PageContext<'a> {
             current_path,
             base_url,
             variant,
+            access_log: std::rc::Rc::new(std::cell::RefCell::new(
+                crate::content::tracked::ContentAccessLog::new(),
+            )),
         }
     }
 
@@ -344,7 +349,28 @@ impl<'a> PageContext<'a> {
             current_path,
             base_url,
             variant,
+            access_log: std::rc::Rc::new(std::cell::RefCell::new(
+                crate::content::tracked::ContentAccessLog::new(),
+            )),
         }
+    }
+
+    /// Get a tracked content source by name. All accesses through the returned
+    /// handle are recorded for incremental build dependency tracking.
+    pub fn content<T: 'static>(
+        &self,
+        name: &str,
+    ) -> crate::content::tracked::TrackedContentSource<'a, T> {
+        crate::content::tracked::TrackedContentSource {
+            inner: self.content.get_source::<T>(name),
+            source_name: name.to_string(),
+            log: self.access_log.clone(),
+        }
+    }
+
+    /// Consume and return the access log. Called internally after each page render.
+    pub(crate) fn take_access_log(&self) -> crate::content::tracked::ContentAccessLog {
+        self.access_log.take()
     }
 
     pub fn params<T: 'static + Clone>(&self) -> T {
@@ -405,13 +431,13 @@ impl<'a> PageContext<'a> {
 /// impl Route<ArticleParams> for Article {
 ///    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
 ///      let params = ctx.params::<ArticleParams>();
-///      let articles = ctx.content.get_source::<ArticleContent>("articles");
+///      let articles = ctx.content::<ArticleContent>("articles");
 ///      let article = articles.get_entry(&params.article);
 ///      article.render(ctx)
 ///   }
 ///
 ///    fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<ArticleParams> {
-///       let articles = ctx.content.get_source::<ArticleContent>("articles");
+///       let articles = ctx.content::<ArticleContent>("articles");
 ///
 ///       articles.into_pages(|entry| Page::from_params(ArticleParams {
 ///          article: entry.id.clone(),
@@ -421,10 +447,49 @@ impl<'a> PageContext<'a> {
 /// ```
 /// Allows to access content and assets in a dynamic route's pages method.
 pub struct DynamicRouteContext<'a> {
-    pub content: &'a ContentSources,
+    pub(crate) content: &'a ContentSources,
     pub assets: &'a mut RouteAssets,
     /// The variant being generated, e.g. `Some("en")` for English variant, `None` for base route
     pub variant: Option<&'a str>,
+    pub(crate) access_log:
+        std::rc::Rc<std::cell::RefCell<crate::content::tracked::ContentAccessLog>>,
+}
+
+impl<'a> DynamicRouteContext<'a> {
+    /// Create a new `DynamicRouteContext`.
+    pub fn new(
+        content: &'a ContentSources,
+        assets: &'a mut RouteAssets,
+        variant: Option<&'a str>,
+    ) -> Self {
+        Self {
+            content,
+            assets,
+            variant,
+            access_log: std::rc::Rc::new(std::cell::RefCell::new(
+                crate::content::tracked::ContentAccessLog::default(),
+            )),
+        }
+    }
+
+    /// Get a tracked content source by name. All accesses through the returned
+    /// handle are recorded for incremental build dependency tracking.
+    pub fn content<T: 'static>(
+        &self,
+        name: &str,
+    ) -> crate::content::tracked::TrackedContentSource<'a, T> {
+        crate::content::tracked::TrackedContentSource {
+            inner: self.content.get_source::<T>(name),
+            source_name: name.to_string(),
+            log: self.access_log.clone(),
+        }
+    }
+
+    /// Consume and return the access log. Called internally after pages() call.
+    #[allow(dead_code)]
+    pub(crate) fn take_access_log(&self) -> crate::content::tracked::ContentAccessLog {
+        self.access_log.take()
+    }
 }
 
 /// Must be implemented for every page of your website.
@@ -512,33 +577,15 @@ pub trait InternalRoute {
         crate::sitemap::RouteSitemapMetadata::default()
     }
 
+    fn always_revalidate(&self) -> bool {
+        false
+    }
+
     fn is_endpoint(&self) -> bool {
         self.route_raw()
             .as_ref()
             .map(|path| guess_if_route_is_endpoint(path))
             .unwrap_or(false)
-    }
-
-    #[deprecated]
-    fn route_type(&self) -> RouteType {
-        let path = self.route_raw().unwrap_or_default();
-        let params_def = extract_params_from_raw_route(&path);
-
-        // Check if base route is dynamic
-        if !params_def.is_empty() {
-            return RouteType::Dynamic;
-        }
-
-        // Check if any variant is dynamic
-        let variants = self.variants();
-        for (_id, variant_path) in variants {
-            let variant_params = extract_params_from_raw_route(&variant_path);
-            if !variant_params.is_empty() {
-                return RouteType::Dynamic;
-            }
-        }
-
-        RouteType::Static
     }
 
     fn url(&self, params: &PageParams) -> String {
@@ -565,9 +612,8 @@ pub trait InternalRoute {
     }
 
     fn file_path(&self, params: &PageParams, output_dir: &Path) -> PathBuf {
-        let route = self.route_raw().unwrap_or_default();
-        let params_def = extract_params_from_raw_route(&route);
-        build_file_path_with_params(&route, &params_def, params, output_dir, self.is_endpoint())
+        let url = self.url(params);
+        build_file_path_from_url(&url, output_dir, self.is_endpoint())
     }
 
     fn variant_file_path(
@@ -576,21 +622,15 @@ pub trait InternalRoute {
         output_dir: &Path,
         variant: &str,
     ) -> Result<PathBuf, String> {
+        let url = self.variant_url(params, variant)?;
         let variants = self.variants();
         let variant_path = variants
             .iter()
             .find(|(id, _)| id == variant)
-            .map(|(_, path)| path.clone())
+            .map(|(_, path)| path.as_str())
             .ok_or_else(|| format!("Variant '{}' not found", variant))?;
-        let is_endpoint = guess_if_route_is_endpoint(&variant_path);
-        let params_def = extract_params_from_raw_route(&variant_path);
-        Ok(build_file_path_with_params(
-            &variant_path,
-            &params_def,
-            params,
-            output_dir,
-            is_endpoint,
-        ))
+        let is_endpoint = guess_if_route_is_endpoint(variant_path);
+        Ok(build_file_path_from_url(&url, output_dir, is_endpoint))
     }
 }
 
@@ -655,8 +695,9 @@ pub trait FullRoute: InternalRoute + Sync + Send {
 use crate::routing::ParameterDef;
 use std::sync::OnceLock;
 
-// This function and the one below are extremely performance-sensitive, as they are called for every single page during the build.
-// It'd be great to optimize them as much as possible, make them allocation-free, etc. But, I'm not smart enough right now to do that!
+// This function is extremely performance-sensitive, as it is called for every single page during the build.
+// It builds the URL in a single forward pass with pre-calculated capacity, avoiding the old
+// clone → replace_range → split/collect/join pattern (which did 3+ allocations).
 pub fn build_url_with_params(
     route_template: &str,
     params_def: &[ParameterDef],
@@ -664,29 +705,49 @@ pub fn build_url_with_params(
     is_endpoint: bool,
 ) -> String {
     if params_def.is_empty() {
-        return route_template.to_string();
+        let mut result = route_template.to_string();
+        if !result.starts_with('/') {
+            result.insert(0, '/');
+        }
+        if !is_endpoint && !result.ends_with('/') {
+            result.push('/');
+        }
+        return result;
     }
 
-    let mut result = route_template.to_string();
+    // Pre-calculate capacity: template length - placeholder lengths + value lengths
+    let mut capacity = route_template.len();
+    for pd in params_def {
+        capacity -= pd.length;
+        if let Some(Some(v)) = params.0.get(&pd.key) {
+            capacity += v.len();
+        }
+    }
 
-    for param_def in params_def {
-        let value = params.0.get(&param_def.key).unwrap_or_else(|| {
+    let mut result = String::with_capacity(capacity + 2); // +2 for possible leading/trailing slash
+    let mut pos = 0;
+
+    // params_def is sorted in reverse index order; iterate forward
+    for pd in params_def.iter().rev() {
+        let segment = &route_template[pos..pd.index];
+        push_collapsing_slashes(&mut result, segment);
+
+        let value = params.0.get(&pd.key).unwrap_or_else(|| {
             panic!(
                 "Route {:?} is missing parameter {:?}",
-                route_template, param_def.key
+                route_template, pd.key
             )
         });
 
-        let replacement = value.as_deref().unwrap_or("");
-        result.replace_range(
-            param_def.index..param_def.index + param_def.length,
-            replacement,
-        );
+        if let Some(v) = value.as_deref() {
+            push_collapsing_slashes(&mut result, v);
+        }
+
+        pos = pd.index + pd.length;
     }
 
-    // Collapse consecutive slashes
-    let parts: Vec<&str> = result.split('/').filter(|s| !s.is_empty()).collect();
-    result = parts.join("/");
+    // Push remaining template after last param
+    push_collapsing_slashes(&mut result, &route_template[pos..]);
 
     // Ensure leading slash
     if !result.starts_with('/') {
@@ -694,7 +755,6 @@ pub fn build_url_with_params(
     }
 
     // Ensure trailing slash for non-endpoints
-    // TODO: Remove this if we implement per-route trailing slash behavior, see build_file_path_with_params comment
     if !is_endpoint && !result.ends_with('/') {
         result.push('/');
     }
@@ -702,48 +762,38 @@ pub fn build_url_with_params(
     result
 }
 
-pub fn build_file_path_with_params(
-    route_template: &str,
-    params_def: &[ParameterDef],
-    params: &PageParams,
-    output_dir: &Path,
-    is_endpoint: bool,
-) -> PathBuf {
-    // Build route string with parameters
-    let mut route = route_template.to_string();
-
-    for param_def in params_def {
-        let value = params.0.get(&param_def.key).unwrap_or_else(|| {
-            panic!(
-                "Route {:?} is missing parameter {:?}",
-                route_template, param_def.key
-            )
-        });
-
-        let replacement = value.as_deref().unwrap_or("");
-        route.replace_range(
-            param_def.index..param_def.index + param_def.length,
-            replacement,
-        );
+/// Push a string slice onto `result`, collapsing a double slash at the join point.
+#[inline]
+fn push_collapsing_slashes(result: &mut String, s: &str) {
+    if s.is_empty() {
+        return;
     }
-
-    // Build path from route string
-    let mut path = PathBuf::from(output_dir);
-    path.extend(route.split('/').filter(|s| !s.is_empty()));
-
-    if !is_endpoint {
-        path.push("index.html");
-
-        // TODO: Trailing slash behavior should be respected per route, so for instance if the user define `/blog` (no trailing slash) it should generate `/blog.html` instead of `/blog/index.html`.
-        // However, right now we don't support pretty URLs, a lot of servers don't support it either and so it's better to have a consistent behavior of always generating `index.html` files.
-        // if route.ends_with("/") {
-        //     path.push("index.html");
-        // } else {
-        //     path.set_extension("html");
-        // }
+    if result.ends_with('/') && s.starts_with('/') {
+        result.push_str(&s[1..]);
+    } else {
+        result.push_str(s);
     }
+}
 
-    path
+/// Build a file path by deriving it from an already-built URL, avoiding duplicate template substitution.
+/// Builds the path as a single String concatenation instead of per-segment PathBuf::push calls.
+/// The URL is already normalized (leading `/`, no consecutive slashes, trailing `/` for non-endpoints),
+/// so we can just concatenate: output_dir + url + optional "index.html".
+pub fn build_file_path_from_url(url: &str, output_dir: &Path, is_endpoint: bool) -> PathBuf {
+    let dir = output_dir.to_str().expect("output_dir must be valid UTF-8");
+    let dir = dir.trim_end_matches('/');
+
+    // Non-endpoints: url ends with '/', so "index.html" joins cleanly.
+    // Endpoints: url has no trailing slash, nothing appended.
+    let suffix = if is_endpoint { "" } else { "index.html" };
+    let capacity = dir.len() + url.len() + suffix.len();
+
+    let mut result = String::with_capacity(capacity);
+    result.push_str(dir);
+    result.push_str(url); // url starts with '/', acts as separator
+    result.push_str(suffix);
+
+    PathBuf::from(result)
 }
 
 /// Wrapper around a route that caches its parameter extraction and endpoint status to avoid redundant computations.
@@ -800,25 +850,6 @@ impl<'a> InternalRoute for CachedRoute<'a> {
         self.inner.variants()
     }
 
-    fn route_type(&self) -> RouteType {
-        // Check if base route is dynamic
-        let params_def = self.get_cached_params();
-        if !params_def.is_empty() {
-            return RouteType::Dynamic;
-        }
-
-        // Check if any variant is dynamic
-        let variants = self.variants();
-        for (_id, variant_path) in variants {
-            let variant_params = extract_params_from_raw_route(&variant_path);
-            if !variant_params.is_empty() {
-                return RouteType::Dynamic;
-            }
-        }
-
-        RouteType::Static
-    }
-
     fn url(&self, params: &PageParams) -> String {
         build_url_with_params(
             &self.route_raw().unwrap_or_default(),
@@ -847,13 +878,8 @@ impl<'a> InternalRoute for CachedRoute<'a> {
     }
 
     fn file_path(&self, params: &PageParams, output_dir: &Path) -> PathBuf {
-        build_file_path_with_params(
-            &self.route_raw().unwrap_or_default(),
-            self.get_cached_params(),
-            params,
-            output_dir,
-            self.is_endpoint(),
-        )
+        let url = self.url(params);
+        build_file_path_from_url(&url, output_dir, self.is_endpoint())
     }
 
     fn variant_file_path(
@@ -862,22 +888,35 @@ impl<'a> InternalRoute for CachedRoute<'a> {
         output_dir: &Path,
         variant: &str,
     ) -> Result<PathBuf, String> {
-        let (params_def, is_endpoint) = self
+        let url = self.variant_url(params, variant)?;
+        let (_, is_endpoint) = self
             .get_variant_cache(variant)
             .ok_or_else(|| format!("Variant '{}' not found", variant))?;
-        let variants = self.inner.variants();
-        let variant_path = variants
-            .iter()
-            .find(|(id, _)| id == variant)
-            .map(|(_, path)| path.clone())
+        Ok(build_file_path_from_url(&url, output_dir, *is_endpoint))
+    }
+}
+
+impl<'a> CachedRoute<'a> {
+    /// Build both URL and file path in one call, avoiding duplicate template substitution.
+    pub fn url_and_file_path(&self, params: &PageParams, output_dir: &Path) -> (String, PathBuf) {
+        let url = self.url(params);
+        let file_path = build_file_path_from_url(&url, output_dir, self.is_endpoint());
+        (url, file_path)
+    }
+
+    /// Build both variant URL and file path in one call.
+    pub fn variant_url_and_file_path(
+        &self,
+        params: &PageParams,
+        output_dir: &Path,
+        variant: &str,
+    ) -> Result<(String, PathBuf), String> {
+        let url = self.variant_url(params, variant)?;
+        let (_, is_endpoint) = self
+            .get_variant_cache(variant)
             .ok_or_else(|| format!("Variant '{}' not found", variant))?;
-        Ok(build_file_path_with_params(
-            &variant_path,
-            params_def,
-            params,
-            output_dir,
-            *is_endpoint,
-        ))
+        let file_path = build_file_path_from_url(&url, output_dir, *is_endpoint);
+        Ok((url, file_path))
     }
 }
 
@@ -1042,7 +1081,7 @@ mod tests {
 
         let route_params = PageParams(FxHashMap::default());
 
-        assert_eq!(page.url(&route_params), "/about");
+        assert_eq!(page.url(&route_params), "/about/");
     }
 
     #[test]
@@ -1128,6 +1167,37 @@ mod tests {
         let expected = Path::new("/dist/api/data.json");
 
         assert_eq!(page.file_path(&route_params, output_dir), expected);
+    }
+
+    #[test]
+    fn test_file_path_endpoint_no_leading_slash() {
+        let page = TestPage {
+            route: "404.html".to_string(),
+        };
+
+        let route_params = PageParams(FxHashMap::default());
+        let output_dir = Path::new("dist");
+
+        assert_eq!(page.url(&route_params), "/404.html");
+        assert_eq!(
+            page.file_path(&route_params, output_dir),
+            Path::new("dist/404.html")
+        );
+    }
+
+    #[test]
+    fn test_url_no_leading_slash_non_endpoint() {
+        let page = TestPage {
+            route: "about".to_string(),
+        };
+
+        let route_params = PageParams(FxHashMap::default());
+
+        assert_eq!(page.url(&route_params), "/about/");
+        assert_eq!(
+            page.file_path(&route_params, Path::new("dist")),
+            Path::new("dist/about/index.html")
+        );
     }
 
     #[test]
