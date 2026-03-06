@@ -46,7 +46,7 @@ pub fn header(
 
                 div.gap-x-6.hidden.md:flex {
                     @for (href, _text, icon_svg) in &social_links {
-                        a href=(href) {
+                        a href=(href) data-graphgarden-ignore {
                             span.sr-only { (_text) }
                             (PreEscaped(icon_svg))
                         }
@@ -75,7 +75,7 @@ pub fn header(
             }
             div.px-6.py-8.flex.flex-wrap.gap-8 {
                 @for (href, text, icon_svg) in &social_links {
-                    a.flex.items-center href=(href) {
+                    a.flex.items-center href=(href) data-graphgarden-ignore {
                         span.sr-only { (text) }
                         (PreEscaped(icon_svg))
                     }

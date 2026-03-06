@@ -9,3 +9,4 @@ maudit = { workspace = true }
 maud = { workspace = true }
 serde = { workspace = true }
 chrono = { version = "0.4.43", features = ["serde"] }
+graphgarden-core = "0.2.0"

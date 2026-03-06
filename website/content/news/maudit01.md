@@ -11,7 +11,7 @@ Behold, the dawn of a new era in static site generation! The latest incarnation 
 
 ...
 
-_More seriously_, this is the first release of **Maudit** (/mo.di/), a Rust library to generate static sites.
+_More seriously_, this is the first release of **Maudit** (/mo.di/), a Rust library to generate static sites, a new project by [Bruits](https://bruits.org/), a collective building Rust softwares.
 
 <div class="text-center italic">Want to just get started using Maudit? Check out our <a href="/docs/quick-start/">Quick Start guide</a></div>
 
