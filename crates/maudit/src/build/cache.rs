@@ -400,57 +400,45 @@ pub fn determine_dirty_pages(
 ) -> FxHashSet<PageKey> {
     let mut dirty = FxHashSet::default();
 
-    for (page_key, page_entry) in &cache.pages {
-        let mut is_dirty = false;
-
+    'pages: for (page_key, page_entry) in &cache.pages {
         // Check if any iterated source changed structurally
         for source_name in &page_entry.content_sources_iterated {
             if structurally_changed_sources.contains(source_name) {
-                is_dirty = true;
-                break;
+                dirty.insert(page_key.clone());
+                continue 'pages;
             }
         }
 
-        if !is_dirty {
-            // Check if any iterated source had any content change at all
-            // (since the page iterates all entries, any change affects it)
-            for source_name in &page_entry.content_sources_iterated {
-                if changed_entries.iter().any(|(s, _)| s == source_name) {
-                    is_dirty = true;
-                    break;
-                }
+        // Check if any iterated source had any content change at all
+        // (since the page iterates all entries, any change affects it)
+        for source_name in &page_entry.content_sources_iterated {
+            if changed_entries.iter().any(|(s, _)| s == source_name) {
+                dirty.insert(page_key.clone());
+                continue 'pages;
             }
         }
 
-        if !is_dirty {
-            // Check if any specifically-read entry changed
-            for (source_name, entry_id) in &page_entry.content_entries_read {
-                if changed_entries.contains(&(source_name.clone(), entry_id.clone())) {
-                    is_dirty = true;
-                    break;
-                }
+        // Check if any specifically-read entry changed
+        for (source_name, entry_id) in &page_entry.content_entries_read {
+            if changed_entries.contains(&(source_name.clone(), entry_id.clone())) {
+                dirty.insert(page_key.clone());
+                continue 'pages;
             }
         }
 
-        if !is_dirty {
-            // Check if any asset file used by this page changed
-            let page_asset_paths = page_entry
-                .images
-                .iter()
-                .map(|a| &a.path)
-                .chain(page_entry.scripts.iter().map(|a| &a.path))
-                .chain(page_entry.styles.iter().map(|a| &a.path));
+        // Check if any asset file used by this page changed
+        let page_asset_paths = page_entry
+            .images
+            .iter()
+            .map(|a| &a.path)
+            .chain(page_entry.scripts.iter().map(|a| &a.path))
+            .chain(page_entry.styles.iter().map(|a| &a.path));
 
-            for path in page_asset_paths {
-                if changed_asset_files.contains(path) {
-                    is_dirty = true;
-                    break;
-                }
+        for path in page_asset_paths {
+            if changed_asset_files.contains(path) {
+                dirty.insert(page_key.clone());
+                continue 'pages;
             }
-        }
-
-        if is_dirty {
-            dirty.insert(page_key.clone());
         }
     }
 
