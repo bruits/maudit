@@ -56,6 +56,7 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
                 "nav".into(),
                 "[data-graphgarden-ignore]".into(),
             ]),
+            exclude: Some(vec!["404.html".into()]),
             ..Default::default()
         },
     };

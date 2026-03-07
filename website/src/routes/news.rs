@@ -46,7 +46,7 @@ impl Route for NewsIndex {
                                     li.border-b.border-gray-200.pb-4 {
                                         p.text-sm.font-bold { (article.data(ctx).date) }
                                         h3.text-5xl {
-                                            a."hover:text-brand-red" href=(article.id) {
+                                            a."hover:text-brand-red" href=(NewsPage.url(NewsPageParams { slug: article.id.clone() })) {
                                                 (article.data(ctx).title)
                                             }
                                         }
