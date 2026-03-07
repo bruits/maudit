@@ -39,4 +39,4 @@ That said, we think that's okay. We'll do our best to make Maudit as friendly as
 
 We're very excited to see what people build with Maudit! Hopefully, the flexibility of Maudit empowers and motivate you to create websites that fits your exact and precise needs.
 
-If you have any questions, feedback, or just want to say hi, feel free to [join our Discord](https://maudit.org/discord) or [open an issue or discussion on GitHub](https://github.com/bruits/maudit)!
+If you have any questions, feedback, or just want to say hi, feel free to [join our Discord](https://maudit.org/chat/) or [open an issue or discussion on GitHub](https://github.com/bruits/maudit)!

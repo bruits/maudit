@@ -70,7 +70,7 @@ impl Route for Index {
                         p {
                             "This devotion to static sites ensures speed, simple upkeep, and effortless reliability."
                             div."mt-4" {
-                                a.font-bold.text-lg."hover:!text-our-black" href="/docs/philosophy" { "Read our philosophy" }
+                                a.font-bold.text-lg."hover:!text-our-black" href="/docs/philosophy/" { "Read our philosophy" }
                             }
                         }
                     }
