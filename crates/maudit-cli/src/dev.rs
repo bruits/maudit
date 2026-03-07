@@ -1,6 +1,7 @@
 pub(crate) mod server;
 
 mod build;
+mod dep_tracker;
 mod filterer;
 
 use notify::{
@@ -9,13 +10,9 @@ use notify::{
 };
 use notify_debouncer_full::{DebounceEventResult, DebouncedEvent, new_debouncer};
 use quanta::Instant;
-use server::WebSocketMessage;
-use std::{fs, path::Path};
-use tokio::{
-    signal,
-    sync::{broadcast, mpsc::channel},
-    task::JoinHandle,
-};
+use server::StatusManager;
+use std::{fs, path::Path, path::PathBuf};
+use tokio::{signal, sync::mpsc::channel, task::JoinHandle};
 use tracing::{error, info};
 
 use crate::dev::build::BuildManager;
@@ -28,10 +25,11 @@ pub async fn start_dev_env(
     let start_time = Instant::now();
     info!(name: "dev", "Preparing dev environment…");
 
-    let (sender_websocket, _) = broadcast::channel::<WebSocketMessage>(100);
+    // Create status manager for WebSocket communication
+    let status_manager = StatusManager::new();
 
-    // Create build manager (it will create its own status state internally)
-    let build_manager = BuildManager::new(sender_websocket.clone());
+    // Create build manager with the status manager
+    let build_manager = BuildManager::new(status_manager.clone());
 
     // Do initial build
     info!(name: "build", "Doing initial build…");
@@ -77,7 +75,7 @@ pub async fn start_dev_env(
         info!(name: "dev", "Starting web server...");
         web_server_thread = Some(tokio::spawn(server::start_dev_web_server(
             start_time,
-            sender_websocket.clone(),
+            build_manager.websocket_sender(),
             host,
             port,
             None,
@@ -87,7 +85,6 @@ pub async fn start_dev_env(
 
     // Clone build manager for the file watcher task
     let build_manager_watcher = build_manager.clone();
-    let sender_websocket_watcher = sender_websocket.clone();
 
     let file_watcher_task = tokio::spawn(async move {
         let mut dev_server_started = initial_build_success;
@@ -139,6 +136,13 @@ pub async fn start_dev_env(
                             }
 
                             if should_rebuild {
+                                // Collect all changed paths for the recompile check
+                                let changed_paths: Vec<PathBuf> = events
+                                    .iter()
+                                    .flat_map(|e| e.paths.iter().cloned())
+                                    .filter(|p| should_watch_path(p))
+                                    .collect();
+
                                 if !dev_server_started {
                                     // Initial build failed, retry it
                                     info!(name: "watch", "Files changed, retrying initial build...");
@@ -151,7 +155,7 @@ pub async fn start_dev_env(
                                             dev_server_handle =
                                                 Some(tokio::spawn(server::start_dev_web_server(
                                                     start_time,
-                                                    sender_websocket_watcher.clone(),
+                                                    build_manager_watcher.websocket_sender(),
                                                     host,
                                                     port,
                                                     None,
@@ -166,16 +170,30 @@ pub async fn start_dev_env(
                                         }
                                     }
                                 } else {
-                                    // Normal rebuild - spawn in background so file watcher can continue
-                                    info!(name: "watch", "Files changed, rebuilding...");
+                                    // Check if we need to recompile or just rerun the binary
+                                    let needs_recompile = build_manager_watcher.needs_recompile(&changed_paths).await;
+
+                                    if needs_recompile {
+                                        info!(name: "watch", "Rust files changed, recompiling...");
+                                    } else {
+                                        info!(name: "watch", "Non-Rust files changed, rerunning binary...");
+                                    }
+
+                                    // Spawn in background so file watcher can continue
                                     let build_manager_clone = build_manager_watcher.clone();
                                     tokio::spawn(async move {
-                                        match build_manager_clone.start_build().await {
+                                        let result = if needs_recompile {
+                                            build_manager_clone.start_build().await
+                                        } else {
+                                            build_manager_clone.rerun_binary().await
+                                        };
+
+                                        match result {
                                             Ok(_) => {
-                                                // Build completed (success or failure already logged)
+                                                // Build/rerun completed (success or failure already logged)
                                             }
                                             Err(e) => {
-                                                error!(name: "build", "Failed to start build: {}", e);
+                                                error!(name: "build", "Failed to start build/rerun: {}", e);
                                             }
                                         }
                                     });

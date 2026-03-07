@@ -64,6 +64,38 @@ pub struct PersistentStatus {
     pub message: String,
 }
 
+/// Manages WebSocket status updates and persistent state for connected clients
+#[derive(Clone)]
+pub struct StatusManager {
+    tx: broadcast::Sender<WebSocketMessage>,
+    current_status: Arc<RwLock<Option<PersistentStatus>>>,
+}
+
+impl StatusManager {
+    pub fn new() -> Self {
+        let (tx, _) = broadcast::channel::<WebSocketMessage>(100);
+        Self {
+            tx,
+            current_status: Arc::new(RwLock::new(None)),
+        }
+    }
+
+    /// Send a status update to all connected clients
+    pub async fn update(&self, status_type: StatusType, message: &str) {
+        update_status(&self.tx, self.current_status.clone(), status_type, message).await;
+    }
+
+    /// Get the broadcast sender (for passing to the web server)
+    pub fn sender(&self) -> broadcast::Sender<WebSocketMessage> {
+        self.tx.clone()
+    }
+
+    /// Get the current status state (for passing to the web server)
+    pub fn current_status(&self) -> Arc<RwLock<Option<PersistentStatus>>> {
+        self.current_status.clone()
+    }
+}
+
 #[derive(Clone)]
 struct AppState {
     tx: broadcast::Sender<WebSocketMessage>,
