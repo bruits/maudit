@@ -9,15 +9,51 @@
 [![CodSpeed Badge](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://codspeed.io/bruits/maudit)
 [![Discord](https://img.shields.io/discord/1323452220817014876)](https://maudit.org/chat/)
 
-A library for generating static websites with Rust.
+[Maudit](https://maudit.org) is a library for generating static websites with Rust.
+
+## Getting started
+
+The quickest way to get started is with the Maudit CLI:
+
+```bash
+cargo install maudit-cli
+```
+
+Create a new project by running:
+
+```bash
+maudit init
+```
+
+You can also use Maudit without the CLI tool, or integrate Maudit into an existing project. Check out our [Manual Installation](/docs/manual-install) guide.
+
+## Commands
+
+Start a local dev server with live reload:
+
+```bash
+maudit dev
+```
+
+Build your project to the `dist` directory:
+
+```bash
+maudit build
+```
+
+Preview your build before deploying:
+
+```bash
+maudit preview
+```
 
 ## Quick links
 
-🌍 Visit our [website](https://maudit.org) to read the [documentation](https://maudit.org/docs) and our [news](https://maudit.org/news)
+🌍 Visit our [website](https://maudit.org) to read the [documentation](https://maudit.org/docs) and the latest [news](https://maudit.org/news)
 
 📦 See the [crate](https://crates.io/crates/maudit) on Crates.io, and the [reference](https://docs.rs/maudit/latest/maudit/) on Docs.rs.
 
-🐛 [Report a bug](https://github.com/bruits/maudit/issues), please read our [contributing guidelines](https://github.com/bruits/maudit/blob/main/CONTRIBUTING.md) and [code of conduct](https://github.com/bruits/maudit/blob/main/CODE_OF_CONDUCT.md) first.
+🐛 [Report a bug](https://github.com/bruits/maudit/issues). Please read our [contributing guidelines](https://github.com/bruits/maudit/blob/main/CONTRIBUTING.md) and [code of conduct](https://github.com/bruits/maudit/blob/main/CODE_OF_CONDUCT.md) first.
 
 💬 Join the discussion on [Github](https://github.com/bruits/maudit/discussions) and [Discord](https://maudit.org/chat/), if you have any questions, ideas, or suggestions.
 
@@ -25,6 +61,6 @@ A library for generating static websites with Rust.
 
 Contributions are welcome! See our [Contributor Guide](https://github.com/bruits/maudit/blob/main/CONTRIBUTING.md) for help getting started.
 
-# License
+## License
 
-Maudit is licensed under [the MIT License](https://opensource.org/license/MIT). See [LICENSE](LICENSE) for details.
+Maudit is licensed under the [MIT License](https://opensource.org/license/MIT). See [LICENSE](LICENSE) for details.
