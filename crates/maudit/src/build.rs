@@ -1,8 +1,10 @@
 use std::{
+    cell::RefCell,
     env,
     fs::{self},
     io::{self},
     path::{Path, PathBuf},
+    rc::Rc,
     sync::Arc,
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
@@ -315,6 +317,8 @@ pub async fn build(
     let mut rendered_count: usize = 0;
     let mut cached_count: usize = 0;
     let mut created_dirs: FxHashSet<PathBuf> = FxHashSet::default();
+    let asset_hash_cache: assets::AssetHashCache =
+        Rc::new(RefCell::new(FxHashMap::default()));
 
     // Normalize base_url once to avoid repeated trimming
     let normalized_base_url = options
@@ -353,6 +357,7 @@ pub async fn build(
         Some(RouteAssets::with_default_assets(
             &route_assets_options,
             Some(image_cache.clone()),
+            Some(asset_hash_cache.clone()),
             default_scripts.clone(),
             vec![],
         ))
@@ -422,6 +427,7 @@ pub async fn build(
                     let mut route_assets = RouteAssets::with_default_assets(
                         &route_assets_options,
                         Some(image_cache.clone()),
+                        Some(asset_hash_cache.clone()),
                         default_scripts.clone(),
                         vec![],
                     );
@@ -474,6 +480,7 @@ pub async fn build(
                 let mut pages_route_assets = RouteAssets::with_default_assets(
                     &route_assets_options,
                     Some(image_cache.clone()),
+                    Some(asset_hash_cache.clone()),
                     default_scripts.clone(),
                     vec![],
                 );
@@ -529,6 +536,7 @@ pub async fn build(
                         let mut route_assets = RouteAssets::with_default_assets(
                             &route_assets_options,
                             Some(image_cache.clone()),
+                            Some(asset_hash_cache.clone()),
                             default_scripts.clone(),
                             vec![],
                         );
@@ -670,6 +678,7 @@ pub async fn build(
                 let mut route_assets = RouteAssets::with_default_assets(
                     &route_assets_options,
                     Some(image_cache.clone()),
+                    Some(asset_hash_cache.clone()),
                     default_scripts.clone(),
                     vec![],
                 );
@@ -721,6 +730,7 @@ pub async fn build(
                 let mut pages_route_assets = RouteAssets::with_default_assets(
                     &route_assets_options,
                     Some(image_cache.clone()),
+                    Some(asset_hash_cache.clone()),
                     default_scripts.clone(),
                     vec![],
                 );
@@ -779,6 +789,7 @@ pub async fn build(
                         let mut route_assets = RouteAssets::with_default_assets(
                             &route_assets_options,
                             Some(image_cache.clone()),
+                            Some(asset_hash_cache.clone()),
                             default_scripts.clone(),
                             vec![],
                         );

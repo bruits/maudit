@@ -1,8 +1,10 @@
 use log::debug;
 use rapidhash::fast::RapidHasher;
-use rustc_hash::FxHashSet;
-use std::hash::Hasher;
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::cell::RefCell;
+use std::hash::{Hash, Hasher};
 use std::path::Path;
+use std::rc::Rc;
 use std::time::Instant;
 use std::{fs, path::PathBuf};
 
@@ -23,6 +25,41 @@ use crate::assets::image_cache::ImageCache;
 use crate::errors::AssetError;
 use crate::{AssetHashingStrategy, BuildOptions};
 
+/// Cache key for asset hash computation, capturing the file path and
+/// all options that affect the hash output.
+#[derive(Hash, PartialEq, Eq, Clone)]
+pub struct AssetHashKey {
+    path: PathBuf,
+    options_hash: u64,
+}
+
+impl AssetHashKey {
+    fn new(path: &Path, config: Option<&HashConfig>) -> Self {
+        let options_hash = match config {
+            Some(cfg) => {
+                let mut hasher = RapidHasher::default();
+                std::mem::discriminant(&cfg.asset_type).hash(&mut hasher);
+                std::mem::discriminant(cfg.hashing_strategy).hash(&mut hasher);
+                match &cfg.asset_type {
+                    HashAssetType::Image(opts) => opts.hash(&mut hasher),
+                    HashAssetType::Style(opts) => opts.hash(&mut hasher),
+                    HashAssetType::Script => {}
+                }
+                hasher.finish()
+            }
+            None => 0,
+        };
+        Self {
+            path: path.to_path_buf(),
+            options_hash,
+        }
+    }
+}
+
+/// Shared cache for asset hash computations, avoiding redundant file reads
+/// when multiple pages add the same asset (e.g. a shared layout CSS file).
+pub type AssetHashCache = Rc<RefCell<FxHashMap<AssetHashKey, String>>>;
+
 #[derive(Default)]
 pub struct RouteAssets {
     pub images: FxHashSet<Image>,
@@ -31,6 +68,7 @@ pub struct RouteAssets {
 
     pub(crate) options: RouteAssetsOptions,
     pub(crate) image_cache: Option<ImageCache>,
+    pub(crate) hash_cache: Option<AssetHashCache>,
 }
 
 #[derive(Clone)]
@@ -54,10 +92,15 @@ impl Default for RouteAssetsOptions {
 }
 
 impl RouteAssets {
-    pub fn new(assets_options: &RouteAssetsOptions, image_cache: Option<ImageCache>) -> Self {
+    pub fn new(
+        assets_options: &RouteAssetsOptions,
+        image_cache: Option<ImageCache>,
+        hash_cache: Option<AssetHashCache>,
+    ) -> Self {
         Self {
             options: assets_options.clone(),
             image_cache,
+            hash_cache,
             images: FxHashSet::default(),
             scripts: FxHashSet::default(),
             styles: FxHashSet::default(),
@@ -67,10 +110,11 @@ impl RouteAssets {
     pub fn with_default_assets(
         assets_options: &RouteAssetsOptions,
         image_cache: Option<ImageCache>,
+        hash_cache: Option<AssetHashCache>,
         scripts: Vec<Script>,
         styles: Vec<Style>,
     ) -> Self {
-        let mut route_assets = Self::new(assets_options, image_cache);
+        let mut route_assets = Self::new(assets_options, image_cache, hash_cache);
 
         for script in scripts {
             route_assets.scripts.insert(script);
@@ -81,6 +125,29 @@ impl RouteAssets {
         }
 
         route_assets
+    }
+
+    /// Compute or look up a cached asset hash.
+    fn cached_hash(
+        &self,
+        path: &Path,
+        config: Option<&HashConfig>,
+    ) -> Result<String, AssetError> {
+        let key = AssetHashKey::new(path, config);
+
+        if let Some(cache) = &self.hash_cache {
+            if let Some(hash) = cache.borrow().get(&key) {
+                return Ok(hash.clone());
+            }
+        }
+
+        let hash = calculate_hash(path, config)?;
+
+        if let Some(cache) = &self.hash_cache {
+            cache.borrow_mut().insert(key, hash.clone());
+        }
+
+        Ok(hash)
     }
 
     pub fn assets(&self) -> impl Iterator<Item = &dyn Asset> {
@@ -125,7 +192,7 @@ impl RouteAssets {
             Some(options)
         };
 
-        let hash = calculate_hash(
+        let hash = self.cached_hash(
             &image_path,
             Some(&HashConfig {
                 asset_type: HashAssetType::Image(
@@ -191,7 +258,7 @@ impl RouteAssets {
                 source: e,
             })?;
 
-        let hash = calculate_hash(
+        let hash = self.cached_hash(
             &script_path,
             Some(&HashConfig {
                 asset_type: HashAssetType::Script,
@@ -230,7 +297,7 @@ impl RouteAssets {
                 source: e,
             })?;
 
-        let hash = calculate_hash(
+        let hash = self.cached_hash(
             &script_path,
             Some(&HashConfig {
                 asset_type: HashAssetType::Script,
@@ -295,7 +362,7 @@ impl RouteAssets {
                 source: e,
             })?;
 
-        let hash = calculate_hash(
+        let hash = self.cached_hash(
             &style_path,
             Some(&HashConfig {
                 asset_type: HashAssetType::Style(&options),
@@ -364,7 +431,7 @@ impl RouteAssets {
                 source: e,
             })?;
 
-        let hash = calculate_hash(
+        let hash = self.cached_hash(
             &style_path,
             Some(&HashConfig {
                 asset_type: HashAssetType::Style(&options),
@@ -700,6 +767,7 @@ mod tests {
                 ..Default::default()
             },
             None,
+            None,
         );
 
         // Test that different options produce different hashes
@@ -775,6 +843,7 @@ mod tests {
                 ..Default::default()
             },
             None,
+            None,
         );
 
         // Same options should produce same hash
@@ -817,6 +886,7 @@ mod tests {
                 ..Default::default()
             },
             None,
+            None,
         );
 
         // Test that different tailwind options produce different hashes
@@ -849,6 +919,7 @@ mod tests {
                 ..Default::default()
             },
             None,
+            None,
         );
 
         let style1 = page_assets.add_style(&style1_path).unwrap();
@@ -870,6 +941,7 @@ mod tests {
                 hashing_strategy: AssetHashingStrategy::Precise,
                 ..Default::default()
             },
+            None,
             None,
         );
 

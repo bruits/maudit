@@ -66,6 +66,7 @@ mod tests {
                 ..Default::default()
             },
             None,
+            None,
         );
 
         let mut ctx = PageContext {
