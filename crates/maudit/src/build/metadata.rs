@@ -29,6 +29,7 @@ pub struct BuildOutput {
     pub pages: Vec<PageOutput>,
     pub assets: Vec<String>,
     pub static_files: Vec<StaticAssetOutput>,
+    pub(crate) removed_pages: usize,
 }
 
 impl BuildOutput {
@@ -38,6 +39,7 @@ impl BuildOutput {
             pages: Vec::new(),
             assets: Vec::new(),
             static_files: Vec::new(),
+            removed_pages: 0,
         }
     }
 
@@ -56,8 +58,6 @@ impl BuildOutput {
         });
     }
 
-    // TODO
-    #[allow(dead_code)]
     pub(crate) fn add_asset(&mut self, file_path: String) {
         self.assets.push(file_path);
     }
@@ -67,6 +67,14 @@ impl BuildOutput {
             file_path,
             original_path,
         });
+    }
+
+    /// Returns true if any page was added, changed, or removed during this build.
+    ///
+    /// Useful for deciding whether post-build work (sitemaps, graphs, feeds)
+    /// needs to run or can be skipped.
+    pub fn has_changes(&self) -> bool {
+        self.removed_pages > 0 || self.pages.iter().any(|p| !p.cached)
     }
 }
 

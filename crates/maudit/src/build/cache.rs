@@ -8,7 +8,7 @@ use log::{debug, info};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
-pub const BUILD_CACHE_VERSION: u32 = 6;
+pub const BUILD_CACHE_VERSION: u32 = 8;
 pub const BUILD_CACHE_FILENAME: &str = "build_cache.bin";
 
 /// Fingerprint for an asset file (script, style, image) used for fast change detection.
@@ -50,6 +50,18 @@ pub struct BuildCache {
     pub bundled_scripts: Vec<SerializedAssetRef>,
     /// The set of bundled style inputs from the last build.
     pub bundled_styles: Vec<SerializedAssetRef>,
+    /// Hash of build options that affect rendered output (base_url, prefetch, asset config).
+    /// If this changes, the entire cache is invalidated.
+    #[serde(default)]
+    pub options_hash: String,
+    /// Relative paths of static files copied to the output directory.
+    /// Used to detect and clean up deleted static files on incremental builds.
+    #[serde(default)]
+    pub static_files: FxHashSet<String>,
+    /// Filenames of bundled output files (JS/CSS) produced by the bundler.
+    /// Used to detect and clean up stale bundles when inputs change.
+    #[serde(default)]
+    pub bundled_output_files: FxHashSet<String>,
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -457,6 +469,18 @@ pub fn find_stale_pages(
         .collect()
 }
 
+/// Find static files that existed in the previous build but are no longer present.
+pub fn find_stale_static_files(
+    prev_static_files: &FxHashSet<String>,
+    current_static_files: &FxHashSet<String>,
+) -> Vec<String> {
+    prev_static_files
+        .iter()
+        .filter(|f| !current_static_files.contains(f.as_str()))
+        .cloned()
+        .collect()
+}
+
 /// Check whether rebundling is needed by comparing asset sets.
 pub fn needs_rebundle(
     cached_scripts: &[SerializedAssetRef],
@@ -479,6 +503,7 @@ pub fn load_incremental_state(
     previous_cache: Option<BuildCache>,
     current_content_states: &FxHashMap<String, ContentSourceState>,
     current_binary_hash: &str,
+    current_options_hash: &str,
 ) -> IncrementalState {
     let cache = match previous_cache {
         Some(c) => c,
@@ -491,6 +516,12 @@ pub fn load_incremental_state(
     // Check binary hash
     if cache.binary_hash != current_binary_hash {
         info!(target: "cache", "Binary changed, performing full build");
+        return IncrementalState::full_build();
+    }
+
+    // Check options hash
+    if cache.options_hash != current_options_hash {
+        info!(target: "cache", "Build options changed, performing full build");
         return IncrementalState::full_build();
     }
 

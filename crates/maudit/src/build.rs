@@ -246,16 +246,20 @@ pub async fn build(
             })
             .collect();
 
+        let current_options_hash = options.options_hash();
+
         incremental_state = cache::load_incremental_state(
             previous_build_cache,
             &current_content_states,
             &current_binary_hash,
+            &current_options_hash,
         );
 
         new_cache = Some(cache::BuildCache {
             version: cache::BUILD_CACHE_VERSION,
             binary_hash: current_binary_hash,
             content_sources: current_content_states,
+            options_hash: current_options_hash,
             ..Default::default()
         });
 
@@ -489,8 +493,7 @@ pub async fn build(
                 if new_cache.is_some() {
                     // Incremental: per-page RouteAssets for dependency tracking
                     for page in pages {
-                        let page_key =
-                            cache::PageKey::new(base_path, &page.0.0, None);
+                        let page_key = cache::PageKey::new(base_path, &page.0.0, None);
                         let (url, file_path) =
                             cached_route.url_and_file_path(&page.0, &options.output_dir);
 
@@ -736,11 +739,8 @@ pub async fn build(
 
                 if new_cache.is_some() {
                     for page in pages {
-                        let page_key = cache::PageKey::new(
-                            &variant_path,
-                            &page.0.0,
-                            Some(&variant_id),
-                        );
+                        let page_key =
+                            cache::PageKey::new(&variant_path, &page.0.0, Some(&variant_id));
                         let (url, file_path) = cached_route.variant_url_and_file_path(
                             &page.0,
                             &options.output_dir,
@@ -1086,14 +1086,49 @@ pub async fn build(
                 ],
             )?;
 
-            let _result = bundler.write().await?;
+            let result = bundler.write().await?;
 
-            // TODO: Add outputted chunks to build_metadata
+            let mut current_output_files: FxHashSet<String> = FxHashSet::default();
+            for output in &result.assets {
+                let filename = output.filename().to_string();
+                build_metadata.add_asset(
+                    route_assets_options
+                        .output_assets_dir
+                        .join(&filename)
+                        .to_string_lossy()
+                        .to_string(),
+                );
+                current_output_files.insert(filename);
+            }
+
+            // Clean up stale bundled files from previous builds
+            if !incremental_state.is_full_build()
+                && let Some(prev_cache) = &incremental_state.previous_cache
+            {
+                for stale_file in &prev_cache.bundled_output_files {
+                    if !current_output_files.contains(stale_file) {
+                        let stale_path = route_assets_options.output_assets_dir.join(stale_file);
+                        if fs::remove_file(&stale_path).is_ok() {
+                            info!(target: "cache", "Removed stale bundle: {}", stale_path.display());
+                        }
+                    }
+                }
+            }
+
+            if let Some(ref mut cache) = new_cache {
+                cache.bundled_output_files = current_output_files;
+            }
         }
 
         info!(target: "build", "{}", format!("Assets generated in {}", format_elapsed_time(assets_start.elapsed(), &section_format_options)).bold());
     } else if !should_bundle && (!build_pages_styles.is_empty() || !build_pages_scripts.is_empty())
     {
+        // Carry forward bundled output files from previous cache
+        if let Some(ref mut cache) = new_cache
+            && let Some(prev_cache) = &incremental_state.previous_cache
+        {
+            cache.bundled_output_files = prev_cache.bundled_output_files.clone();
+        }
         info!(target: "build", "Assets unchanged, skipping bundling");
     }
 
@@ -1165,22 +1200,28 @@ pub async fn build(
         info!(target: "build", "{}", format!("Assets copied in {}", format_elapsed_time(assets_start.elapsed(), &FormatElapsedTimeOptions::default())).bold());
     }
 
-    // Generate sitemap
-    if options.sitemap.enabled {
-        if let Some(base_url) = normalized_base_url {
-            let sitemap_start = Instant::now();
-            print_title("generating sitemap");
+    // Record static files in cache and clean up stale ones
+    {
+        let current_static_files: FxHashSet<String> = build_metadata
+            .static_files
+            .iter()
+            .map(|s| s.file_path.clone())
+            .collect();
 
-            generate_sitemap(
-                sitemap_entries,
-                base_url,
-                &options.output_dir,
-                &options.sitemap,
-            )?;
+        if !incremental_state.is_full_build()
+            && let Some(prev_cache) = &incremental_state.previous_cache
+        {
+            let stale =
+                cache::find_stale_static_files(&prev_cache.static_files, &current_static_files);
+            for path in &stale {
+                if fs::remove_file(path).is_ok() {
+                    info!(target: "cache", "Removed stale static file: {path}");
+                }
+            }
+        }
 
-            info!(target: "build", "{}", format!("Sitemap generated in {}", format_elapsed_time(sitemap_start.elapsed(), &FormatElapsedTimeOptions::default())).bold());
-        } else {
-            warn!(target: "build", "Sitemap generation is enabled but no base_url is set in BuildOptions. Either disable sitemap generation or set a base_url to enable it.");
+        if let Some(ref mut cache) = new_cache {
+            cache.static_files = current_static_files;
         }
     }
 
@@ -1191,6 +1232,7 @@ pub async fn build(
         let current_page_keys: FxHashSet<cache::PageKey> = cache.pages.keys().cloned().collect();
         if let Some(prev_cache) = &incremental_state.previous_cache {
             let stale = cache::find_stale_pages(&prev_cache.pages, &current_page_keys);
+            build_metadata.removed_pages = stale.len();
             for stale_key in &stale {
                 if let Some(entry) = prev_cache.pages.get(stale_key)
                     && fs::remove_file(&entry.output_file).is_ok()
@@ -1198,6 +1240,29 @@ pub async fn build(
                     info!(target: "cache", "Removed stale output: {}", entry.output_file.display());
                 }
             }
+        }
+    }
+
+    // Generate sitemap (skip if incremental build with no page changes)
+    if options.sitemap.enabled {
+        if let Some(base_url) = normalized_base_url {
+            if !build_metadata.has_changes() && !incremental_state.is_full_build() {
+                info!(target: "build", "Sitemap unchanged, skipping regeneration");
+            } else {
+                let sitemap_start = Instant::now();
+                print_title("generating sitemap");
+
+                generate_sitemap(
+                    sitemap_entries,
+                    base_url,
+                    &options.output_dir,
+                    &options.sitemap,
+                )?;
+
+                info!(target: "build", "{}", format!("Sitemap generated in {}", format_elapsed_time(sitemap_start.elapsed(), &FormatElapsedTimeOptions::default())).bold());
+            }
+        } else {
+            warn!(target: "build", "Sitemap generation is enabled but no base_url is set in BuildOptions. Either disable sitemap generation or set a base_url to enable it.");
         }
     }
 

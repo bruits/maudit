@@ -1869,3 +1869,212 @@ fn test_image_cache_persists_across_incremental_toggle() {
         "image cache should remain stable across incremental mode toggles"
     );
 }
+
+#[test]
+#[serial]
+fn test_deleted_static_file_removed_from_output() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    let static_dir = tmp.path().join("static");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+    fs::create_dir_all(&static_dir).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+
+    // Create two static files
+    fs::write(static_dir.join("robots.txt"), "User-agent: *").unwrap();
+    fs::write(static_dir.join("favicon.ico"), "fake-icon").unwrap();
+
+    // Build 1
+    let _ = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    assert!(tmp.path().join("dist/robots.txt").exists());
+    assert!(tmp.path().join("dist/favicon.ico").exists());
+
+    // Delete one static file
+    fs::remove_file(static_dir.join("favicon.ico")).unwrap();
+
+    // Build 2
+    let _ = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    assert!(
+        tmp.path().join("dist/robots.txt").exists(),
+        "remaining static file should still exist"
+    );
+    assert!(
+        !tmp.path().join("dist/favicon.ico").exists(),
+        "deleted static file should be removed from output"
+    );
+}
+
+#[test]
+#[serial]
+fn test_options_change_triggers_full_rebuild() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+
+    // Build 1
+    let _ = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Build 2: no changes, all cached
+    let output2 = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+    assert!(
+        output2.pages.iter().all(|p| p.cached),
+        "build 2: all cached"
+    );
+
+    // Build 3: change base_url
+    let output3 = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        BuildOptions {
+            base_url: Some("https://example.com".to_string()),
+            ..build_options(tmp.path())
+        },
+    )
+    .unwrap();
+    assert!(
+        output3.pages.iter().all(|p| !p.cached),
+        "build 3: all re-rendered after base_url change"
+    );
+}
+
+#[test]
+#[serial]
+fn test_has_changes_true_on_first_build() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+
+    let output = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    assert!(output.has_changes(), "first build should have changes");
+}
+
+#[test]
+#[serial]
+fn test_has_changes_false_when_nothing_changed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+
+    let _ = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let output2 = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    assert!(
+        !output2.has_changes(),
+        "second build with no changes should report no changes"
+    );
+}
+
+#[test]
+#[serial]
+fn test_has_changes_true_when_page_removed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+    write_markdown(
+        &content_dir.join("articles"),
+        "second.md",
+        "Second Post",
+        "The second post",
+        "Goodbye world",
+    );
+
+    let _ = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Delete the second article
+    fs::remove_file(content_dir.join("articles/second.md")).unwrap();
+
+    let output2 = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    assert!(
+        output2.has_changes(),
+        "has_changes should be true when a page is removed"
+    );
+}

@@ -162,6 +162,23 @@ impl Default for PrefetchOptions {
 }
 
 impl BuildOptions {
+    /// Compute a hash of the options that affect rendered output.
+    ///
+    /// If this hash changes between builds, the entire cache is invalidated.
+    pub(crate) fn options_hash(&self) -> String {
+        use rapidhash::fast::RapidHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = RapidHasher::default();
+        self.base_url.hash(&mut hasher);
+        std::mem::discriminant(&self.prefetch.strategy).hash(&mut hasher);
+        self.prefetch.prerender.hash(&mut hasher);
+        std::mem::discriminant(&self.prefetch.eagerness).hash(&mut hasher);
+        std::mem::discriminant(&self.assets.hashing_strategy).hash(&mut hasher);
+        self.assets.assets_dir.hash(&mut hasher);
+        format!("{:016x}", hasher.finish())
+    }
+
     /// Returns the fully resolved assets options, with the `output_assets_dir` property resolved to be inside `output_dir`.
     /// e.g. if `output_dir` is `dist` and `assets.assets_dir` is `_maudit`, `output_assets_dir` will return `dist/_maudit`. The user-entered `assets.assets_dir` is also available and unchanged.
     pub fn route_assets_options(&self) -> RouteAssetsOptions {
