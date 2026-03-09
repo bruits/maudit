@@ -128,17 +128,13 @@ impl RouteAssets {
     }
 
     /// Compute or look up a cached asset hash.
-    fn cached_hash(
-        &self,
-        path: &Path,
-        config: Option<&HashConfig>,
-    ) -> Result<String, AssetError> {
+    fn cached_hash(&self, path: &Path, config: Option<&HashConfig>) -> Result<String, AssetError> {
         let key = AssetHashKey::new(path, config);
 
-        if let Some(cache) = &self.hash_cache {
-            if let Some(hash) = cache.borrow().get(&key) {
-                return Ok(hash.clone());
-            }
+        if let Some(cache) = &self.hash_cache
+            && let Some(hash) = cache.borrow().get(&key)
+        {
+            return Ok(hash.clone());
         }
 
         let hash = calculate_hash(path, config)?;
