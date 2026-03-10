@@ -8,7 +8,7 @@ use log::{debug, info};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
-pub const BUILD_CACHE_VERSION: u32 = 8;
+pub const BUILD_CACHE_VERSION: u32 = 9;
 pub const BUILD_CACHE_FILENAME: &str = "build_cache.bin";
 
 /// Fingerprint for an asset file (script, style, image) used for fast change detection.
@@ -31,6 +31,20 @@ impl AssetFileFingerprint {
             size,
         })
     }
+}
+
+/// Persisted asset hash entry: maps an asset (identified by path + options)
+/// to its computed hash, along with file metadata for staleness detection.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PersistedAssetHash {
+    /// The options discriminant (hash of asset type + options).
+    pub options_hash: u64,
+    /// The computed asset hash (e.g. "daf77").
+    pub asset_hash: String,
+    /// File mtime in nanoseconds since epoch.
+    pub mtime_ns: u64,
+    /// File size in bytes.
+    pub size: u64,
 }
 
 /// The full build cache, persisted to disk between builds.
@@ -62,6 +76,10 @@ pub struct BuildCache {
     /// Used to detect and clean up stale bundles when inputs change.
     #[serde(default)]
     pub bundled_output_files: FxHashSet<String>,
+    /// Persisted asset hash cache: path → list of (options_hash, asset_hash, mtime, size).
+    /// Used to skip `calculate_hash` on incremental rebuilds when the file hasn't changed.
+    #[serde(default)]
+    pub persisted_asset_hashes: FxHashMap<PathBuf, Vec<PersistedAssetHash>>,
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -430,9 +448,13 @@ pub fn determine_dirty_pages(
             }
         }
 
-        // Check if any specifically-read entry changed
+        // Check if any specifically-read entry changed or was deleted.
+        // A deleted entry won't appear in changed_entries (which only tracks current files),
+        // but the owning source will have a structural change (entry_ids differ).
         for (source_name, entry_id) in &page_entry.content_entries_read {
-            if changed_entries.contains(&(source_name.clone(), entry_id.clone())) {
+            if changed_entries.contains(&(source_name.clone(), entry_id.clone()))
+                || structurally_changed_sources.contains(source_name)
+            {
                 dirty.insert(page_key.clone());
                 continue 'pages;
             }

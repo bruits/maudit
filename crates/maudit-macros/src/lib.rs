@@ -369,14 +369,15 @@ pub fn route(attrs: TokenStream, item: TokenStream) -> TokenStream {
                 result.into()
             }
 
-            fn pages_internal(&self, ctx: &mut maudit::route::DynamicRouteContext) -> Vec<(maudit::route::PageParams, Box<dyn std::any::Any + Send + Sync>, Box<dyn std::any::Any + Send + Sync>)> {
+            fn pages_internal(&self, ctx: &mut maudit::route::DynamicRouteContext) -> Vec<(maudit::route::PageParams, Box<dyn std::any::Any + Send + Sync>, Box<dyn std::any::Any + Send + Sync>, Option<(String, String)>)> {
                 self.pages(ctx)
                     .into_iter()
                     .map(|route| {
                         let raw_params: maudit::route::PageParams = (&route.params).into();
+                        let source_entry = route._source_entry;
                         let typed_params: Box<dyn std::any::Any + Send + Sync> = Box::new(route.params);
                         let props: Box<dyn std::any::Any + Send + Sync> = Box::new(route.props);
-                        (raw_params, typed_params, props)
+                        (raw_params, typed_params, props, source_entry)
                     })
                     .collect()
             }

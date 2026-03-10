@@ -54,6 +54,19 @@ impl AssetHashKey {
             options_hash,
         }
     }
+
+    /// Reconstruct a key from raw persisted values.
+    pub(crate) fn from_raw(path: PathBuf, options_hash: u64) -> Self {
+        Self { path, options_hash }
+    }
+
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub(crate) fn options_hash(&self) -> u64 {
+        self.options_hash
+    }
 }
 
 /// Shared cache for asset hash computations, avoiding redundant file reads

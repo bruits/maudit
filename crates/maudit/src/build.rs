@@ -317,8 +317,28 @@ pub async fn build(
     let mut rendered_count: usize = 0;
     let mut cached_count: usize = 0;
     let mut created_dirs: FxHashSet<PathBuf> = FxHashSet::default();
-    let asset_hash_cache: assets::AssetHashCache =
-        Rc::new(RefCell::new(FxHashMap::default()));
+    // Seed the asset hash cache from the previous build cache.
+    // Only reuse entries whose file mtime+size still match (cheap stat check).
+    let asset_hash_cache: assets::AssetHashCache = {
+        let mut map = FxHashMap::default();
+        if let Some(ref prev) = incremental_state.previous_cache {
+            for (path, entries) in &prev.persisted_asset_hashes {
+                if let Some((mtime, size)) = cache::file_fingerprint(path) {
+                    for entry in entries {
+                        if entry.mtime_ns == mtime && entry.size == size {
+                            let key =
+                                assets::AssetHashKey::from_raw(path.clone(), entry.options_hash);
+                            map.insert(key, entry.asset_hash.clone());
+                        }
+                    }
+                }
+            }
+        }
+        if !map.is_empty() {
+            debug!(target: "cache", "Seeded asset hash cache with {} entries from previous build", map.len());
+        }
+        Rc::new(RefCell::new(map))
+    };
 
     // Normalize base_url once to avoid repeated trimming
     let normalized_base_url = options
@@ -484,11 +504,13 @@ pub async fn build(
                     default_scripts.clone(),
                     vec![],
                 );
-                let pages = route.get_pages(&mut DynamicRouteContext::new(
+                let mut dynamic_ctx = DynamicRouteContext::new(
                     content_sources,
                     &mut pages_route_assets,
                     None,
-                ));
+                );
+                let pages = route.get_pages(&mut dynamic_ctx);
+                let get_pages_access_log = dynamic_ctx.take_access_log();
 
                 if pages.is_empty() {
                     warn!(target: "build", "{} is a dynamic route, but its implementation of Route::pages returned an empty Vec. No pages will be generated for this route.", base_path.bold());
@@ -550,7 +572,26 @@ pub async fn build(
                             None,
                         );
                         let content = route.build(&mut page_ctx)?;
-                        let access_log = page_ctx.take_access_log();
+                        let mut access_log = page_ctx.take_access_log();
+                        // Merge content dependencies from get_pages() into each page's log,
+                        // so that content read during page enumeration is tracked per-page.
+                        access_log.merge_entries_read(&get_pages_access_log);
+                        // If into_pages() produced this page from a specific entry,
+                        // record precise per-entry dependency. Otherwise, if
+                        // render() didn't track any content dependencies itself,
+                        // fall back to source-level tracking (all pages dirty when
+                        // any entry changes) to avoid serving stale content.
+                        if let Some((src, id)) = &page.3 {
+                            access_log
+                                .entries_read
+                                .push((src.clone(), id.clone()));
+                        } else if access_log.entries_read.is_empty()
+                            && access_log.sources_iterated.is_empty()
+                        {
+                            access_log.sources_iterated.extend(
+                                get_pages_access_log.sources_iterated.iter().cloned(),
+                            );
+                        }
 
                         write_route_file(&content, &file_path, &mut created_dirs)?;
                         info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), &route_format_options));
@@ -734,11 +775,13 @@ pub async fn build(
                     default_scripts.clone(),
                     vec![],
                 );
-                let pages = route.get_pages(&mut DynamicRouteContext::new(
+                let mut dynamic_ctx = DynamicRouteContext::new(
                     content_sources,
                     &mut pages_route_assets,
                     Some(&variant_id),
-                ));
+                );
+                let pages = route.get_pages(&mut dynamic_ctx);
+                let get_pages_access_log = dynamic_ctx.take_access_log();
 
                 if pages.is_empty() {
                     warn!(target: "build", "Variant {} has dynamic parameters but Route::pages returned an empty Vec.", variant_id.bold());
@@ -803,7 +846,19 @@ pub async fn build(
                             Some(variant_id.clone()),
                         );
                         let content = route.build(&mut page_ctx)?;
-                        let access_log = page_ctx.take_access_log();
+                        let mut access_log = page_ctx.take_access_log();
+                        access_log.merge_entries_read(&get_pages_access_log);
+                        if let Some((src, id)) = &page.3 {
+                            access_log
+                                .entries_read
+                                .push((src.clone(), id.clone()));
+                        } else if access_log.entries_read.is_empty()
+                            && access_log.sources_iterated.is_empty()
+                        {
+                            access_log.sources_iterated.extend(
+                                get_pages_access_log.sources_iterated.iter().cloned(),
+                            );
+                        }
 
                         write_route_file(&content, &file_path, &mut created_dirs)?;
                         info!(target: "pages", "│  ├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_page_start.elapsed(), &route_format_options));
@@ -946,6 +1001,24 @@ pub async fn build(
         }
 
         info!(target: "cache", "Asset fingerprints computed in {}", format_elapsed_time(asset_hash_start.elapsed(), &FormatElapsedTimeOptions::default()));
+
+        // Persist the in-memory asset hash cache for the next build.
+        // Each entry gets the current file mtime+size so we can validate on reload.
+        let hash_cache = asset_hash_cache.borrow();
+        for (key, asset_hash) in hash_cache.iter() {
+            if let Some((mtime, size)) = cache::file_fingerprint(key.path()) {
+                cache
+                    .persisted_asset_hashes
+                    .entry(key.path().to_path_buf())
+                    .or_default()
+                    .push(cache::PersistedAssetHash {
+                        options_hash: key.options_hash(),
+                        asset_hash: asset_hash.clone(),
+                        mtime_ns: mtime,
+                        size,
+                    });
+            }
+        }
     }
 
     if (!build_pages_images.is_empty())

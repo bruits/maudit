@@ -2078,3 +2078,624 @@ fn test_has_changes_true_when_page_removed() {
         "has_changes should be true when a page is removed"
     );
 }
+
+// ── Dynamic page edge case routes ──────────────────────────────────────
+
+/// A dynamic route where `get_pages()` reads content and passes entry IDs as props,
+/// and `build()` only uses props (never calls get_entry).
+/// This simulates a real pattern where content data is forwarded via props.
+#[route("/props-articles/[article]")]
+pub struct PropsOnlyArticlePage;
+
+#[derive(Clone)]
+pub struct ArticleIdProp {
+    pub id: String,
+}
+
+impl Route<ArticleParams, ArticleIdProp> for PropsOnlyArticlePage {
+    fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<ArticleParams, ArticleIdProp> {
+        let articles = ctx.content::<ArticleContent>("articles");
+        articles.into_pages(|entry| {
+            Page::new(
+                ArticleParams {
+                    article: entry.id.clone(),
+                },
+                ArticleIdProp {
+                    id: entry.id.clone(),
+                },
+            )
+        })
+    }
+
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        // Only use props — no content access in build()
+        let props = ctx.props::<ArticleIdProp>();
+        format!("<html><body><h1>Article: {}</h1></body></html>", props.id)
+    }
+}
+
+/// A dynamic route where `get_pages()` reads a specific entry to decide page list.
+#[route("/curated/[article]")]
+pub struct CuratedArticlePage;
+
+impl Route<ArticleParams> for CuratedArticlePage {
+    fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<ArticleParams> {
+        let articles = ctx.content::<ArticleContent>("articles");
+        // Only include articles that exist and have a specific property
+        let mut pages = vec![];
+        for entry in articles.entries() {
+            // Read the specific entry data in get_pages
+            pages.push(Page::from_params(ArticleParams {
+                article: entry.id.clone(),
+            }));
+        }
+        pages
+    }
+
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let params = ctx.params::<ArticleParams>();
+        let articles = ctx.content::<ArticleContent>("articles");
+        let article = articles.get_entry(&params.article);
+        let data = article.data(ctx);
+        format!(
+            "<html><body><h1>{}</h1><p>{}</p></body></html>",
+            data.title, data.description
+        )
+    }
+}
+
+/// A dynamic route where `get_pages()` reads a specific entry from one source
+/// to filter, but `build()` reads from the same source.
+#[route("/featured-list/[article]")]
+pub struct GetPagesSpecificReadPage;
+
+impl Route<ArticleParams> for GetPagesSpecificReadPage {
+    fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<ArticleParams> {
+        let articles = ctx.content::<ArticleContent>("articles");
+        // Read a specific entry in get_pages() to decide something
+        if let Some(featured) = articles.get_entry_safe("first") {
+            vec![Page::from_params(ArticleParams {
+                article: featured.id.clone(),
+            })]
+        } else {
+            vec![]
+        }
+    }
+
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let params = ctx.params::<ArticleParams>();
+        let articles = ctx.content::<ArticleContent>("articles");
+        let article = articles.get_entry(&params.article);
+        let data = article.data(ctx);
+        format!(
+            "<html><body><h1>Featured: {}</h1></body></html>",
+            data.title
+        )
+    }
+}
+
+/// A dynamic route that uses entries().map().collect() instead of into_pages().
+/// This pattern loses per-entry tracking but should still correctly dirty pages
+/// via the source-level fallback.
+#[route("/manual-articles/[article]")]
+pub struct ManualMapArticlePage;
+
+impl Route<ArticleParams, ArticleIdProp> for ManualMapArticlePage {
+    fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<ArticleParams, ArticleIdProp> {
+        let articles = ctx.content::<ArticleContent>("articles");
+        articles
+            .entries()
+            .map(|entry| {
+                Page::new(
+                    ArticleParams {
+                        article: entry.id.clone(),
+                    },
+                    ArticleIdProp {
+                        id: entry.id.clone(),
+                    },
+                )
+            })
+            .collect()
+    }
+
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let props = ctx.props::<ArticleIdProp>();
+        format!("<html><body><h1>Article: {}</h1></body></html>", props.id)
+    }
+}
+
+fn routes_props_only() -> &'static [&'static dyn FullRoute] {
+    &[&IndexPage, &PropsOnlyArticlePage]
+}
+
+fn routes_manual_map() -> &'static [&'static dyn FullRoute] {
+    &[&IndexPage, &ManualMapArticlePage]
+}
+
+fn routes_curated() -> &'static [&'static dyn FullRoute] {
+    &[&IndexPage, &CuratedArticlePage]
+}
+
+fn routes_get_pages_specific_read() -> &'static [&'static dyn FullRoute] {
+    &[&IndexPage, &GetPagesSpecificReadPage]
+}
+
+// ── Tests ──────────────────────────────────────────────────────────────
+
+/// When get_pages() uses into_pages() to compute props and build() only uses
+/// props (no content access), into_pages() records which entry produced each
+/// page. Content changes are detected via per-page entry tracking.
+#[test]
+fn test_props_only_page_dirtied_on_content_change() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello",
+    );
+    write_markdown(
+        &content_dir.join("articles"),
+        "second.md",
+        "Second Post",
+        "The second post",
+        "World",
+    );
+
+    // First build
+    let _ = coronate(
+        routes_props_only(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Modify the first article's title (which is passed as a prop)
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "Updated Title",
+        "The first post",
+        "Hello",
+    );
+
+    // Second build
+    let output = coronate(
+        routes_props_only(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // The first article page should be re-rendered since its content changed
+    let first = output.pages.iter().find(|p| {
+        p.params
+            .as_ref()
+            .and_then(|params| params.get("article"))
+            .and_then(|v| v.as_deref())
+            == Some("first")
+    });
+    assert!(first.is_some());
+    assert!(
+        !first.unwrap().cached,
+        "props-only page should be re-rendered when its content changes"
+    );
+}
+
+/// When only one article changes in a props-only route, the OTHER article
+/// should still be cached (we don't over-invalidate).
+#[test]
+fn test_props_only_unchanged_page_stays_cached() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello",
+    );
+    write_markdown(
+        &content_dir.join("articles"),
+        "second.md",
+        "Second Post",
+        "The second post",
+        "World",
+    );
+
+    let _ = coronate(
+        routes_props_only(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Modify only the first article
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "Updated Title",
+        "Updated desc",
+        "Updated body",
+    );
+
+    let output = coronate(
+        routes_props_only(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let second = output.pages.iter().find(|p| {
+        p.params
+            .as_ref()
+            .and_then(|params| params.get("article"))
+            .and_then(|v| v.as_deref())
+            == Some("second")
+    });
+    assert!(second.is_some());
+    assert!(
+        second.unwrap().cached,
+        "unchanged props-only page should stay cached"
+    );
+}
+
+/// When an article is deleted, the dynamic page for it should be removed
+/// from output and has_changes should reflect it.
+#[test]
+fn test_deleted_article_removes_dynamic_page() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First",
+        "First desc",
+        "Hello",
+    );
+    write_markdown(
+        &content_dir.join("articles"),
+        "second.md",
+        "Second",
+        "Second desc",
+        "World",
+    );
+
+    let output1 = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Both article pages exist
+    let article_pages: Vec<_> = output1
+        .pages
+        .iter()
+        .filter(|p| p.route == "/articles/[article]")
+        .collect();
+    assert_eq!(article_pages.len(), 2);
+
+    // Verify the output file exists
+    let second_path = tmp.path().join("dist/articles/second/index.html");
+    assert!(second_path.exists(), "second article output should exist");
+
+    // Delete the second article
+    fs::remove_file(content_dir.join("articles/second.md")).unwrap();
+
+    let output2 = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Only one article page now
+    let article_pages: Vec<_> = output2
+        .pages
+        .iter()
+        .filter(|p| p.route == "/articles/[article]")
+        .collect();
+    assert_eq!(article_pages.len(), 1);
+
+    // The deleted article's output file should be cleaned up
+    assert!(
+        !second_path.exists(),
+        "deleted article's output file should be removed"
+    );
+
+    assert!(output2.has_changes());
+}
+
+/// When get_pages() reads a specific entry and that entry's content changes,
+/// all pages from that route should be dirtied (because the get_pages access
+/// log is merged into each page).
+#[test]
+fn test_get_pages_specific_read_dirties_pages() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "Original description",
+        "Hello",
+    );
+
+    // First build
+    let _ = coronate(
+        routes_get_pages_specific_read(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Modify the entry that get_pages() reads specifically
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "Updated First",
+        "Updated description",
+        "Updated hello",
+    );
+
+    // Second build
+    let output = coronate(
+        routes_get_pages_specific_read(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let first = output.pages.iter().find(|p| {
+        p.params
+            .as_ref()
+            .and_then(|params| params.get("article"))
+            .and_then(|v| v.as_deref())
+            == Some("first")
+    });
+    assert!(first.is_some());
+    assert!(
+        !first.unwrap().cached,
+        "page should be re-rendered when get_pages() read entry changes"
+    );
+}
+
+/// When a new article is added, dynamic route should generate a new page for it.
+#[test]
+fn test_new_article_generates_new_dynamic_page() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First",
+        "First desc",
+        "Hello",
+    );
+
+    let output1 = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let article_count_1 = output1
+        .pages
+        .iter()
+        .filter(|p| p.route == "/articles/[article]")
+        .count();
+    assert_eq!(article_count_1, 1);
+
+    // Add a new article
+    write_markdown(
+        &content_dir.join("articles"),
+        "second.md",
+        "Second",
+        "Second desc",
+        "World",
+    );
+
+    let output2 = coronate(
+        routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let article_count_2 = output2
+        .pages
+        .iter()
+        .filter(|p| p.route == "/articles/[article]")
+        .count();
+    assert_eq!(article_count_2, 2);
+
+    // The new article should exist in output
+    let second_path = tmp.path().join("dist/articles/second/index.html");
+    assert!(second_path.exists(), "new article output should exist");
+
+    // The new page should not be cached
+    let second = output2.pages.iter().find(|p| {
+        p.params
+            .as_ref()
+            .and_then(|params| params.get("article"))
+            .and_then(|v| v.as_deref())
+            == Some("second")
+    });
+    assert!(second.is_some());
+    assert!(
+        !second.unwrap().cached,
+        "new article page should be rendered, not cached"
+    );
+}
+
+/// When entries().map().collect() is used instead of into_pages(), per-entry
+/// tracking is lost but the source-level fallback ensures content changes
+/// still dirty all pages from that route (over-invalidation, but correct).
+#[test]
+fn test_manual_map_fallback_dirties_pages() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello",
+    );
+    write_markdown(
+        &content_dir.join("articles"),
+        "second.md",
+        "Second Post",
+        "The second post",
+        "World",
+    );
+
+    // First build
+    let _ = coronate(
+        routes_manual_map(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Modify the first article
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "Updated Title",
+        "The first post",
+        "Hello",
+    );
+
+    // Second build
+    let output = coronate(
+        routes_manual_map(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // The first article page should be re-rendered (source-level fallback)
+    let first = output.pages.iter().find(|p| {
+        p.params
+            .as_ref()
+            .and_then(|params| params.get("article"))
+            .and_then(|v| v.as_deref())
+            == Some("first")
+    });
+    assert!(first.is_some());
+    assert!(
+        !first.unwrap().cached,
+        "manual-map page should be re-rendered when content changes"
+    );
+
+    // With source-level fallback, the second page is ALSO dirtied
+    // (over-invalidation, but correct — better than stale content)
+    let second = output.pages.iter().find(|p| {
+        p.params
+            .as_ref()
+            .and_then(|params| params.get("article"))
+            .and_then(|v| v.as_deref())
+            == Some("second")
+    });
+    assert!(second.is_some());
+    assert!(
+        !second.unwrap().cached,
+        "manual-map: all pages dirtied via source-level fallback"
+    );
+}
+
+/// When get_pages() uses a for loop over entries() but render() calls
+/// get_entry(), the render-time access log provides per-entry tracking.
+/// Only the page whose entry changed should be dirtied.
+#[test]
+fn test_curated_render_tracks_per_entry() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello",
+    );
+    write_markdown(
+        &content_dir.join("articles"),
+        "second.md",
+        "Second Post",
+        "The second post",
+        "World",
+    );
+
+    // First build
+    let _ = coronate(
+        routes_curated(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Modify the first article
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "Updated Title",
+        "The first post",
+        "Hello",
+    );
+
+    // Second build
+    let output = coronate(
+        routes_curated(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // First article should be re-rendered (get_entry() in render tracks it)
+    let first = output.pages.iter().find(|p| {
+        p.params
+            .as_ref()
+            .and_then(|params| params.get("article"))
+            .and_then(|v| v.as_deref())
+            == Some("first")
+    });
+    assert!(first.is_some());
+    assert!(
+        !first.unwrap().cached,
+        "curated page should be re-rendered when its entry changes"
+    );
+
+    // Second article should stay cached (render's get_entry tracks "second",
+    // which didn't change)
+    let second = output.pages.iter().find(|p| {
+        p.params
+            .as_ref()
+            .and_then(|params| params.get("article"))
+            .and_then(|v| v.as_deref())
+            == Some("second")
+    });
+    assert!(second.is_some());
+    assert!(
+        second.unwrap().cached,
+        "curated page for unchanged entry should be cached"
+    );
+}

@@ -90,6 +90,8 @@ where
 {
     pub params: Params,
     pub props: Props,
+    #[doc(hidden)]
+    pub _source_entry: Option<(String, String)>,
 }
 
 impl<Params, Props> Page<Params, Props>
@@ -97,7 +99,11 @@ where
     Params: Into<PageParams>,
 {
     pub fn new(params: Params, props: Props) -> Self {
-        Self { params, props }
+        Self {
+            params,
+            props,
+            _source_entry: None,
+        }
     }
 }
 
@@ -106,7 +112,11 @@ where
     Params: Into<PageParams>,
 {
     pub fn from_params(params: Params) -> Self {
-        Self { params, props: () }
+        Self {
+            params,
+            props: (),
+            _source_entry: None,
+        }
     }
 }
 
@@ -980,7 +990,7 @@ pub fn finish_route(
     }
 }
 
-pub type PagesResult = (PageParams, PageProps, PageTypedParams);
+pub type PagesResult = (PageParams, PageProps, PageTypedParams, Option<(String, String)>);
 pub type PagesResults = Vec<PagesResult>;
 
 pub type PageProps = Box<dyn Any + Send + Sync>;

@@ -19,6 +19,16 @@ impl ContentAccessLog {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Merge specific entry reads from another access log into this one.
+    /// Used to include content dependencies from `get_pages()` into each
+    /// individual page's log. Only merges `entries_read` (not `sources_iterated`),
+    /// because source iteration during `get_pages()` is for page enumeration —
+    /// structural changes to iterated sources already trigger a full rebuild
+    /// of the dynamic route via `find_stale_pages`.
+    pub fn merge_entries_read(&mut self, other: &ContentAccessLog) {
+        self.entries_read.extend(other.entries_read.iter().cloned());
+    }
 }
 
 /// A wrapper around [`ContentSource`] that records all accesses
@@ -63,9 +73,11 @@ impl<'a, T> TrackedContentSource<'a, T> {
     }
 
     /// Convert entries to pages. Marks this source as fully iterated.
+    /// Also records which entry produced each page, so that per-page
+    /// content dependencies can be tracked even when `build()` only uses props.
     pub fn into_pages<Params, Props>(
         &self,
-        cb: impl FnMut(&Entry<T>) -> Page<Params, Props>,
+        mut cb: impl FnMut(&Entry<T>) -> Page<Params, Props>,
     ) -> Pages<Params, Props>
     where
         Params: Into<PageParams>,
@@ -74,7 +86,12 @@ impl<'a, T> TrackedContentSource<'a, T> {
             .borrow_mut()
             .sources_iterated
             .push(self.source_name.clone());
-        self.inner.into_pages(cb)
+        let source_name = self.source_name.clone();
+        self.inner.into_pages(|entry| {
+            let mut page = cb(entry);
+            page._source_entry = Some((source_name.clone(), entry.id.clone()));
+            page
+        })
     }
 
     /// Convert entries to params. Marks this source as fully iterated.
