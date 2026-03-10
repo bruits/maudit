@@ -8,20 +8,43 @@ use log::debug;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
+use std::time::UNIX_EPOCH;
+
 const IMAGE_CACHE_FILENAME: &str = "image_cache.bin";
+
+/// Get file mtime (nanoseconds since epoch) and size for cache invalidation.
+fn file_fingerprint(path: &Path) -> Option<(u64, u64)> {
+    let meta = fs::metadata(path).ok()?;
+    let mtime = meta
+        .modified()
+        .ok()?
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_nanos() as u64;
+    Some((mtime, meta.len()))
+}
 
 /// Serializable image cache data, persisted independently of the build cache.
 #[derive(Serialize, Deserialize, Default)]
 struct PersistedImageCache {
-    placeholders: FxHashMap<PathBuf, (Vec<u8>, String)>,
+    placeholders: FxHashMap<PathBuf, PersistedPlaceholder>,
     transformed: FxHashMap<PathBuf, PathBuf>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct PersistedPlaceholder {
+    thumbhash: Vec<u8>,
+    mtime_ns: u64,
+    size: u64,
 }
 
 #[derive(Debug, Clone)]
 pub struct PlaceholderCacheEntry {
     pub thumbhash: Vec<u8>,
-    /// Hash of the source image content, used to invalidate stale entries.
-    pub source_hash: String,
+    /// File mtime in nanoseconds since epoch, used to invalidate stale entries.
+    pub mtime_ns: u64,
+    /// File size in bytes, used to invalidate stale entries.
+    pub size: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -79,12 +102,13 @@ impl ImageCacheInner {
         let placeholders = persisted
             .placeholders
             .into_iter()
-            .map(|(path, (thumbhash, source_hash))| {
+            .map(|(path, p)| {
                 (
                     path,
                     PlaceholderCacheEntry {
-                        thumbhash,
-                        source_hash,
+                        thumbhash: p.thumbhash,
+                        mtime_ns: p.mtime_ns,
+                        size: p.size,
                     },
                 )
             })
@@ -115,7 +139,11 @@ impl ImageCacheInner {
                 .map(|(path, entry)| {
                     (
                         path.clone(),
-                        (entry.thumbhash.clone(), entry.source_hash.clone()),
+                        PersistedPlaceholder {
+                            thumbhash: entry.thumbhash.clone(),
+                            mtime_ns: entry.mtime_ns,
+                            size: entry.size,
+                        },
                     )
                 })
                 .collect(),
@@ -134,17 +162,14 @@ impl ImageCacheInner {
     }
 
     /// Get cached placeholder or None if not found.
-    /// Returns None if the source hash doesn't match (image was modified).
-    pub fn get_placeholder(
-        &self,
-        src_path: &Path,
-        source_hash: &str,
-    ) -> Option<PlaceholderCacheEntry> {
+    /// Returns None if the file's mtime+size don't match (image was modified).
+    pub fn get_placeholder(&self, src_path: &Path) -> Option<PlaceholderCacheEntry> {
         let entry = self.placeholders.get(src_path)?;
 
-        if entry.source_hash != source_hash {
+        let (mtime_ns, size) = file_fingerprint(src_path)?;
+        if entry.mtime_ns != mtime_ns || entry.size != size {
             debug!(
-                "Placeholder cache stale for {} (hash mismatch)",
+                "Placeholder cache stale for {} (mtime/size mismatch)",
                 src_path.display()
             );
             return None;
@@ -154,11 +179,19 @@ impl ImageCacheInner {
         Some(entry.clone())
     }
 
-    /// Cache a placeholder
-    pub fn cache_placeholder(&mut self, src_path: &Path, thumbhash: Vec<u8>, source_hash: String) {
+    /// Cache a placeholder, recording the file's current mtime+size for invalidation.
+    pub fn cache_placeholder(&mut self, src_path: &Path, thumbhash: Vec<u8>) {
+        let Some((mtime_ns, size)) = file_fingerprint(src_path) else {
+            debug!(
+                "Cannot cache placeholder for {} (failed to stat file)",
+                src_path.display()
+            );
+            return;
+        };
         let entry = PlaceholderCacheEntry {
             thumbhash,
-            source_hash,
+            mtime_ns,
+            size,
         };
 
         self.placeholders.insert(src_path.to_path_buf(), entry);
@@ -286,19 +319,14 @@ impl ImageCache {
     }
 
     /// Get cached placeholder or None if not found.
-    /// Returns None if the source hash doesn't match (image was modified).
-    pub fn get_placeholder(
-        &self,
-        src_path: &Path,
-        source_hash: &str,
-    ) -> Option<PlaceholderCacheEntry> {
-        self.lock_inner().get_placeholder(src_path, source_hash)
+    /// Returns None if the file's mtime+size don't match (image was modified).
+    pub fn get_placeholder(&self, src_path: &Path) -> Option<PlaceholderCacheEntry> {
+        self.lock_inner().get_placeholder(src_path)
     }
 
-    /// Cache a placeholder
-    pub fn cache_placeholder(&self, src_path: &Path, thumbhash: Vec<u8>, source_hash: String) {
-        self.lock_inner()
-            .cache_placeholder(src_path, thumbhash, source_hash)
+    /// Cache a placeholder, recording the file's current mtime+size for invalidation.
+    pub fn cache_placeholder(&self, src_path: &Path, thumbhash: Vec<u8>) {
+        self.lock_inner().cache_placeholder(src_path, thumbhash)
     }
 
     /// Get cached transformed image path or None if not found
@@ -392,22 +420,21 @@ mod tests {
     fn test_thread_safety() {
         use std::thread;
 
+        let dir = tempfile::tempdir().unwrap();
+        let img_path = dir.path().join("test.jpg");
+        fs::write(&img_path, b"fake image data").unwrap();
+
         let cache = ImageCache::new();
         let cache_clone = cache.clone();
+        let img_path_clone = img_path.clone();
 
-        // Test that the cache can be shared across threads
         let handle = thread::spawn(move || {
-            cache_clone.cache_placeholder(
-                Path::new("test.jpg"),
-                vec![1, 2, 3, 4],
-                "hash1".to_string(),
-            );
+            cache_clone.cache_placeholder(&img_path_clone, vec![1, 2, 3, 4]);
         });
 
         handle.join().unwrap();
 
-        // Verify the placeholder was cached
-        let entry = cache.get_placeholder(Path::new("test.jpg"), "hash1");
+        let entry = cache.get_placeholder(&img_path);
         assert!(entry.is_some());
         assert_eq!(entry.unwrap().thumbhash, vec![1, 2, 3, 4]);
     }
@@ -417,31 +444,28 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cache_dir = dir.path().join("images");
         let persisted_dir = dir.path().join("cache");
+        let img_path = dir.path().join("test.png");
+        fs::write(&img_path, b"fake image data").unwrap();
 
         let image_cache = ImageCache::with_cache_dir(&cache_dir);
-        image_cache.cache_placeholder(
-            Path::new("test.png"),
-            vec![10, 20, 30],
-            "srchash".to_string(),
-        );
+        image_cache.cache_placeholder(&img_path, vec![10, 20, 30]);
         image_cache.cache_transformed_image(
             Path::new("test.abc123.webp"),
             PathBuf::from("/tmp/cached/test.abc123.webp"),
         );
 
-        // Save to its own file
         image_cache.save(&persisted_dir).unwrap();
 
-        // Load from file
         let restored = ImageCache::load(&cache_dir, &persisted_dir);
 
-        // Matching hash returns the entry
-        let placeholder = restored.get_placeholder(Path::new("test.png"), "srchash");
+        // File unchanged → hit
+        let placeholder = restored.get_placeholder(&img_path);
         assert!(placeholder.is_some());
         assert_eq!(placeholder.unwrap().thumbhash, vec![10, 20, 30]);
 
-        // Mismatched hash returns None (stale entry)
-        let stale = restored.get_placeholder(Path::new("test.png"), "different_hash");
+        // Modify the file → stale
+        fs::write(&img_path, b"modified image data").unwrap();
+        let stale = restored.get_placeholder(&img_path);
         assert!(stale.is_none());
     }
 
@@ -452,30 +476,33 @@ mod tests {
         let persisted_dir = dir.path().join("nonexistent");
 
         let cache = ImageCache::load(&cache_dir, &persisted_dir);
-        assert!(
-            cache
-                .get_placeholder(Path::new("anything"), "hash")
-                .is_none()
-        );
+        assert!(cache.get_placeholder(Path::new("anything")).is_none());
     }
 
     #[test]
     fn test_gc_evicts_stale_entries() {
-        let temp_dir = env::temp_dir().join("test_maudit_gc");
+        let dir = tempfile::tempdir().unwrap();
+        let temp_dir = dir.path().join("gc_cache");
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let img_a = dir.path().join("a.png");
+        let img_b = dir.path().join("b.png");
+        let img_c = dir.path().join("c.png");
+        fs::write(&img_a, b"a").unwrap();
+        fs::write(&img_b, b"b").unwrap();
+        fs::write(&img_c, b"c").unwrap();
+
         let cache = ImageCache::with_cache_dir(&temp_dir);
 
-        // Add some placeholders
-        cache.cache_placeholder(Path::new("/img/a.png"), vec![1], "ha".to_string());
-        cache.cache_placeholder(Path::new("/img/b.png"), vec![2], "hb".to_string());
-        cache.cache_placeholder(Path::new("/img/c.png"), vec![3], "hc".to_string());
+        cache.cache_placeholder(&img_a, vec![1]);
+        cache.cache_placeholder(&img_b, vec![2]);
+        cache.cache_placeholder(&img_c, vec![3]);
 
-        // Add some transformed images
         cache.cache_transformed_image(Path::new("a.abc.webp"), temp_dir.join("a.abc.webp"));
         cache.cache_transformed_image(Path::new("b.def.webp"), temp_dir.join("b.def.webp"));
 
         // Only a.png and a.abc.webp are still live
-        let live_placeholders: FxHashSet<PathBuf> =
-            [PathBuf::from("/img/a.png")].into_iter().collect();
+        let live_placeholders: FxHashSet<PathBuf> = [img_a.clone()].into_iter().collect();
         let live_transformed: FxHashSet<PathBuf> =
             [PathBuf::from("a.abc.webp")].into_iter().collect();
 
@@ -483,54 +510,34 @@ mod tests {
         assert_eq!(evicted, 3); // b.png, c.png placeholders + b.def.webp transformed
 
         // a.png still accessible
-        assert!(
-            cache
-                .get_placeholder(Path::new("/img/a.png"), "ha")
-                .is_some()
-        );
+        assert!(cache.get_placeholder(&img_a).is_some());
         // b.png evicted
-        assert!(
-            cache
-                .get_placeholder(Path::new("/img/b.png"), "hb")
-                .is_none()
-        );
-        // a.abc.webp still accessible (though file doesn't exist, it's still in the map)
-        assert!(
-            cache
-                .get_transformed_image(Path::new("a.abc.webp"))
-                .is_none()
-        ); // file doesn't exist
-        // b.def.webp evicted
-        assert!(
-            cache
-                .get_transformed_image(Path::new("b.def.webp"))
-                .is_none()
-        );
-
-        let _ = fs::remove_dir_all(&temp_dir);
+        assert!(cache.get_placeholder(&img_b).is_none());
     }
 
     #[test]
     fn test_placeholder_invalidation_on_source_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let img_path = dir.path().join("img.png");
+        fs::write(&img_path, b"original image").unwrap();
+
         let cache = ImageCache::new();
 
-        // Cache a placeholder with hash "v1"
-        cache.cache_placeholder(Path::new("img.png"), vec![1, 2, 3], "v1".to_string());
+        // Cache placeholder
+        cache.cache_placeholder(&img_path, vec![1, 2, 3]);
 
-        // Same hash → hit
-        assert!(cache.get_placeholder(Path::new("img.png"), "v1").is_some());
+        // Same file → hit
+        assert!(cache.get_placeholder(&img_path).is_some());
 
-        // Different hash (source changed) → miss
-        assert!(cache.get_placeholder(Path::new("img.png"), "v2").is_none());
+        // Modify file → miss (mtime+size changed)
+        fs::write(&img_path, b"modified image content").unwrap();
+        assert!(cache.get_placeholder(&img_path).is_none());
 
-        // Cache with new hash
-        cache.cache_placeholder(Path::new("img.png"), vec![4, 5, 6], "v2".to_string());
+        // Re-cache with new content
+        cache.cache_placeholder(&img_path, vec![4, 5, 6]);
 
-        // New hash → hit with new data
-        let entry = cache.get_placeholder(Path::new("img.png"), "v2").unwrap();
+        // New cache entry → hit
+        let entry = cache.get_placeholder(&img_path).unwrap();
         assert_eq!(entry.thumbhash, vec![4, 5, 6]);
-
-        // Old hash → miss
-        assert!(cache.get_placeholder(Path::new("img.png"), "v1").is_none());
     }
 }

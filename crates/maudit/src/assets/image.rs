@@ -157,7 +157,7 @@ impl Image {
     ///
     /// Returns an error if the image cannot be loaded.
     pub fn placeholder(&self) -> Result<ImagePlaceholder, crate::errors::AssetError> {
-        get_placeholder(&self.path, &self.hash, self.cache.as_ref())
+        get_placeholder(&self.path, self.cache.as_ref())
     }
 
     // Get the dimensions of an image. Note that at this time, unsupported file formats such as SVGs will return (0, 0).
@@ -262,12 +262,11 @@ impl ImagePlaceholder {
 
 fn get_placeholder(
     path: &PathBuf,
-    source_hash: &str,
     cache: Option<&ImageCache>,
 ) -> Result<ImagePlaceholder, crate::errors::AssetError> {
     // Check cache first if provided
     if let Some(cache) = cache
-        && let Some(cached) = cache.get_placeholder(path, source_hash)
+        && let Some(cached) = cache.get_placeholder(path)
     {
         debug!("Using cached placeholder for {}", path.display());
         let thumbhash_base64 = base64::engine::general_purpose::STANDARD.encode(&cached.thumbhash);
@@ -335,7 +334,7 @@ fn get_placeholder(
 
     // Cache the result if cache is provided
     if let Some(cache) = cache {
-        cache.cache_placeholder(path, thumb_hash.clone(), source_hash.to_string());
+        cache.cache_placeholder(path, thumb_hash.clone());
     }
 
     Ok(ImagePlaceholder::new(thumb_hash, thumbhash_base64))
@@ -537,7 +536,7 @@ mod tests {
     fn test_placeholder_with_missing_file() {
         let nonexistent_path = PathBuf::from("/this/file/does/not/exist.png");
 
-        let result = get_placeholder(&nonexistent_path, "fakehash", None);
+        let result = get_placeholder(&nonexistent_path, None);
 
         assert!(result.is_err());
         if let Err(AssetError::ImageLoadFailed { path, .. }) = result {
@@ -558,7 +557,7 @@ mod tests {
         });
         img.save(&image_path).unwrap();
 
-        let result = get_placeholder(&image_path, "testhash", None);
+        let result = get_placeholder(&image_path, None);
 
         if let Err(e) = &result {
             eprintln!("get_placeholder failed: {:?}", e.source());
