@@ -17,6 +17,7 @@ pub fn build_website(markdown_count: usize) {
                 strategy: PrefetchStrategy::None,
                 ..Default::default()
             },
+            incremental: false,
             ..Default::default()
         },
     );

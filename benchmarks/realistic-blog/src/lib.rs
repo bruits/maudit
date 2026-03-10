@@ -36,6 +36,9 @@ pub fn build_website() {
             ..Default::default()
             })
         ],
-        BuildOptions::default(),
+        BuildOptions {
+            incremental: false,
+            ..Default::default()
+        },
     );
 }
