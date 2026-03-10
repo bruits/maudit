@@ -176,7 +176,7 @@ pub fn layout(
                                     span.sr-only { "Follow Maudit on Bluesky" }
                                     (PreEscaped(include_str!("../assets/bsky.svg")))
                                 }
-                                a href="/chat/" {
+                                a href="/chat/" data-graphgarden-ignore {
                                     span.sr-only { "Join the Maudit community on Discord" }
                                     (PreEscaped(include_str!("../assets/discord.svg")))
                                 }

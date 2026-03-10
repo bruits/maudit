@@ -6,7 +6,7 @@ section: "core-concepts"
 
 ## Registering Routes
 
-Routes must be passed to the `coronate` function in [the entrypoint](/docs/entrypoint) in order to be built.
+Routes must be passed to the `coronate` function in [the entrypoint](/docs/entrypoint/) in order to be built.
 
 The first argument to the `coronate` function is a `Vec` of all the routes that should be built. This list can be created using the `routes!` macro to make it more concise.
 

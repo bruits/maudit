@@ -11,7 +11,7 @@ Behold, the dawn of a new era in static site generation! The latest incarnation 
 
 ...
 
-_More seriously_, this is the first release of **Maudit** (/mo.di/), a Rust library to generate static sites.
+_More seriously_, this is the first release of **Maudit** (/mo.di/), a Rust library to generate static sites, a new project by [Bruits](https://bruits.org/), a collective building Rust softwares.
 
 <div class="text-center italic">Want to just get started using Maudit? Check out our <a href="/docs/quick-start/">Quick Start guide</a></div>
 
@@ -64,10 +64,10 @@ We keep a [roadmap](https://github.com/bruits/maudit/issues/1) up to date with o
 
 [Maudit is open source, licensed under MIT](https://github.com/bruits/maudit), and we would be thrilled to receive your contributions, no matter your skill level. Whether it's code, documentation, design, issues, or just spreading the word, every little bit helps.
 
-We also have a [Discord server](/chat) where you can chat with other users and contributors. We hope to see you there!
+We also have a [Discord server](/chat/) where you can chat with other users and contributors. We hope to see you there!
 
 ## Get started
 
-To get started with Maudit, check out the [official documentation](/docs). It covers everything from installation to advanced usage.
+To get started with Maudit, check out the [official documentation](/docs/). It covers everything from installation to advanced usage.
 
 We're very excited to see what you build with Maudit, and we hope you'll find it as enjoyable to use as we do!

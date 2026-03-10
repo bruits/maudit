@@ -13,7 +13,7 @@ A library for generating static websites with Rust.
 
 ## Quick links
 
-🌍 Visit our [website](https://maudit.org) to read the [documentation](https://maudit.org/docs) and our [news](https://maudit.org/news)
+🌍 Visit our [website](https://maudit.org) to read the [documentation](https://maudit.org/docs/) and our [news](https://maudit.org/news/)
 
 📦 See the [crate](https://crates.io/crates/maudit) on Crates.io, and the [reference](https://docs.rs/maudit/latest/maudit/) on Docs.rs.
 

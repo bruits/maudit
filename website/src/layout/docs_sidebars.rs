@@ -74,9 +74,11 @@ pub fn left_sidebar(ctx: &mut PageContext) -> Markup {
                 }
             }
         }
-        ul.space-y-1 {
-            @for entry in entries {
-                (entry)
+        nav {
+            ul.space-y-1 {
+                @for entry in entries {
+                    (entry)
+                }
             }
         }
     }

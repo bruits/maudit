@@ -36,7 +36,7 @@ fn main() {
 }
 ```
 
-See the [Routing](/docs/routing) documentation for more information on how to define routes.
+See the [Routing](/docs/routing/) documentation for more information on how to define routes.
 
 ## Content
 
@@ -58,7 +58,7 @@ fn main() {
 }
 ```
 
-See the [Content](/docs/content) documentation for more information on how to define content sources.
+See the [Content](/docs/content/) documentation for more information on how to define content sources.
 
 ## Options
 

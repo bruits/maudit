@@ -225,8 +225,6 @@ fn main() {
 
 With this, building your website will now result in a `sitemap.xml` file being generated inside your `dist` folder, which includes all the pages of your website. Maudit will also automatically handle separating your sitemap into multiple files if you have over the recommended maximum of 50,000 pages per sitemap.
 
-For more information on sitemap generation in Maudit, check [our sitemap documentation](/docs/sitemap/).
-
 ## Automatic prefetching
 
 A common complaint about MPAs (Multi-Page Applications) is that navigating between pages is slow, especially compared to the app-like experience of SPAs (Single-Page Applications).
