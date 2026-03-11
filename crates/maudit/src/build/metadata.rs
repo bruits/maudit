@@ -71,8 +71,7 @@ impl BuildOutput {
 
     /// Returns true if any page was added, changed, or removed during this build.
     ///
-    /// Useful for deciding whether post-build work (sitemaps, graphs, feeds)
-    /// needs to run or can be skipped.
+    /// Useful for deciding whether post-build work needs to run or can be skipped.
     pub fn has_changes(&self) -> bool {
         self.removed_pages > 0 || self.pages.iter().any(|p| !p.cached)
     }

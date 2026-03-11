@@ -112,7 +112,7 @@ pub struct BuildOptions {
     pub incremental: bool,
 
     /// Directory for build cache storage.
-    /// Defaults to `target/maudit/<binary_name>`.
+    /// Defaults to `{workspace_root}/target/maudit/<binary_name>`.
     pub cache_dir: PathBuf,
 }
 

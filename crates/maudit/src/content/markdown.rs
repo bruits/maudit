@@ -225,6 +225,7 @@ where
 
         let id = entry.file_stem().unwrap().to_str().unwrap().to_string();
         let content = std::fs::read_to_string(&entry).unwrap();
+
         // Clone content for the closure
         let content_clone = content.clone();
         let data_loader = Box::new(move |_: &mut dyn ContentContext| {
