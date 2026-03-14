@@ -892,14 +892,25 @@ pub fn finish_route(
         RenderResult::Text(html) => {
             let included_styles: Vec<_> = page_assets.included_styles().collect();
             let included_scripts: Vec<_> = page_assets.included_scripts().collect();
+            let inline_css = page_assets.inline_css.as_deref();
 
-            if included_scripts.is_empty() && included_styles.is_empty() {
+            if included_scripts.is_empty()
+                && included_styles.is_empty()
+                && inline_css.is_none()
+            {
                 return Ok(html.into_bytes());
             }
 
             let element_content_handlers = vec![
-                // Add included scripts and styles to the head
+                // Add inline CSS, included styles and scripts to the head
                 element!("head", |el| {
+                    if let Some(css) = inline_css {
+                        el.append(
+                            &format!("<style>{}</style>", css),
+                            lol_html::html_content::ContentType::Html,
+                        );
+                    }
+
                     for style in &included_styles {
                         el.append(
                             &format!("<link rel=\"stylesheet\" href=\"{}\">", style.url()),
@@ -932,7 +943,10 @@ pub fn finish_route(
             let included_styles: Vec<_> = page_assets.included_styles().collect();
             let included_scripts: Vec<_> = page_assets.included_scripts().collect();
 
-            if !included_scripts.is_empty() || !included_styles.is_empty() {
+            if !included_scripts.is_empty()
+                || !included_styles.is_empty()
+                || page_assets.inline_css.is_some()
+            {
                 Err(BuildError::InvalidRenderResult { route })?;
             }
 

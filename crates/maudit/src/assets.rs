@@ -31,6 +31,7 @@ pub struct RouteAssets {
 
     pub(crate) options: RouteAssetsOptions,
     pub(crate) image_cache: Option<ImageCache>,
+    pub(crate) inline_css: Option<String>,
 }
 
 #[derive(Clone)]
@@ -67,6 +68,7 @@ impl RouteAssets {
         image_cache: Option<ImageCache>,
         scripts: Vec<Script>,
         styles: Vec<Style>,
+        inline_css: Option<String>,
     ) -> Self {
         let mut route_assets = Self::new(assets_options, image_cache);
 
@@ -77,6 +79,8 @@ impl RouteAssets {
         for style in styles {
             route_assets.styles.insert(style);
         }
+
+        route_assets.inline_css = inline_css;
 
         route_assets
     }
@@ -431,7 +435,7 @@ pub enum HashAssetType<'a> {
     Script,
 }
 
-fn make_filename(path: &Path, hash: &String, extension: Option<&str>) -> PathBuf {
+pub(crate) fn make_filename(path: &Path, hash: &String, extension: Option<&str>) -> PathBuf {
     let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("asset");
 
     let sanitized_stem = sanitize_filename::default_sanitize_file_name(file_stem);
@@ -446,11 +450,11 @@ fn make_filename(path: &Path, hash: &String, extension: Option<&str>) -> PathBuf
     filename
 }
 
-fn make_final_url(assets_dir: &Path, file_name: &Path) -> String {
+pub(crate) fn make_final_url(assets_dir: &Path, file_name: &Path) -> String {
     format!("/{}/{}", assets_dir.display(), file_name.display())
 }
 
-fn make_final_path(output_assets_dir: &Path, file_name: &Path) -> PathBuf {
+pub(crate) fn make_final_path(output_assets_dir: &Path, file_name: &Path) -> PathBuf {
     output_assets_dir.join(file_name)
 }
 

@@ -1,15 +1,5 @@
 @import "tailwindcss";
 
-@font-face {
-	font-family: "Charter";
-	src:
-		local("Charter"),
-		url("./fonts/charter_regular.woff2") format("woff2");
-	font-weight: normal;
-	font-style: normal;
-	font-display: swap;
-}
-
 @theme {
 	--color-our-white: #fafafa;
 	--color-our-black: #262421;
@@ -34,7 +24,7 @@ body {
 }
 
 body {
-	font-family: Charter, "Bitstream Charter", Cambria, serif;
+	font-family: var(--font-charter);
 }
 
 a:hover {

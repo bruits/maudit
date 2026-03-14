@@ -3,7 +3,11 @@ use graphgarden_core::{
     build::build,
     config::{Config, OutputConfig, ParseConfig, SiteConfig},
 };
-use maudit::{AssetsOptions, BuildOptions, BuildOutput, coronate, routes};
+use maudit::{
+    AssetsOptions, BuildOptions, BuildOutput, coronate,
+    fonts::{FontDisplay, FontFamily, FontStyle, FontVariant, FontWeight},
+    routes,
+};
 
 mod content;
 mod layout;
@@ -30,6 +34,22 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
                 tailwind_binary_path: "../node_modules/.bin/tailwindcss".into(),
                 ..Default::default()
             },
+            fonts: vec![FontFamily {
+                family: "Charter".into(),
+                css_variable: "--font-charter".into(),
+                fallbacks: vec![
+                    "Bitstream Charter".into(),
+                    "Cambria".into(),
+                    "serif".into(),
+                ],
+                display: FontDisplay::Swap,
+                variants: vec![FontVariant {
+                    file: "./assets/fonts/charter_regular.woff2".into(),
+                    weight: FontWeight::Single(400),
+                    style: FontStyle::Normal,
+                    unicode_range: None,
+                }],
+            }],
             ..Default::default()
         },
     )?;

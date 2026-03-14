@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf};
 
-use crate::{assets::RouteAssetsOptions, is_dev, sitemap::SitemapOptions};
+use crate::{assets::RouteAssetsOptions, fonts::FontFamily, is_dev, sitemap::SitemapOptions};
 
 /// Maudit build options. Should be passed to [`coronate()`](crate::coronate()).
 ///
@@ -67,6 +67,12 @@ pub struct BuildOptions {
 
     /// Options for sitemap generation. See [`SitemapOptions`] for configuration.
     pub sitemap: SitemapOptions,
+
+    /// Font families to register. Generates `@font-face` declarations and CSS custom properties automatically.
+    /// Font files are processed through the asset pipeline and receive hashed filenames.
+    ///
+    /// See [`FontFamily`] for configuration options.
+    pub fonts: Vec<FontFamily>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -204,6 +210,7 @@ impl Default for BuildOptions {
             prefetch: PrefetchOptions::default(),
             assets: AssetsOptions::default(),
             sitemap: SitemapOptions::default(),
+            fonts: Vec::new(),
         }
     }
 }

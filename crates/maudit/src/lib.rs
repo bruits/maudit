@@ -9,6 +9,7 @@
 pub mod assets;
 pub mod content;
 pub mod errors;
+pub mod fonts;
 pub mod route;
 pub mod routing;
 pub mod sitemap;

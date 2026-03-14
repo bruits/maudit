@@ -11,11 +11,12 @@ use std::{
 use crate::{
     BuildOptions, BuildOutput,
     assets::{
-        self, HashAssetType, HashConfig, PrefetchPlugin, RouteAssets, Script, TailwindPlugin,
-        calculate_hash, image_cache::ImageCache, prefetch,
+        self, PrefetchPlugin, RouteAssets, Script, TailwindPlugin,
+        calculate_hash, HashAssetType, HashConfig, image_cache::ImageCache, prefetch,
     },
     build::{images::process_image, options::PrefetchStrategy},
     content::ContentSources,
+    fonts,
     is_dev,
     logging::print_title,
     route::{CachedRoute, DynamicRouteContext, FullRoute, InternalRoute, PageContext, PageParams},
@@ -159,6 +160,27 @@ pub async fn build(
         default_scripts.push(prefetch_script);
     }
 
+    let inline_font_css = if !options.fonts.is_empty() {
+        let font_result = fonts::generate_font_css_inline(
+            &options.fonts,
+            &route_assets_options.assets_dir,
+            &route_assets_options.output_assets_dir,
+            &options.assets.hashing_strategy,
+        )?;
+
+        // Copy font files to output directory
+        fs::create_dir_all(&route_assets_options.output_assets_dir)?;
+        for font_asset in &font_result.assets {
+            if !font_asset.dest.exists() {
+                fs::copy(&font_asset.source, &font_asset.dest)?;
+            }
+        }
+
+        Some(font_result.css)
+    } else {
+        None
+    };
+
     // This is fully serial. It is somewhat trivial to make it parallel, but it currently isn't because every time I've tried to
     // (uncommited, #25, #41, #46) it either made no difference or was slower. The overhead of parallelism is just too high for
     // how fast most sites build. Ideally, it'd be configurable and default to serial, but I haven't found an ergonomic way to do that yet.
@@ -188,6 +210,7 @@ pub async fn build(
                     Some(image_cache.clone()),
                     default_scripts.clone(),
                     vec![],
+                    inline_font_css.clone(),
                 );
 
                 let params = PageParams::default();
@@ -234,6 +257,7 @@ pub async fn build(
                     Some(image_cache.clone()),
                     default_scripts.clone(),
                     vec![],
+                    inline_font_css.clone(),
                 );
                 let pages = route.get_pages(&mut DynamicRouteContext {
                     content: content_sources,
@@ -304,6 +328,7 @@ pub async fn build(
                     Some(image_cache.clone()),
                     default_scripts.clone(),
                     vec![],
+                    inline_font_css.clone(),
                 );
 
                 let params = PageParams::default();
@@ -350,6 +375,7 @@ pub async fn build(
                     Some(image_cache.clone()),
                     default_scripts.clone(),
                     vec![],
+                    inline_font_css.clone(),
                 );
                 let pages = route.get_pages(&mut DynamicRouteContext {
                     content: content_sources,
@@ -467,6 +493,8 @@ pub async fn build(
             let mut module_types_hashmap = FxHashMap::default();
             module_types_hashmap.insert("woff".to_string(), ModuleType::Asset);
             module_types_hashmap.insert("woff2".to_string(), ModuleType::Asset);
+            module_types_hashmap.insert("ttf".to_string(), ModuleType::Asset);
+            module_types_hashmap.insert("otf".to_string(), ModuleType::Asset);
 
             let mut bundler = Bundler::with_plugins(
                 BundlerOptions {
