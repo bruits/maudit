@@ -121,6 +121,7 @@ pub use maudit_macros::markdown_entry;
 pub enum Dependency {
     /// A file on disk. Changes to this file will trigger a rebuild of pages that depend on this entry.
     File(PathBuf),
+    // TODO: Add other types of dependencies
 }
 
 pub struct EntryInner<T> {

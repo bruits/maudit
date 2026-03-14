@@ -365,8 +365,6 @@ impl<'a> PageContext<'a> {
         }
     }
 
-    /// Get a tracked content source by name. All accesses through the returned
-    /// handle are recorded for incremental build dependency tracking.
     pub fn content<T: 'static>(
         &self,
         name: &str,
@@ -378,7 +376,6 @@ impl<'a> PageContext<'a> {
         }
     }
 
-    /// Consume and return the access log. Called internally after each page render.
     pub(crate) fn take_access_log(&self) -> crate::content::tracked::ContentAccessLog {
         self.access_log.take()
     }
@@ -706,8 +703,6 @@ use crate::routing::ParameterDef;
 use std::sync::OnceLock;
 
 // This function is extremely performance-sensitive, as it is called for every single page during the build.
-// It builds the URL in a single forward pass with pre-calculated capacity, avoiding the old
-// clone → replace_range → split/collect/join pattern (which did 3+ allocations).
 pub fn build_url_with_params(
     route_template: &str,
     params_def: &[ParameterDef],

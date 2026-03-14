@@ -14,68 +14,38 @@ pub struct DependencyTracker {
     pub(crate) dependencies: HashMap<PathBuf, SystemTime>,
 }
 
-/// Find the target directory using multiple strategies
+/// Find the target/debug directory.
 ///
-/// This function tries multiple approaches to locate the target directory:
-/// 1. CARGO_TARGET_DIR / CARGO_BUILD_TARGET_DIR environment variables
-/// 2. Local ./target/debug directory
-/// 3. Workspace root target/debug directory (walking up to find [workspace])
-/// 4. Fallback to relative "target/debug" path
+/// Uses `CARGO_TARGET_DIR` if set, otherwise walks up from the current
+/// directory looking for `Cargo.lock` (the workspace/project root) and
+/// appends `target`. Falls back to a relative `target` path.
 pub fn find_target_dir() -> Result<PathBuf, std::io::Error> {
-    // 1. Check CARGO_TARGET_DIR and CARGO_BUILD_TARGET_DIR environment variables
-    for env_var in ["CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR"] {
-        if let Ok(target_dir) = std::env::var(env_var) {
-            // Try with /debug appended
-            let path = PathBuf::from(&target_dir).join("debug");
-            if path.exists() {
-                debug!("Using target directory from {}: {:?}", env_var, path);
-                return Ok(path);
-            }
-            // If the env var points directly to debug or release
-            let path_no_debug = PathBuf::from(&target_dir);
-            if path_no_debug.exists()
-                && (path_no_debug.ends_with("debug") || path_no_debug.ends_with("release"))
-            {
-                debug!(
-                    "Using target directory from {} (direct): {:?}",
-                    env_var, path_no_debug
-                );
-                return Ok(path_no_debug);
-            }
+    let target_dir = std::env::var("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| find_project_root().join("target"));
+
+    let debug_dir = target_dir.join("debug");
+    debug!("Using target directory: {:?}", debug_dir);
+    Ok(debug_dir)
+}
+
+/// Find the project/workspace root by walking up from the current directory
+/// looking for `Cargo.lock`.
+fn find_project_root() -> PathBuf {
+    let Ok(mut current) = std::env::current_dir() else {
+        return PathBuf::from(".");
+    };
+
+    for _ in 0..5 {
+        if current.join("Cargo.lock").exists() {
+            return current;
         }
-    }
-
-    // 2. Look for target directory in current directory
-    let local_target = PathBuf::from("target/debug");
-    if local_target.exists() {
-        debug!("Using local target directory: {:?}", local_target);
-        return Ok(local_target);
-    }
-
-    // 3. Try to find workspace root by looking for Cargo.toml with [workspace]
-    let mut current = std::env::current_dir()?;
-    loop {
-        let cargo_toml = current.join("Cargo.toml");
-        if cargo_toml.exists()
-            && let Ok(content) = fs::read_to_string(&cargo_toml)
-            && content.contains("[workspace]")
-        {
-            let workspace_target = current.join("target").join("debug");
-            if workspace_target.exists() {
-                debug!("Using workspace target directory: {:?}", workspace_target);
-                return Ok(workspace_target);
-            }
-        }
-
-        // Move up to parent directory
         if !current.pop() {
             break;
         }
     }
 
-    // 4. Final fallback to relative path
-    debug!("Falling back to relative target/debug path");
-    Ok(PathBuf::from("target/debug"))
+    PathBuf::from(".")
 }
 
 impl DependencyTracker {

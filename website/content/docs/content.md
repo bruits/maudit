@@ -55,7 +55,7 @@ pub struct SomeArticlePage;
 
 impl Route for SomeArticlePage {
   fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-    let source = ctx.collection::<BlogPost>("source_name");
+    let source = ctx.content::<BlogPost>("source_name");
     let entry = source.get_entry("entry_id");
 
     let entry_data = entry.data(ctx);
