@@ -228,7 +228,6 @@ pub async fn build(
         &FormatElapsedTimeOptions::default(),
     )).bold());
 
-    // --- Incremental build: compute state ---
     let incremental_state;
     let mut new_cache: Option<cache::BuildCache>;
 
@@ -271,7 +270,6 @@ pub async fn build(
         new_cache = None;
     };
 
-    // --- Generate pages ---
     print_title("generating pages");
 
     if !incremental_state.is_full_build() {
@@ -1327,7 +1325,7 @@ pub async fn build(
         }
     }
 
-    // Generate sitemap (skip if incremental build with no page changes)
+    // Generate sitemap, skipping if no pages have changed
     if options.sitemap.enabled {
         if let Some(base_url) = normalized_base_url {
             if !build_metadata.has_changes() && !incremental_state.is_full_build() {
