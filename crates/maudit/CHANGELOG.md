@@ -1,5 +1,35 @@
 # maudit
 
+## 0.11.0 — 2026-03-15
+
+### Minor changes
+
+- [a5b49ad](https://github.com/bruits/maudit/commit/a5b49adacbbbc18506e3157ade0547b60e35348a) Adds support for prefetching / prerendering pages using the Speculation Rules API — Thanks @Princesseuh!
+- [f861bf2](https://github.com/bruits/maudit/commit/f861bf226c76bef451d6dead3e88f0ade09a0082) Adds support for incremental builds. Subsequent builds will now only re-render pages whose content or assets have changed, making rebuilds significantly faster. This is enabled by default. To disable it, set `incremental: false` in your `BuildOptions`:
+  
+  ```rust
+  use maudit::{content_sources, coronate, routes, BuildOptions, BuildOutput};
+  
+  fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
+    coronate(
+      routes![],
+      content_sources![],
+      BuildOptions {
+        incremental: false,
+        ..Default::default()
+      },
+    )
+  }
+  ```
+   — Thanks @Princesseuh!
+
+### Patch changes
+
+- [f861bf2](https://github.com/bruits/maudit/commit/f861bf226c76bef451d6dead3e88f0ade09a0082) Improves performance when using dynamic routes — Thanks @Princesseuh!
+- [f759f36](https://github.com/bruits/maudit/commit/f759f36234bab9e38ad3718b8580a66580d6932a) Make placeholders function return Result so that errors can be handled, if need to — Thanks @Princesseuh!
+- [f861bf2](https://github.com/bruits/maudit/commit/f861bf226c76bef451d6dead3e88f0ade09a0082) The Maudit CLI will now directly rerun the website's binary instead of using Cargo when changes do not require recompilation, this on average speeds up the feedback loop by 300-1000ms. — Thanks @Princesseuh!
+- Updated dependencies: maudit-macros (Cargo)@0.8.0
+
 ## 0.10.0 — 2026-01-18
 
 ### Minor changes
