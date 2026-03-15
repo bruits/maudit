@@ -13,12 +13,12 @@ pub struct NewsIndex;
 
 impl Route for NewsIndex {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-        let content = ctx.content.get_source::<NewsContent>("news");
+        let content = ctx.content::<NewsContent>("news");
 
         // Group articles by year
         let mut articles_by_year: BTreeMap<String, Vec<_>> = BTreeMap::new();
 
-        for article in &content.entries {
+        for article in content.entries() {
             let year = article.data(ctx).date.year().to_string();
             articles_by_year
                 .entry(year)
@@ -95,7 +95,7 @@ struct NewsPageParams {
 
 impl Route<NewsPageParams> for NewsPage {
     fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<NewsPageParams> {
-        let content = ctx.content.get_source::<NewsContent>("news");
+        let content = ctx.content::<NewsContent>("news");
 
         content.into_pages(|entry| {
             Page::from_params(NewsPageParams {
@@ -106,10 +106,8 @@ impl Route<NewsPageParams> for NewsPage {
 
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let slug = ctx.params::<NewsPageParams>().slug.clone();
-        let entry = ctx
-            .content
-            .get_source::<NewsContent>("news")
-            .get_entry(&slug);
+        let news = ctx.content::<NewsContent>("news");
+        let entry = news.get_entry(&slug);
 
         let NewsContent {
             title,

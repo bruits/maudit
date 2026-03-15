@@ -10,11 +10,11 @@ use crate::{
 };
 
 pub fn left_sidebar(ctx: &mut PageContext) -> Markup {
-    let content = ctx.content.get_source::<DocsContent>("docs");
+    let content = ctx.content::<DocsContent>("docs");
 
     let mut sections = std::collections::HashMap::new();
 
-    for entry in content.entries.iter() {
+    for entry in content.entries() {
         if let Some(section) = &entry.data(ctx).section {
             sections.entry(section).or_insert_with(Vec::new).push(entry);
         }

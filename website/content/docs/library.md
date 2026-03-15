@@ -64,7 +64,7 @@ pub fn build_website(
 
       // Our page does not include content or assets, but we'll set those up for future use.
       // RouteAssets can take an optional image cache parameter, but we'll leave it as None for simplicity.
-      let mut route_assets = RouteAssets::new(&route_assets_options, None);
+      let mut route_assets = RouteAssets::new(&route_assets_options, None, None);
 
       // Static and dynamic routes share the same interface for building, but static routes do not require any parameters.
       // As such, we can just pass an empty set of parameters (the default for PageParams).
@@ -138,16 +138,16 @@ Each individual page is essentially a static route, but it has a slightly differ
 } else {
   // Every page of a dynamic route may share a reference to the same RouteAssets instance, as it can help with caching.
   // However, it is not strictly necessary, and you may want to instead create a new instance of RouteAssets especially if you were to parallelize the building of pages.
-  let mut page_assets = RouteAssets::new(&route_assets_options, None);
+  let mut page_assets = RouteAssets::new(&route_assets_options, None, None);
 
   // The `get_pages` method returns all the possible pages for this route, along with their parameters and properties.
   // It is very common for dynamic pages to be based on content, for instance a blog post page that has one route per blog post.
   // As such, we create essentially a mini `PageContext` through `DynamicRouteContext` that includes the content sources, so that the page can use them to generate its routes.
-  let mut dynamic_ctx = DynamicRouteContext {
-      content: &content_sources,
-      assets: &mut page_assets,
-      variant: None,
-  };
+  let mut dynamic_ctx = DynamicRouteContext::new(
+      &content_sources,
+      &mut page_assets,
+      None,
+  );
 
   let pages = route.get_pages(&dynamic_ctx);
 

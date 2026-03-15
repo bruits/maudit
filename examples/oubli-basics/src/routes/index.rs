@@ -9,14 +9,12 @@ impl Route for Index {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let logo = ctx.assets.add_image("images/logo.svg")?;
 
-        let archetype_store = ctx
-            .content
-            .get_source::<oubli::ArchetypeStoreEntry>("archetype_store");
+        let archetype_store = ctx.content::<oubli::ArchetypeStoreEntry>("archetype_store");
 
         Ok(layout(html! {
             (logo.render("Maudit logo, a crudely drawn crown"))
             h1 { "Hello World" }
-            @for archetype in &archetype_store.entries {
+            @for archetype in archetype_store.entries() {
                 a href=(archetype.id) { (archetype.data(ctx).title) }
             }
         }))

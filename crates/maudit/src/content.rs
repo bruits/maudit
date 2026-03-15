@@ -8,6 +8,7 @@ use rustc_hash::FxHashMap;
 mod highlight;
 pub mod markdown;
 mod slugger;
+pub mod tracked;
 
 use crate::{
     assets::RouteAssets,
@@ -25,6 +26,7 @@ pub use markdown::{
 };
 
 pub use highlight::{HighlightOptions, highlight_code};
+pub use tracked::TrackedContentSource;
 
 /// Helps implement a struct as a Markdown content entry.
 ///
@@ -107,20 +109,28 @@ pub use maudit_macros::markdown_entry;
 ///
 /// impl Route for Article {
 ///    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-///      let articles = ctx.content.get_source::<ArticleContent>("articles");
+///      let articles = ctx.content::<ArticleContent>("articles");
 ///      let article = articles.get_entry("my-article"); // returns a Entry<ArticleContent>
 ///
 ///      article.render(ctx)
 ///   }
 /// }
 /// ```
+/// A dependency of a content entry, used for incremental build change detection.
+#[derive(Debug, Clone)]
+pub enum Dependency {
+    /// A file on disk. Changes to this file will trigger a rebuild of pages that depend on this entry.
+    File(PathBuf),
+    // TODO: Add other types of dependencies
+}
+
 pub struct EntryInner<T> {
     pub id: String,
     render: OptionalContentRenderFn,
     pub raw_content: Option<String>,
     data_loader: Option<DataLoadingFn<T>>,
     cached_data: std::sync::OnceLock<T>,
-    pub file_path: Option<PathBuf>,
+    pub dependencies: Vec<Dependency>,
 }
 
 /// Helper type for easier usage of `EntryInner`. Content sources always return Arc-wrapped entries, but the user ergonomics of writing `Arc<EntryInner<T>>` is not great.
@@ -132,7 +142,7 @@ pub trait ContentEntry<T> {
         render: OptionalContentRenderFn,
         raw_content: Option<String>,
         data: T,
-        file_path: Option<PathBuf>,
+        dependencies: Vec<Dependency>,
     ) -> Entry<T> {
         Arc::new(EntryInner {
             id,
@@ -140,7 +150,7 @@ pub trait ContentEntry<T> {
             raw_content,
             data_loader: None,
             cached_data: std::sync::OnceLock::from(data),
-            file_path,
+            dependencies,
         })
     }
 
@@ -149,7 +159,7 @@ pub trait ContentEntry<T> {
         render: OptionalContentRenderFn,
         raw_content: Option<String>,
         data_loader: DataLoadingFn<T>,
-        file_path: Option<PathBuf>,
+        dependencies: Vec<Dependency>,
     ) -> Entry<T> {
         Arc::new(EntryInner {
             id,
@@ -157,7 +167,7 @@ pub trait ContentEntry<T> {
             raw_content,
             data_loader: Some(data_loader),
             cached_data: std::sync::OnceLock::new(),
-            file_path,
+            dependencies,
         })
     }
 }
@@ -261,13 +271,13 @@ pub type Untyped = FxHashMap<String, String>;
 /// impl Route<ArticleParams> for Article {
 ///    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
 ///      let params = ctx.params::<ArticleParams>();
-///      let articles = ctx.content.get_source::<ArticleContent>("articles");
+///      let articles = ctx.content::<ArticleContent>("articles");
 ///      let article = articles.get_entry(&params.article);
 ///      article.render(ctx)
 ///   }
 ///
 ///   fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<ArticleParams> {
-///     let articles = ctx.content.get_source::<ArticleContent>("articles");
+///     let articles = ctx.content::<ArticleContent>("articles");
 ///
 ///     articles.into_pages(|entry| Page::from_params(ArticleParams {
 ///        article: entry.id.clone(),
@@ -337,7 +347,7 @@ type ContentSourceInitMethod<T> = Box<dyn Fn() -> Vec<Arc<EntryInner<T>>> + Send
 /// A source of content such as articles, blog posts, etc.
 pub struct ContentSource<T = Untyped> {
     pub name: String,
-    pub entries: Vec<Arc<EntryInner<T>>>,
+    pub entries: FxHashMap<String, Arc<EntryInner<T>>>,
     pub(crate) init_method: ContentSourceInitMethod<T>,
 }
 
@@ -348,27 +358,26 @@ impl<T> ContentSource<T> {
     {
         Self {
             name: name.into(),
-            entries: vec![],
+            entries: FxHashMap::default(),
             init_method: entries,
         }
     }
 
     pub fn get_entry(&self, id: &str) -> &Entry<T> {
         self.entries
-            .iter()
-            .find(|entry| entry.id == id)
+            .get(id)
             .unwrap_or_else(|| panic!("Entry with id '{}' not found", id))
     }
 
     pub fn get_entry_safe(&self, id: &str) -> Option<&Entry<T>> {
-        self.entries.iter().find(|entry| entry.id == id)
+        self.entries.get(id)
     }
 
     pub fn into_params<P>(&self, cb: impl FnMut(&Entry<T>) -> P) -> Vec<P>
     where
         P: Into<PageParams>,
     {
-        self.entries.iter().map(cb).collect()
+        self.entries.values().map(cb).collect()
     }
 
     pub fn into_pages<Params, Props>(
@@ -378,7 +387,7 @@ impl<T> ContentSource<T> {
     where
         Params: Into<PageParams>,
     {
-        self.entries.iter().map(cb).collect()
+        self.entries.values().map(cb).collect()
     }
 }
 
@@ -389,16 +398,58 @@ pub trait ContentSourceInternal: Send + Sync {
     fn init(&mut self);
     fn get_name(&self) -> &str;
     fn as_any(&self) -> &dyn Any; // Used for type checking at runtime
+
+    /// Return (entry_id, file_paths) for each entry.
+    /// Used by the incremental build system to track file hashes.
+    fn entry_file_info(&self) -> Vec<(String, Vec<PathBuf>)>;
+
+    /// Return (entry_id, raw_content) for entries that have raw content loaded.
+    /// Used to hash content without re-reading files from disk.
+    fn entry_raw_content(&self) -> FxHashMap<String, &str> {
+        FxHashMap::default()
+    }
+
+    /// Return sorted entry IDs for structural change detection.
+    fn entry_ids(&self) -> Vec<String>;
 }
 
 impl<T: 'static + Sync + Send> ContentSourceInternal for ContentSource<T> {
     fn init(&mut self) {
-        self.entries = (self.init_method)();
+        self.entries = (self.init_method)()
+            .into_iter()
+            .map(|e| (e.id.clone(), e))
+            .collect();
     }
     fn get_name(&self) -> &str {
         &self.name
     }
     fn as_any(&self) -> &dyn Any {
         self
+    }
+    fn entry_file_info(&self) -> Vec<(String, Vec<PathBuf>)> {
+        self.entries
+            .values()
+            .map(|e| {
+                let files = e
+                    .dependencies
+                    .iter()
+                    .map(|d| match d {
+                        Dependency::File(p) => p.clone(),
+                    })
+                    .collect();
+                (e.id.clone(), files)
+            })
+            .collect()
+    }
+    fn entry_raw_content(&self) -> FxHashMap<String, &str> {
+        self.entries
+            .values()
+            .filter_map(|e| e.raw_content.as_deref().map(|rc| (e.id.clone(), rc)))
+            .collect()
+    }
+    fn entry_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self.entries.keys().cloned().collect();
+        ids.sort();
+        ids
     }
 }

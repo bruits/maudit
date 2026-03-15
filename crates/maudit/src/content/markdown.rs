@@ -13,7 +13,7 @@ use components::{LinkType, ListType, MarkdownComponents, TableAlignment};
 use crate::{
     assets::Asset,
     content::{
-        ContentContext, ContentEntry, Entry,
+        ContentContext, ContentEntry, Dependency, Entry,
         shortcodes::{MarkdownShortcodes, preprocess_shortcodes},
     },
     route::PageContext,
@@ -45,7 +45,7 @@ mod shortcodes_tests;
 ///
 /// impl Route<PageParams, Markup> for Article {
 ///   fn render(&self, ctx: &mut PageContext) -> Markup {
-///     let articles = ctx.content.get_source::<ArticleContent>("articles");
+///     let articles = ctx.content::<ArticleContent>("articles");
 ///     let article = articles.get_entry("my-article");
 ///     let headings = article.data(ctx).get_headings(); // returns a Vec<MarkdownHeading>
 ///     let toc = html! {
@@ -244,7 +244,7 @@ where
             })),
             Some(content),
             data_loader,
-            Some(entry),
+            vec![Dependency::File(entry)],
         ));
     }
 

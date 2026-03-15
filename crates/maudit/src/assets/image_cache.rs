@@ -4,16 +4,47 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
-use base64::Engine;
 use log::debug;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
+use serde::{Deserialize, Serialize};
 
-pub const DEFAULT_IMAGE_CACHE_DIR: &str = "target/maudit_cache/images";
-pub const MANIFEST_VERSION: u32 = 1;
+use std::time::UNIX_EPOCH;
+
+const IMAGE_CACHE_FILENAME: &str = "image_cache.bin";
+
+/// Get file mtime (nanoseconds since epoch) and size for cache invalidation.
+fn file_fingerprint(path: &Path) -> Option<(u64, u64)> {
+    let meta = fs::metadata(path).ok()?;
+    let mtime = meta
+        .modified()
+        .ok()?
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_nanos() as u64;
+    Some((mtime, meta.len()))
+}
+
+/// Serializable image cache data, persisted independently of the build cache.
+#[derive(Serialize, Deserialize, Default)]
+struct PersistedImageCache {
+    placeholders: FxHashMap<PathBuf, PersistedPlaceholder>,
+    transformed: FxHashMap<PathBuf, PathBuf>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct PersistedPlaceholder {
+    thumbhash: Vec<u8>,
+    mtime_ns: u64,
+    size: u64,
+}
 
 #[derive(Debug, Clone)]
 pub struct PlaceholderCacheEntry {
     pub thumbhash: Vec<u8>,
+    /// File mtime in nanoseconds since epoch, used to invalidate stale entries.
+    pub mtime_ns: u64,
+    /// File size in bytes, used to invalidate stale entries.
+    pub size: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -22,19 +53,14 @@ pub struct TransformedImageCacheEntry {
     pub cached_path: PathBuf,
 }
 
-#[derive(Debug, Default)]
-struct CacheManifest {
-    /// Cache for placeholder data (thumbhash, etc.)
-    placeholders: FxHashMap<PathBuf, PlaceholderCacheEntry>,
-    /// Cache for transformed images (path + options -> cached file path)
-    transformed: FxHashMap<PathBuf, TransformedImageCacheEntry>,
-}
-
 #[derive(Debug)]
 struct ImageCacheInner {
-    manifest: CacheManifest,
+    /// Cache for placeholder data (thumbhash, etc.)
+    placeholders: FxHashMap<PathBuf, PlaceholderCacheEntry>,
+    /// Cache for transformed images (final_filename -> cached file path)
+    transformed: FxHashMap<PathBuf, TransformedImageCacheEntry>,
+    /// Directory where actual processed image files are stored
     cache_dir: PathBuf,
-    manifest_path: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -47,159 +73,134 @@ impl Default for ImageCache {
 }
 
 impl ImageCacheInner {
-    pub fn new() -> Self {
-        Self::with_cache_dir(DEFAULT_IMAGE_CACHE_DIR)
+    pub fn new(cache_dir: PathBuf) -> Self {
+        Self {
+            placeholders: FxHashMap::default(),
+            transformed: FxHashMap::default(),
+            cache_dir,
+        }
     }
 
-    pub fn with_cache_dir<P: AsRef<Path>>(cache_dir_path: P) -> Self {
-        let cache_dir = cache_dir_path.as_ref().to_path_buf();
-        let manifest_path = cache_dir.join("manifest");
+    pub fn load(cache_dir: PathBuf, persisted_dir: &Path) -> Self {
+        let path = persisted_dir.join(IMAGE_CACHE_FILENAME);
+        let persisted = fs::read(&path).ok().and_then(|bytes| {
+            bincode::deserialize::<PersistedImageCache>(&bytes)
+                .map_err(|e| debug!("Failed to deserialize image cache: {}", e))
+                .ok()
+        });
 
-        // Create cache directory if it doesn't exist
-        if let Err(e) = fs::create_dir_all(&cache_dir) {
-            debug!("Failed to create cache directory: {}", e);
-        }
-
-        // Load existing manifest or create new one
-        let manifest = if manifest_path.exists() {
-            Self::load_manifest(&manifest_path).unwrap_or_default()
-        } else {
-            CacheManifest::default()
+        let Some(persisted) = persisted else {
+            return Self::new(cache_dir);
         };
 
         debug!(
-            "Image cache initialized with {} placeholders and {} transformed images",
-            manifest.placeholders.len(),
-            manifest.transformed.len()
+            "Image cache loaded with {} placeholders and {} transformed images",
+            persisted.placeholders.len(),
+            persisted.transformed.len()
         );
 
+        let placeholders = persisted
+            .placeholders
+            .into_iter()
+            .map(|(path, p)| {
+                (
+                    path,
+                    PlaceholderCacheEntry {
+                        thumbhash: p.thumbhash,
+                        mtime_ns: p.mtime_ns,
+                        size: p.size,
+                    },
+                )
+            })
+            .collect();
+
+        let transformed = persisted
+            .transformed
+            .into_iter()
+            .map(|(key, cached_path)| (key, TransformedImageCacheEntry { cached_path }))
+            .collect();
+
         Self {
-            manifest,
+            placeholders,
+            transformed,
             cache_dir,
-            manifest_path,
         }
     }
 
-    fn load_manifest(path: &Path) -> Option<CacheManifest> {
-        let content = fs::read_to_string(path).ok()?;
-        let mut manifest = CacheManifest::default();
-        let mut found_version = None;
+    pub fn save(&self, persisted_dir: &Path) -> std::io::Result<()> {
+        fs::create_dir_all(persisted_dir)?;
+        let path = persisted_dir.join(IMAGE_CACHE_FILENAME);
+        let tmp_path = persisted_dir.join(format!("{}.tmp", IMAGE_CACHE_FILENAME));
 
-        let mut current_section = "";
-        for line in content.lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
+        let persisted = PersistedImageCache {
+            placeholders: self
+                .placeholders
+                .iter()
+                .map(|(path, entry)| {
+                    (
+                        path.clone(),
+                        PersistedPlaceholder {
+                            thumbhash: entry.thumbhash.clone(),
+                            mtime_ns: entry.mtime_ns,
+                            size: entry.size,
+                        },
+                    )
+                })
+                .collect(),
+            transformed: self
+                .transformed
+                .iter()
+                .map(|(key, entry)| (key.clone(), entry.cached_path.clone()))
+                .collect(),
+        };
 
-            // Check for version line
-            if line.starts_with("version = ") {
-                if let Some(version_str) = line.strip_prefix("version = ")
-                    && let Ok(version) = version_str.parse::<u32>()
-                {
-                    found_version = Some(version);
-                }
-                continue;
-            }
+        let bytes =
+            bincode::serialize(&persisted).expect("ImageCache serialization should not fail");
+        fs::write(&tmp_path, bytes)?;
+        fs::rename(&tmp_path, &path)?;
+        Ok(())
+    }
 
-            if line == "[placeholders]" {
-                current_section = "placeholders";
-                continue;
-            } else if line == "[transformed]" {
-                current_section = "transformed";
-                continue;
-            }
+    /// Get cached placeholder or None if not found.
+    /// Returns None if the file's mtime+size don't match (image was modified).
+    pub fn get_placeholder(&self, src_path: &Path) -> Option<PlaceholderCacheEntry> {
+        let entry = self.placeholders.get(src_path)?;
 
-            match current_section {
-                "placeholders" => {
-                    if let Some((path_str, thumbhash_b64)) = line.split_once('=')
-                        && let Ok(thumbhash) =
-                            base64::engine::general_purpose::STANDARD.decode(thumbhash_b64)
-                    {
-                        let entry = PlaceholderCacheEntry { thumbhash };
-                        manifest.placeholders.insert(PathBuf::from(path_str), entry);
-                    }
-                }
-                "transformed" => {
-                    if let Some((cache_key, cached_path_str)) = line.split_once('=') {
-                        let entry = TransformedImageCacheEntry {
-                            cached_path: PathBuf::from(cached_path_str),
-                        };
-                        manifest.transformed.insert(PathBuf::from(cache_key), entry);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        // Check version compatibility
-        if let Some(version) = found_version {
-            if version != MANIFEST_VERSION {
-                debug!(
-                    "Manifest version mismatch: found {}, expected {}. Invalidating cache.",
-                    version, MANIFEST_VERSION
-                );
-                // Delete the manifest file to invalidate the cache
-                let _ = fs::remove_file(path);
-                return None;
-            }
-        } else {
-            debug!("No version found in manifest. Invalidating cache.");
-            let _ = fs::remove_file(path);
+        let (mtime_ns, size) = file_fingerprint(src_path)?;
+        if entry.mtime_ns != mtime_ns || entry.size != size {
+            debug!(
+                "Placeholder cache stale for {} (mtime/size mismatch)",
+                src_path.display()
+            );
             return None;
         }
-
-        Some(manifest)
-    }
-
-    pub fn save_manifest(&self) {
-        let mut content = String::new();
-        content.push_str("# Maudit Image Cache Manifest\n");
-        content.push_str(&format!("version = {}\n\n", MANIFEST_VERSION));
-
-        // Write placeholders section
-        content.push_str("[placeholders]\n");
-        for (path, entry) in &self.manifest.placeholders {
-            let thumbhash_b64 = base64::engine::general_purpose::STANDARD.encode(&entry.thumbhash);
-            content.push_str(&format!("{}={}\n", path.to_string_lossy(), thumbhash_b64));
-        }
-
-        content.push_str("\n[transformed]\n");
-        for (cache_key, entry) in &self.manifest.transformed {
-            content.push_str(&format!(
-                "{}={}\n",
-                cache_key.to_string_lossy(),
-                entry.cached_path.to_string_lossy()
-            ));
-        }
-
-        if let Err(e) = fs::write(&self.manifest_path, content) {
-            debug!("Failed to save cache manifest: {}", e);
-        }
-    }
-
-    /// Get cached placeholder or None if not found
-    pub fn get_placeholder(&self, src_path: &Path) -> Option<PlaceholderCacheEntry> {
-        let entry = self.manifest.placeholders.get(src_path)?;
 
         debug!("Placeholder cache hit for {}", src_path.display());
         Some(entry.clone())
     }
 
-    /// Cache a placeholder
+    /// Cache a placeholder, recording the file's current mtime+size for invalidation.
     pub fn cache_placeholder(&mut self, src_path: &Path, thumbhash: Vec<u8>) {
-        let entry = PlaceholderCacheEntry { thumbhash };
+        let Some((mtime_ns, size)) = file_fingerprint(src_path) else {
+            debug!(
+                "Cannot cache placeholder for {} (failed to stat file)",
+                src_path.display()
+            );
+            return;
+        };
+        let entry = PlaceholderCacheEntry {
+            thumbhash,
+            mtime_ns,
+            size,
+        };
 
-        self.manifest
-            .placeholders
-            .insert(src_path.to_path_buf(), entry);
-        self.save_manifest();
+        self.placeholders.insert(src_path.to_path_buf(), entry);
         debug!("Cached placeholder for {}", src_path.display());
     }
 
     /// Get cached transformed image path or None if not found
     pub fn get_transformed_image(&self, final_filename: &Path) -> Option<PathBuf> {
-        let entry = self.manifest.transformed.get(final_filename)?;
+        let entry = self.transformed.get(final_filename)?;
 
         // Check if cached file still exists
         if !entry.cached_path.exists() {
@@ -224,10 +225,7 @@ impl ImageCacheInner {
             cached_path: cached_path.clone(),
         };
 
-        self.manifest
-            .transformed
-            .insert(final_filename.to_path_buf(), entry);
-        self.save_manifest();
+        self.transformed.insert(final_filename.to_path_buf(), entry);
         debug!(
             "Cached transformed image {} -> {}",
             final_filename.display(),
@@ -240,21 +238,73 @@ impl ImageCacheInner {
         &self.cache_dir
     }
 
-    /// Generate a cache path for a transformed image
+    /// Generate a cache path for a transformed image, creating the cache
+    /// directory if it doesn't exist yet.
     pub fn generate_cache_path(&self, final_filename: &Path) -> PathBuf {
+        let _ = fs::create_dir_all(&self.cache_dir);
         self.cache_dir.join(final_filename)
+    }
+
+    /// Remove placeholder and transformed entries not in the given sets.
+    /// Also deletes orphaned files from the cache directory.
+    pub fn gc(
+        &mut self,
+        live_placeholder_paths: &FxHashSet<PathBuf>,
+        live_transformed_filenames: &FxHashSet<PathBuf>,
+    ) -> usize {
+        let before = self.placeholders.len() + self.transformed.len();
+
+        self.placeholders
+            .retain(|k, _| live_placeholder_paths.contains(k));
+
+        let mut orphaned_files = Vec::new();
+        self.transformed.retain(|k, entry| {
+            if live_transformed_filenames.contains(k) {
+                true
+            } else {
+                orphaned_files.push(entry.cached_path.clone());
+                false
+            }
+        });
+
+        // Clean up orphaned cached files on disk
+        for path in &orphaned_files {
+            if let Err(e) = fs::remove_file(path) {
+                debug!(
+                    "Failed to remove orphaned cache file {}: {}",
+                    path.display(),
+                    e
+                );
+            }
+        }
+
+        let after = self.placeholders.len() + self.transformed.len();
+        before - after
     }
 }
 
 impl ImageCache {
     pub fn new() -> Self {
-        Self(Arc::new(Mutex::new(ImageCacheInner::new())))
+        Self::with_cache_dir("target/maudit/images")
     }
 
     pub fn with_cache_dir<P: AsRef<Path>>(cache_dir_path: P) -> Self {
-        Self(Arc::new(Mutex::new(ImageCacheInner::with_cache_dir(
-            cache_dir_path,
+        Self(Arc::new(Mutex::new(ImageCacheInner::new(
+            cache_dir_path.as_ref().to_path_buf(),
         ))))
+    }
+
+    /// Load image cache from its own persisted file, independent of the build cache.
+    pub fn load<P: AsRef<Path>>(cache_dir_path: P, persisted_dir: &Path) -> Self {
+        Self(Arc::new(Mutex::new(ImageCacheInner::load(
+            cache_dir_path.as_ref().to_path_buf(),
+            persisted_dir,
+        ))))
+    }
+
+    /// Save image cache to its own file, independent of the build cache.
+    pub fn save(&self, persisted_dir: &Path) -> std::io::Result<()> {
+        self.lock_inner().save(persisted_dir)
     }
 
     fn lock_inner(&'_ self) -> MutexGuard<'_, ImageCacheInner> {
@@ -268,12 +318,13 @@ impl ImageCache {
         }
     }
 
-    /// Get cached placeholder or None if not found
+    /// Get cached placeholder or None if not found.
+    /// Returns None if the file's mtime+size don't match (image was modified).
     pub fn get_placeholder(&self, src_path: &Path) -> Option<PlaceholderCacheEntry> {
         self.lock_inner().get_placeholder(src_path)
     }
 
-    /// Cache a placeholder
+    /// Cache a placeholder, recording the file's current mtime+size for invalidation.
     pub fn cache_placeholder(&self, src_path: &Path, thumbhash: Vec<u8>) {
         self.lock_inner().cache_placeholder(src_path, thumbhash)
     }
@@ -289,6 +340,12 @@ impl ImageCache {
             .cache_transformed_image(final_filename, cached_path)
     }
 
+    /// Returns true if the cache has no entries.
+    pub fn is_empty(&self) -> bool {
+        let inner = self.lock_inner();
+        inner.placeholders.is_empty() && inner.transformed.is_empty()
+    }
+
     /// Get the cache directory path
     pub fn get_cache_dir(&self) -> PathBuf {
         self.lock_inner().get_cache_dir().clone()
@@ -299,9 +356,17 @@ impl ImageCache {
         self.lock_inner().generate_cache_path(final_filename)
     }
 
-    /// Save the manifest to disk
-    pub fn save_manifest(&self) {
-        self.lock_inner().save_manifest()
+    /// Remove entries not referenced by any current page.
+    /// `live_placeholder_paths`: source paths of images used in the current build.
+    /// `live_transformed_filenames`: final filenames of transformed images in the current build.
+    /// Returns the number of evicted entries.
+    pub fn gc(
+        &self,
+        live_placeholder_paths: &FxHashSet<PathBuf>,
+        live_transformed_filenames: &FxHashSet<PathBuf>,
+    ) -> usize {
+        self.lock_inner()
+            .gc(live_placeholder_paths, live_transformed_filenames)
     }
 }
 
@@ -328,52 +393,151 @@ mod tests {
 
     #[test]
     fn test_default_cache_dir() {
-        // Test that the default cache directory is used when no custom dir is set
-        let expected_default = PathBuf::from(DEFAULT_IMAGE_CACHE_DIR);
-
-        // Create a new cache instance (will use default)
         let cache = ImageCache::new();
-        assert_eq!(cache.get_cache_dir(), expected_default);
+        assert_eq!(cache.get_cache_dir(), PathBuf::from("target/maudit/images"));
     }
 
     #[test]
     fn test_build_options_integration() {
-        use crate::build::options::{AssetsOptions, BuildOptions};
+        use crate::build::options::BuildOptions;
 
-        // Test that BuildOptions can configure the cache directory
-        let custom_cache = PathBuf::from("/tmp/custom_maudit_cache");
+        // Test that image cache dir is derived from cache_dir
         let build_options = BuildOptions {
-            assets: AssetsOptions {
-                image_cache_dir: custom_cache.clone(),
-                ..Default::default()
-            },
+            cache_dir: PathBuf::from("/tmp/custom_maudit_cache"),
             ..Default::default()
         };
 
-        // Create cache with build options
-        let cache = ImageCache::with_cache_dir(&build_options.assets.image_cache_dir);
+        let image_cache_dir = build_options.cache_dir.join("images");
+        let cache = ImageCache::with_cache_dir(&image_cache_dir);
 
-        // Verify it uses the configured directory
-        assert_eq!(cache.get_cache_dir(), custom_cache);
+        assert_eq!(
+            cache.get_cache_dir(),
+            PathBuf::from("/tmp/custom_maudit_cache/images")
+        );
     }
 
     #[test]
     fn test_thread_safety() {
         use std::thread;
 
+        let dir = tempfile::tempdir().unwrap();
+        let img_path = dir.path().join("test.jpg");
+        fs::write(&img_path, b"fake image data").unwrap();
+
         let cache = ImageCache::new();
         let cache_clone = cache.clone();
+        let img_path_clone = img_path.clone();
 
-        // Test that the cache can be shared across threads
         let handle = thread::spawn(move || {
-            cache_clone.cache_placeholder(Path::new("test.jpg"), vec![1, 2, 3, 4]);
+            cache_clone.cache_placeholder(&img_path_clone, vec![1, 2, 3, 4]);
         });
 
         handle.join().unwrap();
 
-        // Verify the placeholder was cached
-        let entry = cache.get_placeholder(Path::new("test.jpg"));
+        let entry = cache.get_placeholder(&img_path);
         assert!(entry.is_some());
         assert_eq!(entry.unwrap().thumbhash, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_save_load_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache_dir = dir.path().join("images");
+        let persisted_dir = dir.path().join("cache");
+        let img_path = dir.path().join("test.png");
+        fs::write(&img_path, b"fake image data").unwrap();
+
+        let image_cache = ImageCache::with_cache_dir(&cache_dir);
+        image_cache.cache_placeholder(&img_path, vec![10, 20, 30]);
+        image_cache.cache_transformed_image(
+            Path::new("test.abc123.webp"),
+            PathBuf::from("/tmp/cached/test.abc123.webp"),
+        );
+
+        image_cache.save(&persisted_dir).unwrap();
+
+        let restored = ImageCache::load(&cache_dir, &persisted_dir);
+
+        // File unchanged → hit
+        let placeholder = restored.get_placeholder(&img_path);
+        assert!(placeholder.is_some());
+        assert_eq!(placeholder.unwrap().thumbhash, vec![10, 20, 30]);
+
+        // Modify the file → stale
+        fs::write(&img_path, b"modified image data").unwrap();
+        let stale = restored.get_placeholder(&img_path);
+        assert!(stale.is_none());
+    }
+
+    #[test]
+    fn test_load_missing_file_returns_empty_cache() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache_dir = dir.path().join("images");
+        let persisted_dir = dir.path().join("nonexistent");
+
+        let cache = ImageCache::load(&cache_dir, &persisted_dir);
+        assert!(cache.get_placeholder(Path::new("anything")).is_none());
+    }
+
+    #[test]
+    fn test_gc_evicts_stale_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let temp_dir = dir.path().join("gc_cache");
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let img_a = dir.path().join("a.png");
+        let img_b = dir.path().join("b.png");
+        let img_c = dir.path().join("c.png");
+        fs::write(&img_a, b"a").unwrap();
+        fs::write(&img_b, b"b").unwrap();
+        fs::write(&img_c, b"c").unwrap();
+
+        let cache = ImageCache::with_cache_dir(&temp_dir);
+
+        cache.cache_placeholder(&img_a, vec![1]);
+        cache.cache_placeholder(&img_b, vec![2]);
+        cache.cache_placeholder(&img_c, vec![3]);
+
+        cache.cache_transformed_image(Path::new("a.abc.webp"), temp_dir.join("a.abc.webp"));
+        cache.cache_transformed_image(Path::new("b.def.webp"), temp_dir.join("b.def.webp"));
+
+        // Only a.png and a.abc.webp are still live
+        let live_placeholders: FxHashSet<PathBuf> = [img_a.clone()].into_iter().collect();
+        let live_transformed: FxHashSet<PathBuf> =
+            [PathBuf::from("a.abc.webp")].into_iter().collect();
+
+        let evicted = cache.gc(&live_placeholders, &live_transformed);
+        assert_eq!(evicted, 3); // b.png, c.png placeholders + b.def.webp transformed
+
+        // a.png still accessible
+        assert!(cache.get_placeholder(&img_a).is_some());
+        // b.png evicted
+        assert!(cache.get_placeholder(&img_b).is_none());
+    }
+
+    #[test]
+    fn test_placeholder_invalidation_on_source_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let img_path = dir.path().join("img.png");
+        fs::write(&img_path, b"original image").unwrap();
+
+        let cache = ImageCache::new();
+
+        // Cache placeholder
+        cache.cache_placeholder(&img_path, vec![1, 2, 3]);
+
+        // Same file → hit
+        assert!(cache.get_placeholder(&img_path).is_some());
+
+        // Modify file → miss (mtime+size changed)
+        fs::write(&img_path, b"modified image content").unwrap();
+        assert!(cache.get_placeholder(&img_path).is_none());
+
+        // Re-cache with new content
+        cache.cache_placeholder(&img_path, vec![4, 5, 6]);
+
+        // New cache entry → hit
+        let entry = cache.get_placeholder(&img_path).unwrap();
+        assert_eq!(entry.thumbhash, vec![4, 5, 6]);
     }
 }

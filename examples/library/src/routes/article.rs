@@ -12,7 +12,7 @@ pub struct ArticleParams {
 
 impl Route<ArticleParams> for Article {
     fn pages(&self, ctx: &mut DynamicRouteContext) -> Pages<ArticleParams> {
-        let articles = ctx.content.get_source::<ArticleContent>("articles");
+        let articles = ctx.content::<ArticleContent>("articles");
 
         articles.into_pages(|entry| {
             Page::from_params(ArticleParams {
@@ -23,7 +23,7 @@ impl Route<ArticleParams> for Article {
 
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
         let params = ctx.params::<ArticleParams>();
-        let articles = ctx.content.get_source::<ArticleContent>("articles");
+        let articles = ctx.content::<ArticleContent>("articles");
         let article = articles.get_entry(&params.article);
 
         let headings = article.data(ctx).get_headings();
