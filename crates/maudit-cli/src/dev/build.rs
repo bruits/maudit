@@ -113,7 +113,7 @@ impl BuildManager {
         }
 
         // Acquire semaphore to ensure only one build/run happens at a time
-        let _ = self.build_semaphore.acquire().await?;
+        let _permit = self.build_semaphore.acquire().await?;
 
         // Notify that we're rerunning
         self.status_manager
@@ -248,7 +248,7 @@ impl BuildManager {
 
         // Acquire semaphore to ensure only one build runs at a time
         // This prevents resource conflicts if cancellation fails
-        let _ = self.build_semaphore.acquire().await?;
+        let _permit = self.build_semaphore.acquire().await?;
 
         // Notify that build is starting
         self.status_manager

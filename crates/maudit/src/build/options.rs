@@ -171,6 +171,7 @@ impl BuildOptions {
 
         let mut hasher = RapidHasher::default();
         self.base_url.hash(&mut hasher);
+        self.output_dir.hash(&mut hasher);
         std::mem::discriminant(&self.prefetch.strategy).hash(&mut hasher);
         self.prefetch.prerender.hash(&mut hasher);
         std::mem::discriminant(&self.prefetch.eagerness).hash(&mut hasher);

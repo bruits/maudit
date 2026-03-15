@@ -141,7 +141,7 @@ pub struct DataPage;
 
 impl Route for DataPage {
     fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
-        let source = ctx.collection::<MyType>("my_data");
+        let source = ctx.content::<MyType>("my_data");
         let entry = source.get_entry("0");
 
         let entry_data = entry.data();
