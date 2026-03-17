@@ -1,5 +1,11 @@
 # maudit
 
+## 0.11.1 — 2026-03-17
+
+### Patch changes
+
+- [3ee9cdf](https://github.com/bruits/maudit/commit/3ee9cdfb5b9ee6adad6513b4cc84df03d5059d73) Fixes tsconfig.json not being resolved correctly — Thanks @Princesseuh!
+
 ## 0.11.0 — 2026-03-17
 
 ### Minor changes
