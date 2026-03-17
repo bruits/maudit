@@ -1,5 +1,27 @@
 # maudit-macros
 
+## 0.8.0 — 2026-03-17
+
+### Minor changes
+
+- [f861bf2](https://github.com/bruits/maudit/commit/f861bf226c76bef451d6dead3e88f0ade09a0082) Adds support for incremental builds. Subsequent builds will now only re-render pages whose content or assets have changed, making rebuilds significantly faster. This is enabled by default. To disable it, set `incremental: false` in your `BuildOptions`:
+  
+  ```rust
+  use maudit::{content_sources, coronate, routes, BuildOptions, BuildOutput};
+  
+  fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
+    coronate(
+      routes![],
+      content_sources![],
+      BuildOptions {
+        incremental: false,
+        ..Default::default()
+      },
+    )
+  }
+  ```
+   — Thanks @Princesseuh!
+
 ## 0.7.0 — 2026-01-10
 
 ### Minor changes

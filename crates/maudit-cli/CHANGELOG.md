@@ -1,5 +1,16 @@
 # maudit-cli
 
+## 0.7.0 — 2026-03-17
+
+### Minor changes
+
+- [a5b49ad](https://github.com/bruits/maudit/commit/a5b49adacbbbc18506e3157ade0547b60e35348a) Adds support for passing a port to the dev using the `--port` option. — Thanks @Princesseuh!
+
+### Patch changes
+
+- [f861bf2](https://github.com/bruits/maudit/commit/f861bf226c76bef451d6dead3e88f0ade09a0082) The Maudit CLI will now directly rerun the website's binary instead of using Cargo when changes do not require recompilation, this on average speeds up the feedback loop by 300-1000ms. — Thanks @Princesseuh!
+- [a5b49ad](https://github.com/bruits/maudit/commit/a5b49adacbbbc18506e3157ade0547b60e35348a) Fixed an issue where Maudit would not properly liberate the port when shutting down — Thanks @Princesseuh!
+
 ## 0.6.2 — 2025-10-21
 
 ### Patch changes
