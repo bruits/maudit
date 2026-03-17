@@ -1058,6 +1058,7 @@ pub async fn build(
                 &prev.bundled_styles,
                 &current_bundled_scripts,
                 &current_bundled_styles,
+                &prev.css_url_dependencies,
             )
         } else {
             true
@@ -1118,7 +1119,7 @@ pub async fn build(
                     None
                 };
 
-                let css = bundle_css(
+                let css_output = bundle_css(
                     style.path(),
                     tailwind_output.as_deref(),
                     should_minify,
@@ -1130,7 +1131,7 @@ pub async fn build(
                     fs::create_dir_all(parent)?;
                 }
 
-                fs::write(style.build_path(), &css)?;
+                fs::write(style.build_path(), &css_output.code)?;
 
                 let filename = style.filename().to_string_lossy().to_string();
                 build_metadata.add_asset(
@@ -1141,6 +1142,20 @@ pub async fn build(
                         .to_string(),
                 );
                 current_output_files.insert(filename);
+
+                // Track copied CSS-referenced assets (fonts, images) for stale cleanup
+                for asset_filename in &css_output.copied_asset_filenames {
+                    current_output_files.insert(asset_filename.clone());
+                }
+
+                // Record dependency fingerprints for incremental rebundle detection
+                if let Some(ref mut cache) = new_cache {
+                    for dep_path in &css_output.source_dependencies {
+                        if let Some(fp) = cache::AssetFileFingerprint::from_path(dep_path) {
+                            cache.css_url_dependencies.insert(dep_path.clone(), fp);
+                        }
+                    }
+                }
             }
         }
 
@@ -1228,6 +1243,7 @@ pub async fn build(
             && let Some(prev_cache) = &incremental_state.previous_cache
         {
             cache.bundled_output_files = prev_cache.bundled_output_files.clone();
+            cache.css_url_dependencies = prev_cache.css_url_dependencies.clone();
         }
         info!(target: "build", "Assets unchanged, skipping bundling");
     }
