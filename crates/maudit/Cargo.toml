@@ -8,6 +8,7 @@ version = "0.11.0"
 license = "MIT"
 edition = "2024"
 rust-version = "1.91.0"
+exclude = ["tsconfig.json"]
 
 [features]
 default = ["maud"]

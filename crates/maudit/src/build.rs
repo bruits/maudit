@@ -1187,6 +1187,7 @@ pub async fn build(
             let mut bundler = Bundler::with_plugins(
                 BundlerOptions {
                     input: Some(bundler_inputs),
+                    cwd: env::current_dir().ok(),
                     minify: Some(rolldown::RawMinifyOptions::Bool(!is_dev())),
                     dir: Some(
                         route_assets_options
