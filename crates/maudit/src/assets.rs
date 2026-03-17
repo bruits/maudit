@@ -8,6 +8,7 @@ use std::rc::Rc;
 use std::time::Instant;
 use std::{fs, path::PathBuf};
 
+pub(crate) mod css;
 mod image;
 pub mod image_cache;
 pub mod prefetch;
@@ -19,7 +20,7 @@ pub use image::{Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAl
 pub use prefetch::PrefetchPlugin;
 pub use script::Script;
 pub use style::{Style, StyleOptions};
-pub use tailwind::TailwindPlugin;
+pub use tailwind::run_tailwind;
 
 use crate::assets::image_cache::ImageCache;
 use crate::errors::AssetError;

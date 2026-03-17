@@ -8,7 +8,7 @@ use log::{debug, info};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
-pub const BUILD_CACHE_VERSION: u32 = 9;
+pub const BUILD_CACHE_VERSION: u32 = 10;
 pub const BUILD_CACHE_FILENAME: &str = "build_cache.bin";
 
 /// Fingerprint for an asset file (script, style, image) used for fast change detection.
@@ -72,10 +72,16 @@ pub struct BuildCache {
     /// Used to detect and clean up deleted static files on incremental builds.
     #[serde(default)]
     pub static_files: FxHashSet<String>,
-    /// Filenames of bundled output files (JS/CSS) produced by the bundler.
+    /// Filenames of bundled output files produced by Rolldown.
     /// Used to detect and clean up stale bundles when inputs change.
     #[serde(default)]
     pub bundled_output_files: FxHashSet<String>,
+    /// Fingerprints of files referenced via `url()` in CSS (fonts, images, etc.).
+    /// When any of these change, CSS must be re-bundled even if the stylesheet
+    /// inputs themselves haven't changed, because the fingerprinted output
+    /// filenames will differ.
+    #[serde(default)]
+    pub css_url_dependencies: FxHashMap<PathBuf, AssetFileFingerprint>,
     /// Persisted asset hash cache: path → list of (options_hash, asset_hash, mtime, size).
     /// Used to skip `calculate_hash` on incremental rebuilds when the file hasn't changed.
     #[serde(default)]
@@ -503,18 +509,32 @@ pub fn find_stale_static_files(
         .collect()
 }
 
-/// Check whether rebundling is needed by comparing asset sets.
+/// Check whether rebundling is needed by comparing asset sets and CSS dependency fingerprints.
 pub fn needs_rebundle(
     cached_scripts: &[SerializedAssetRef],
     cached_styles: &[SerializedAssetRef],
     current_scripts: &FxHashSet<SerializedAssetRef>,
     current_styles: &FxHashSet<SerializedAssetRef>,
+    cached_css_deps: &FxHashMap<PathBuf, AssetFileFingerprint>,
 ) -> bool {
     fn sets_differ(cached: &[SerializedAssetRef], current: &FxHashSet<SerializedAssetRef>) -> bool {
         cached.len() != current.len() || cached.iter().any(|item| !current.contains(item))
     }
 
-    sets_differ(cached_scripts, current_scripts) || sets_differ(cached_styles, current_styles)
+    if sets_differ(cached_scripts, current_scripts) || sets_differ(cached_styles, current_styles) {
+        return true;
+    }
+
+    // Check if any file referenced via url() in CSS has changed (or been deleted).
+    // A change means the fingerprinted output filename will differ, so we must rebundle.
+    for (path, prev_fp) in cached_css_deps {
+        match file_fingerprint(path) {
+            Some((mtime, size)) if mtime == prev_fp.mtime_ns && size == prev_fp.size => {}
+            _ => return true,
+        }
+    }
+
+    false
 }
 
 /// Compute incremental state from a previously loaded cache and current content.
@@ -806,11 +826,14 @@ mod tests {
         let current_scripts: FxHashSet<SerializedAssetRef> = scripts.iter().cloned().collect();
         let current_styles: FxHashSet<SerializedAssetRef> = FxHashSet::default();
 
+        let no_css_deps = FxHashMap::default();
+
         assert!(!needs_rebundle(
             &scripts,
             &styles,
             &current_scripts,
-            &current_styles
+            &current_styles,
+            &no_css_deps,
         ));
 
         // Add a new script
@@ -824,7 +847,8 @@ mod tests {
             &scripts,
             &styles,
             &new_scripts,
-            &current_styles
+            &current_styles,
+            &no_css_deps,
         ));
     }
 

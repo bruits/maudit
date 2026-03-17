@@ -9,11 +9,13 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
+use crate::assets::css::bundle_css;
+use crate::assets::run_tailwind;
 use crate::{
     BuildOptions, BuildOutput,
     assets::{
         self, HashAssetType, HashConfig, PrefetchPlugin, RouteAssets, Script, Style, StyleOptions,
-        TailwindPlugin, calculate_hash, image_cache::ImageCache, prefetch,
+        calculate_hash, image_cache::ImageCache, prefetch,
     },
     build::{images::process_image, options::PrefetchStrategy},
     content::ContentSources,
@@ -26,7 +28,7 @@ use crate::{
 use colored::{ColoredString, Colorize};
 use log::{debug, info, trace, warn};
 use pathdiff::diff_paths;
-use rolldown::{Bundler, BundlerOptions, InputItem, ModuleType};
+use rolldown::{Bundler, BundlerOptions, InputItem};
 use rolldown_plugin_replace::ReplacePlugin;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -201,10 +203,17 @@ pub async fn build(
 
     let previous_build_cache = if options.incremental {
         let cache = cache::BuildCache::load(&options.cache_dir);
-        if cache.is_some() {
-            info!(target: "cache", "Build cache loaded in {}", format_elapsed_time(cache_load_start.elapsed(), &FormatElapsedTimeOptions::default()));
+        if let Some(cache) = cache {
+            if !options.output_dir.exists() {
+                info!(target: "cache", "Output directory missing, forcing full rebuild");
+                None
+            } else {
+                info!(target: "cache", "Build cache loaded in {}", format_elapsed_time(cache_load_start.elapsed(), &FormatElapsedTimeOptions::default()));
+                Some(cache)
+            }
+        } else {
+            None
         }
-        cache
     } else {
         None
     };
@@ -502,11 +511,8 @@ pub async fn build(
                     default_scripts.clone(),
                     vec![],
                 );
-                let mut dynamic_ctx = DynamicRouteContext::new(
-                    content_sources,
-                    &mut pages_route_assets,
-                    None,
-                );
+                let mut dynamic_ctx =
+                    DynamicRouteContext::new(content_sources, &mut pages_route_assets, None);
                 let pages = route.get_pages(&mut dynamic_ctx);
                 let get_pages_access_log = dynamic_ctx.take_access_log();
 
@@ -580,15 +586,13 @@ pub async fn build(
                         // fall back to source-level tracking (all pages dirty when
                         // any entry changes) to avoid serving stale content.
                         if let Some((src, id)) = &page.3 {
-                            access_log
-                                .entries_read
-                                .push((src.clone(), id.clone()));
+                            access_log.entries_read.push((src.clone(), id.clone()));
                         } else if access_log.entries_read.is_empty()
                             && access_log.sources_iterated.is_empty()
                         {
-                            access_log.sources_iterated.extend(
-                                get_pages_access_log.sources_iterated.iter().cloned(),
-                            );
+                            access_log
+                                .sources_iterated
+                                .extend(get_pages_access_log.sources_iterated.iter().cloned());
                         }
 
                         write_route_file(&content, &file_path, &mut created_dirs)?;
@@ -847,15 +851,13 @@ pub async fn build(
                         let mut access_log = page_ctx.take_access_log();
                         access_log.merge_entries_read(&get_pages_access_log);
                         if let Some((src, id)) = &page.3 {
-                            access_log
-                                .entries_read
-                                .push((src.clone(), id.clone()));
+                            access_log.entries_read.push((src.clone(), id.clone()));
                         } else if access_log.entries_read.is_empty()
                             && access_log.sources_iterated.is_empty()
                         {
-                            access_log.sources_iterated.extend(
-                                get_pages_access_log.sources_iterated.iter().cloned(),
-                            );
+                            access_log
+                                .sources_iterated
+                                .extend(get_pages_access_log.sources_iterated.iter().cloned());
                         }
 
                         write_route_file(&content, &file_path, &mut created_dirs)?;
@@ -1056,6 +1058,7 @@ pub async fn build(
                 &prev.bundled_styles,
                 &current_bundled_scripts,
                 &current_bundled_styles,
+                &prev.css_url_dependencies,
             )
         } else {
             true
@@ -1093,20 +1096,70 @@ pub async fn build(
         let assets_start = Instant::now();
         print_title("generating assets");
 
-        let css_inputs = build_pages_styles
-            .iter()
-            .map(|style| InputItem {
-                name: Some(
-                    style
-                        .filename()
-                        .with_extension("")
+        let mut current_output_files: FxHashSet<String> = FxHashSet::default();
+
+        // Process CSS files with lightningcss (with optional Tailwind pre-processing)
+        if !build_pages_styles.is_empty() {
+            let should_minify = !is_dev();
+
+            for style in &build_pages_styles {
+                debug!(
+                    target: "bundling",
+                    "Processing CSS: {:?}",
+                    style.path()
+                );
+
+                // If the style is flagged for Tailwind, run the Tailwind CLI first
+                let tailwind_output = if style.tailwind {
+                    Some(run_tailwind(
+                        &options.assets.tailwind_binary_path,
+                        style.path(),
+                    )?)
+                } else {
+                    None
+                };
+
+                let css_output = bundle_css(
+                    style.path(),
+                    tailwind_output.as_deref(),
+                    should_minify,
+                    &route_assets_options.output_assets_dir,
+                )?;
+
+                // Ensure the output directory exists
+                if let Some(parent) = style.build_path().parent() {
+                    fs::create_dir_all(parent)?;
+                }
+
+                fs::write(style.build_path(), &css_output.code)?;
+
+                let filename = style.filename().to_string_lossy().to_string();
+                build_metadata.add_asset(
+                    route_assets_options
+                        .output_assets_dir
+                        .join(&filename)
                         .to_string_lossy()
                         .to_string(),
-                ),
-                import: { style.path().to_string_lossy().to_string() },
-            })
-            .collect::<Vec<InputItem>>();
+                );
+                current_output_files.insert(filename);
 
+                // Track copied CSS-referenced assets (fonts, images) for stale cleanup
+                for asset_filename in &css_output.copied_asset_filenames {
+                    current_output_files.insert(asset_filename.clone());
+                }
+
+                // Record dependency fingerprints for incremental rebundle detection
+                if let Some(ref mut cache) = new_cache {
+                    for dep_path in &css_output.source_dependencies {
+                        if let Some(fp) = cache::AssetFileFingerprint::from_path(dep_path) {
+                            cache.css_url_dependencies.insert(dep_path.clone(), fp);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Process JS files with rolldown
         let bundler_inputs = build_pages_scripts
             .iter()
             .map(|script| InputItem {
@@ -1119,7 +1172,6 @@ pub async fn build(
                         .to_string(),
                 ),
             })
-            .chain(css_inputs.into_iter())
             .collect::<Vec<InputItem>>();
 
         debug!(
@@ -1132,10 +1184,6 @@ pub async fn build(
         );
 
         if !bundler_inputs.is_empty() {
-            let mut module_types_hashmap = FxHashMap::default();
-            module_types_hashmap.insert("woff".to_string(), ModuleType::Asset);
-            module_types_hashmap.insert("woff2".to_string(), ModuleType::Asset);
-
             let mut bundler = Bundler::with_plugins(
                 BundlerOptions {
                     input: Some(bundler_inputs),
@@ -1146,23 +1194,9 @@ pub async fn build(
                             .to_string_lossy()
                             .to_string(),
                     ),
-                    module_types: Some(module_types_hashmap),
                     ..Default::default()
                 },
                 vec![
-                    Arc::new(TailwindPlugin {
-                        tailwind_path: options.assets.tailwind_binary_path.clone(),
-                        tailwind_entries: build_pages_styles
-                            .iter()
-                            .filter_map(|style| {
-                                if style.tailwind {
-                                    Some(style.path().clone())
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect::<Vec<PathBuf>>(),
-                    }),
                     Arc::new(PrefetchPlugin {}),
                     Arc::new(ReplacePlugin::new(FxHashMap::default())?),
                 ],
@@ -1170,7 +1204,6 @@ pub async fn build(
 
             let result = bundler.write().await?;
 
-            let mut current_output_files: FxHashSet<String> = FxHashSet::default();
             for output in &result.assets {
                 let filename = output.filename().to_string();
                 build_metadata.add_asset(
@@ -1182,24 +1215,24 @@ pub async fn build(
                 );
                 current_output_files.insert(filename);
             }
+        }
 
-            // Clean up stale bundled files from previous builds
-            if !incremental_state.is_full_build()
-                && let Some(prev_cache) = &incremental_state.previous_cache
-            {
-                for stale_file in &prev_cache.bundled_output_files {
-                    if !current_output_files.contains(stale_file) {
-                        let stale_path = route_assets_options.output_assets_dir.join(stale_file);
-                        if fs::remove_file(&stale_path).is_ok() {
-                            info!(target: "cache", "Removed stale bundle: {}", stale_path.display());
-                        }
+        // Clean up stale bundled files from previous builds
+        if !incremental_state.is_full_build()
+            && let Some(prev_cache) = &incremental_state.previous_cache
+        {
+            for stale_file in &prev_cache.bundled_output_files {
+                if !current_output_files.contains(stale_file) {
+                    let stale_path = route_assets_options.output_assets_dir.join(stale_file);
+                    if fs::remove_file(&stale_path).is_ok() {
+                        info!(target: "cache", "Removed stale bundle: {}", stale_path.display());
                     }
                 }
             }
+        }
 
-            if let Some(ref mut cache) = new_cache {
-                cache.bundled_output_files = current_output_files;
-            }
+        if let Some(ref mut cache) = new_cache {
+            cache.bundled_output_files = current_output_files;
         }
 
         info!(target: "build", "{}", format!("Assets generated in {}", format_elapsed_time(assets_start.elapsed(), &section_format_options)).bold());
@@ -1210,6 +1243,7 @@ pub async fn build(
             && let Some(prev_cache) = &incremental_state.previous_cache
         {
             cache.bundled_output_files = prev_cache.bundled_output_files.clone();
+            cache.css_url_dependencies = prev_cache.css_url_dependencies.clone();
         }
         info!(target: "build", "Assets unchanged, skipping bundling");
     }

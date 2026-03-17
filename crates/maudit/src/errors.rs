@@ -53,6 +53,13 @@ pub enum AssetError {
         #[source]
         source: std::io::Error,
     },
+    #[error("Failed to copy CSS-referenced asset {source_path} to {dest_path}")]
+    CopyFailed {
+        source_path: PathBuf,
+        dest_path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
     #[error("Failed to load image for placeholder generation: {path}")]
     ImageLoadFailed {
         path: PathBuf,
