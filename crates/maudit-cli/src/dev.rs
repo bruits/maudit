@@ -3,6 +3,7 @@ pub(crate) mod server;
 mod build;
 mod dep_tracker;
 mod filterer;
+mod headers_file;
 
 use notify::{
     EventKind, RecursiveMode,
@@ -11,11 +12,12 @@ use notify::{
 use notify_debouncer_full::{DebounceEventResult, DebouncedEvent, new_debouncer};
 use quanta::Instant;
 use server::StatusManager;
-use std::{fs, path::Path, path::PathBuf};
+use std::{fs, path::Path, path::PathBuf, sync::Arc};
 use tokio::{signal, sync::mpsc::channel, task::JoinHandle};
 use tracing::{error, info};
 
 use crate::dev::build::BuildManager;
+use crate::dev::headers_file::HeadersFile;
 
 pub async fn start_dev_env(
     cwd: &str,
@@ -70,6 +72,9 @@ pub async fn start_dev_env(
 
     let mut web_server_thread: Option<tokio::task::JoinHandle<()>> = None;
 
+    // TODO: read from a configured `dist_dir` once that's plumbed through.
+    let headers_file = Arc::new(HeadersFile::load(Path::new("dist")));
+
     // If initial build succeeded, start web server immediately
     if initial_build_success {
         info!(name: "dev", "Starting web server...");
@@ -80,11 +85,13 @@ pub async fn start_dev_env(
             port,
             None,
             build_manager.current_status(),
+            headers_file.clone(),
         )));
     }
 
     // Clone build manager for the file watcher task
     let build_manager_watcher = build_manager.clone();
+    let headers_file_watcher = headers_file.clone();
 
     let file_watcher_task = tokio::spawn(async move {
         let mut dev_server_started = initial_build_success;
@@ -151,6 +158,7 @@ pub async fn start_dev_env(
                                         Ok(true) => {
                                             info!(name: "build", "Initial build succeeded! Starting web server...");
                                             dev_server_started = true;
+                                            headers_file_watcher.reload();
 
                                             dev_server_handle =
                                                 Some(tokio::spawn(server::start_dev_web_server(
@@ -160,6 +168,7 @@ pub async fn start_dev_env(
                                                     port,
                                                     None,
                                                     build_manager_watcher.current_status(),
+                                                    headers_file_watcher.clone(),
                                                 )));
                                         }
                                         Ok(false) => {
@@ -181,6 +190,7 @@ pub async fn start_dev_env(
 
                                     // Spawn in background so file watcher can continue
                                     let build_manager_clone = build_manager_watcher.clone();
+                                    let headers_file_clone = headers_file_watcher.clone();
                                     tokio::spawn(async move {
                                         let result = if needs_recompile {
                                             build_manager_clone.start_build().await
@@ -190,7 +200,7 @@ pub async fn start_dev_env(
 
                                         match result {
                                             Ok(_) => {
-                                                // Build/rerun completed (success or failure already logged)
+                                                headers_file_clone.reload();
                                             }
                                             Err(e) => {
                                                 error!(name: "build", "Failed to start build/rerun: {}", e);

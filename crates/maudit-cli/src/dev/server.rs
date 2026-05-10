@@ -10,6 +10,8 @@ use axum::{
     response::{IntoResponse, Response},
     routing::get,
 };
+
+use crate::dev::headers_file::HeadersFile;
 use quanta::Instant;
 use serde_json::json;
 use tokio::{
@@ -130,6 +132,7 @@ pub async fn start_dev_web_server(
     port: Option<u16>,
     initial_error: Option<String>,
     current_status: Arc<RwLock<Option<PersistentStatus>>>,
+    headers_file: Arc<HeadersFile>,
 ) {
     // TODO: The dist dir should be configurable
     let dist_dir = "dist";
@@ -191,6 +194,13 @@ pub async fn start_dev_web_server(
         .route("/ws", get(ws_handler))
         .fallback_service(serve_dir)
         .layer(middleware::from_fn(add_cache_headers))
+        .layer({
+            let headers_file = headers_file.clone();
+            middleware::from_fn(move |req, next| {
+                let headers_file = headers_file.clone();
+                async move { apply_headers_file(req, next, headers_file).await }
+            })
+        })
         .layer(middleware::from_fn(move |req, next| {
             add_dev_client_script(req, next, socket_addr, host)
         }))
@@ -298,6 +308,29 @@ async fn add_dev_client_script(
         return res;
     }
 
+    res
+}
+
+async fn apply_headers_file(
+    req: Request,
+    next: Next,
+    headers_file: Arc<HeadersFile>,
+) -> Response {
+    if headers_file.is_empty() {
+        return next.run(req).await;
+    }
+    let path = req.uri().path().to_string();
+    let mut res = next.run(req).await;
+    let extra = headers_file.headers_for(&path);
+    if !extra.is_empty() {
+        let response_headers = res.headers_mut();
+        for (name, value) in &extra {
+            // Insert overwrites; matches the spec's "headers from `_headers`
+            // override defaults" behaviour. Multiple matches against the same
+            // name are already comma-joined inside `headers_for`.
+            response_headers.insert(name.clone(), value.clone());
+        }
+    }
     res
 }
 
