@@ -1,5 +1,11 @@
 # maudit-cli
 
+## 0.8.0 — 2026-05-10
+
+### Minor changes
+
+- [fe90158](https://github.com/bruits/maudit/commit/fe901584913531a1d33404173e38b4373e35853d) Added support for `_headers` files to the dev server. Drop a `_headers` file in your static directory of your website and the dev server will apply its rules to responses, matching the behaviour of hosts like Cloudflare and Netlify that supports those files in production. — Thanks @Princesseuh!
+
 ## 0.7.0 — 2026-03-17
 
 ### Minor changes
