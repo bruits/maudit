@@ -1,5 +1,11 @@
 # maudit
 
+## 0.11.2 — 2026-05-10
+
+### Patch changes
+
+- [05510ea](https://github.com/bruits/maudit/commit/05510ea411c9cbe4a245cab18365e366c72b43df) Enabled Rolldown's `resolve_new_url_to_asset` experimental feature to transform `new URL('./path', import.meta.url)` patterns to bundled asset URLs. — Thanks @Princesseuh!
+
 ## 0.11.1 — 2026-03-17
 
 ### Patch changes
