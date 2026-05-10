@@ -28,7 +28,7 @@ use crate::{
 use colored::{ColoredString, Colorize};
 use log::{debug, info, trace, warn};
 use pathdiff::diff_paths;
-use rolldown::{Bundler, BundlerOptions, InputItem};
+use rolldown::{Bundler, BundlerOptions, ExperimentalOptions, InputItem};
 use rolldown_plugin_replace::ReplacePlugin;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -1195,6 +1195,10 @@ pub async fn build(
                             .to_string_lossy()
                             .to_string(),
                     ),
+                    experimental: Some(ExperimentalOptions {
+                        resolve_new_url_to_asset: Some(true),
+                        ..Default::default()
+                    }),
                     ..Default::default()
                 },
                 vec![
