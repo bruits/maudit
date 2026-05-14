@@ -985,7 +985,12 @@ pub fn finish_route(
     }
 }
 
-pub type PagesResult = (PageParams, PageProps, PageTypedParams, Option<(String, String)>);
+pub type PagesResult = (
+    PageParams,
+    PageProps,
+    PageTypedParams,
+    Option<(String, String)>,
+);
 pub type PagesResults = Vec<PagesResult>;
 
 pub type PageProps = Box<dyn Any + Send + Sync>;

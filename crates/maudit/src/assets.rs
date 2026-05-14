@@ -12,15 +12,13 @@ pub(crate) mod css;
 mod image;
 pub mod image_cache;
 pub mod prefetch;
-mod sanitize_filename;
+pub(crate) mod sanitize_filename;
 mod script;
 mod style;
 mod tailwind;
 pub use image::{Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt, RenderedImage};
 pub use prefetch::PrefetchPlugin;
 pub use script::Script;
-pub(crate) use script::make_placeholder_url as make_script_placeholder_url;
-pub(crate) use style::make_placeholder_url as make_style_placeholder_url;
 pub use style::{Style, StyleOptions};
 pub use tailwind::run_tailwind;
 

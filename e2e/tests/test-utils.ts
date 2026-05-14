@@ -162,13 +162,14 @@ export class DevServerPool {
 	}
 }
 
-// Worker-scoped server pool - one server per worker, shared across all tests in that worker
-// Key format: "workerIndex-fixtureName"
-const workerServers = new Map<string, DevServer>();
-
 /**
  * Create a test instance with a devServer fixture for a specific fixture.
  * This allows each test file to use a different fixture while sharing the same pattern.
+ *
+ * The dev server is worker-scoped: one server per Playwright worker, reused across every
+ * test in that worker. The server is explicitly stopped when the worker exits, otherwise
+ * the spawned `maudit dev` subprocess keeps its stdout/stderr pipes attached to the worker
+ * and the worker can hang at shutdown (this is what was causing CI to get stuck).
  *
  * @param fixtureName - Name of the fixture directory under e2e/fixtures/
  * @param basePort - Starting port number (default: 1864). Each worker gets basePort + workerIndex
@@ -184,31 +185,22 @@ const workerServers = new Map<string, DevServer>();
  * ```
  */
 export function createTestWithFixture(fixtureName: string, basePort = 1864) {
-	return base.extend<{ devServer: DevServer }>({
-		// oxlint-disable-next-line no-empty-pattern
-		devServer: async ({}, use, testInfo) => {
-			// Use worker index to get or create a server for this worker
-			const workerIndex = testInfo.workerIndex;
-			const serverKey = `${workerIndex}-${fixtureName}`;
-
-			let server = workerServers.get(serverKey);
-
-			if (!server) {
-				// Assign unique port based on worker index
-				const port = basePort + workerIndex;
-
-				server = await startDevServer({
-					fixture: fixtureName,
-					port,
-				});
-
-				workerServers.set(serverKey, server);
-			}
-
-			await use(server);
-
-			// Don't stop the server here - it stays alive for all tests in this worker
-			// Playwright will clean up when the worker exits
+	return base.extend<{ devServer: DevServer }, { _workerDevServer: DevServer }>({
+		_workerDevServer: [
+			// oxlint-disable-next-line no-empty-pattern
+			async ({}, use, workerInfo) => {
+				const port = basePort + workerInfo.workerIndex;
+				const server = await startDevServer({ fixture: fixtureName, port });
+				try {
+					await use(server);
+				} finally {
+					await server.stop();
+				}
+			},
+			{ scope: "worker" },
+		],
+		devServer: async ({ _workerDevServer }, use) => {
+			await use(_workerDevServer);
 		},
 	});
 }
