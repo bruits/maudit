@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use crate::assets::{RouteAssetsOptions, make_filename, make_final_path};
+use crate::assets::{RouteAssetsOptions, make_filename, make_final_path, make_final_url};
 
 #[derive(Clone, PartialEq, Eq, Hash, Default)]
 pub struct StyleOptions {
@@ -29,10 +29,8 @@ impl Style {
     ) -> Self {
         let filename = make_filename(&path, &hash, Some("css"));
         let build_path = make_final_path(&route_assets_options.output_assets_dir, &filename);
-        // Placeholder URL; replaced after CSS bundling with a content-hashed final URL
-        // so that Tailwind-scanned classes (which change the bundled bytes without
-        // changing the source file) cascade into a new filename.
-        let url = make_placeholder_url(&route_assets_options.assets_dir, &hash);
+        // See `Script::new`.
+        let url = make_final_url(&route_assets_options.assets_dir, &filename);
 
         Self {
             path,
@@ -44,12 +42,4 @@ impl Style {
             build_path,
         }
     }
-}
-
-pub(crate) fn make_placeholder_url(assets_dir: &Path, source_hash: &str) -> String {
-    format!(
-        "/{}/__maudit_style_{}__.css",
-        assets_dir.display(),
-        source_hash
-    )
 }

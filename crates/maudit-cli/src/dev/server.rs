@@ -311,11 +311,7 @@ async fn add_dev_client_script(
     res
 }
 
-async fn apply_headers_file(
-    req: Request,
-    next: Next,
-    headers_file: Arc<HeadersFile>,
-) -> Response {
+async fn apply_headers_file(req: Request, next: Next, headers_file: Arc<HeadersFile>) -> Response {
     if headers_file.is_empty() {
         return next.run(req).await;
     }
