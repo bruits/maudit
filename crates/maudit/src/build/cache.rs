@@ -8,7 +8,7 @@ use log::{debug, info};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
-pub const BUILD_CACHE_VERSION: u32 = 10;
+pub const BUILD_CACHE_VERSION: u32 = 11;
 pub const BUILD_CACHE_FILENAME: &str = "build_cache.bin";
 
 /// Fingerprint for an asset file (script, style, image) used for fast change detection.
@@ -86,6 +86,16 @@ pub struct BuildCache {
     /// Used to skip `calculate_hash` on incremental rebuilds when the file hasn't changed.
     #[serde(default)]
     pub persisted_asset_hashes: FxHashMap<PathBuf, Vec<PersistedAssetHash>>,
+    /// Map from a script's placeholder URL to the final URL it was substituted with
+    /// in the previous build. On rebundle, cached HTML on disk contains the previous
+    /// final URL; we look up the new URL from the current bundle output and rewrite.
+    #[serde(default)]
+    pub script_placeholder_urls: FxHashMap<String, String>,
+    /// Same as `script_placeholder_urls` for CSS — captures Tailwind output (and
+    /// any `@import`/lightningcss-driven byte changes) that don't show up in the
+    /// source-file hash.
+    #[serde(default)]
+    pub style_placeholder_urls: FxHashMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
