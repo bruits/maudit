@@ -218,8 +218,13 @@ pub async fn build(
         None
     };
 
-    // Create route_assets_options with the image cache
-    let route_assets_options = options.route_assets_options();
+    // Coronate bundles via Rolldown/lightningcss with content-hashed filenames, so
+    // the substitution pass below rewrites the placeholder URLs.
+    let route_assets_options = {
+        let mut opts = options.route_assets_options();
+        opts.intermediate_url_format = assets::IntermediateUrlFormat::Placeholder;
+        opts
+    };
 
     info!(target: "build", "Output directory: {}", options.output_dir.display());
 
@@ -327,8 +332,8 @@ pub async fn build(
     // Pages flagged at write time as containing an asset-URL prefix. The post-bundle
     // pass only re-reads these, not every page.
     let mut pages_with_assets: Vec<PathBuf> = Vec::new();
-    let assets_prefix_string = format!("/{}/", route_assets_options.assets_dir.display());
-    let assets_prefix_bytes = assets_prefix_string.as_bytes();
+    // Pending prefix is what render-time HTML contains; substitution scans for it.
+    let assets_prefix_bytes = assets::PENDING_URL_PREFIX.as_bytes();
     // Seed the asset hash cache from the previous build cache.
     // Only reuse entries whose file mtime+size still match (cheap stat check).
     let asset_hash_cache: assets::AssetHashCache = {
@@ -1194,7 +1199,7 @@ pub async fn build(
                     route_assets_options.assets_dir.display(),
                     filename
                 );
-                style_substitutions.insert(style.url.clone(), final_url);
+                style_substitutions.insert(style.url.as_rendered().to_owned(), final_url);
 
                 // Track copied CSS-referenced assets (fonts, images) for stale cleanup
                 for asset_filename in &css_output.copied_asset_filenames {
@@ -1293,7 +1298,8 @@ pub async fn build(
                                 route_assets_options.assets_dir.display(),
                                 filename
                             );
-                            script_substitutions.insert(script.url.clone(), final_url);
+                            script_substitutions
+                                .insert(script.url.as_rendered().to_owned(), final_url);
                         }
                     }
                     // Fingerprint each Rolldown-emitted asset (WASM, images, fonts) so
@@ -1365,6 +1371,17 @@ pub async fn build(
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone())),
         );
+        // Surface the substitution map on BuildOutput so `AssetUrl::resolve` /
+        // `AssetPath::resolve` can find the post-build URL/path for any asset
+        // Maudit rewrote.
+        for (rendered, resolved) in &new_map {
+            build_metadata.record_asset_substitution(
+                rendered.clone(),
+                resolved.clone(),
+                url_to_disk_path(rendered, &options.output_dir),
+                url_to_disk_path(resolved, &options.output_dir),
+            );
+        }
         let previous_map = incremental_state.previous_cache.as_ref().map(|c| {
             let mut m = c.script_substitutions.clone();
             m.extend(
@@ -1388,7 +1405,7 @@ pub async fn build(
         let start_time = Instant::now();
         build_pages_images.par_iter().for_each(|image| {
             let start_process = Instant::now();
-            let dest_path: &PathBuf = image.build_path();
+            let dest_path: &Path = image.build_path().as_rendered();
 
             let image_cwd_relative = diff_paths(image.path(), env::current_dir().unwrap())
                 .unwrap_or_else(|| image.path().to_path_buf());
@@ -1645,6 +1662,11 @@ fn hash_asset_bytes(bytes: &[u8]) -> String {
     bytes.hash(&mut hasher);
     let hex = format!("{:016x}", hasher.finish());
     hex[..5].to_string()
+}
+
+/// `/_maudit/foo-abc.js` + `<output_dir>` → `<output_dir>/_maudit/foo-abc.js`.
+fn url_to_disk_path(url: &str, output_dir: &Path) -> PathBuf {
+    output_dir.join(url.trim_start_matches('/'))
 }
 
 /// Sanitized file stem (e.g. `data/foo.js` → `foo`). Used as Rolldown's `[name]`;

@@ -946,14 +946,20 @@ pub fn finish_route(
                 element!("head", |el| {
                     for style in &included_styles {
                         el.append(
-                            &format!("<link rel=\"stylesheet\" href=\"{}\">", style.url()),
+                            &format!(
+                                "<link rel=\"stylesheet\" href=\"{}\">",
+                                style.url().as_rendered()
+                            ),
                             lol_html::html_content::ContentType::Html,
                         );
                     }
 
                     for script in &included_scripts {
                         el.append(
-                            &format!("<script src=\"{}\" type=\"module\"></script>", script.url()),
+                            &format!(
+                                "<script src=\"{}\" type=\"module\"></script>",
+                                script.url().as_rendered()
+                            ),
                             lol_html::html_content::ContentType::Html,
                         );
                     }
