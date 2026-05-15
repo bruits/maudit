@@ -8,7 +8,7 @@ use log::{debug, info};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
-pub const BUILD_CACHE_VERSION: u32 = 10;
+pub const BUILD_CACHE_VERSION: u32 = 13;
 pub const BUILD_CACHE_FILENAME: &str = "build_cache.bin";
 
 /// Fingerprint for an asset file (script, style, image) used for fast change detection.
@@ -82,10 +82,24 @@ pub struct BuildCache {
     /// filenames will differ.
     #[serde(default)]
     pub css_url_dependencies: FxHashMap<PathBuf, AssetFileFingerprint>,
+    /// Fingerprints of files Rolldown emitted as assets (WASM, images, fonts via
+    /// `new URL(..., import.meta.url)`). A change here changes the bundled chunk's
+    /// bytes even when no JS source changed, so we must re-bundle.
+    #[serde(default)]
+    pub script_asset_dependencies: FxHashMap<PathBuf, AssetFileFingerprint>,
     /// Persisted asset hash cache: path → list of (options_hash, asset_hash, mtime, size).
     /// Used to skip `calculate_hash` on incremental rebuilds when the file hasn't changed.
     #[serde(default)]
     pub persisted_asset_hashes: FxHashMap<PathBuf, Vec<PersistedAssetHash>>,
+    /// Substitution map: source-hash URL → content-hashed URL emitted by Rolldown
+    /// in the previous build. On rebundle, cached HTML on disk contains the previous
+    /// content-hashed URL; we look up the new URL by source-hash key and rewrite.
+    #[serde(default)]
+    pub script_substitutions: FxHashMap<String, String>,
+    /// Same as `script_substitutions` for CSS. Captures Tailwind output and any
+    /// `@import`/lightningcss-driven byte changes that the source-file hash misses.
+    #[serde(default)]
+    pub style_substitutions: FxHashMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -509,13 +523,14 @@ pub fn find_stale_static_files(
         .collect()
 }
 
-/// Check whether rebundling is needed by comparing asset sets and CSS dependency fingerprints.
+/// Check whether rebundling is needed by comparing asset sets and dependency fingerprints.
 pub fn needs_rebundle(
     cached_scripts: &[SerializedAssetRef],
     cached_styles: &[SerializedAssetRef],
     current_scripts: &FxHashSet<SerializedAssetRef>,
     current_styles: &FxHashSet<SerializedAssetRef>,
     cached_css_deps: &FxHashMap<PathBuf, AssetFileFingerprint>,
+    cached_script_asset_deps: &FxHashMap<PathBuf, AssetFileFingerprint>,
 ) -> bool {
     fn sets_differ(cached: &[SerializedAssetRef], current: &FxHashSet<SerializedAssetRef>) -> bool {
         cached.len() != current.len() || cached.iter().any(|item| !current.contains(item))
@@ -525,13 +540,20 @@ pub fn needs_rebundle(
         return true;
     }
 
-    // Check if any file referenced via url() in CSS has changed (or been deleted).
-    // A change means the fingerprinted output filename will differ, so we must rebundle.
-    for (path, prev_fp) in cached_css_deps {
-        match file_fingerprint(path) {
-            Some((mtime, size)) if mtime == prev_fp.mtime_ns && size == prev_fp.size => {}
-            _ => return true,
-        }
+    fn any_fingerprint_changed(deps: &FxHashMap<PathBuf, AssetFileFingerprint>) -> bool {
+        deps.iter().any(|(path, prev_fp)| {
+            !matches!(
+                file_fingerprint(path),
+                Some((mtime, size)) if mtime == prev_fp.mtime_ns && size == prev_fp.size
+            )
+        })
+    }
+
+    // A changed CSS url() target or Rolldown-emitted asset changes the next bundle's
+    // output bytes, so we must re-bundle to pick it up.
+    if any_fingerprint_changed(cached_css_deps) || any_fingerprint_changed(cached_script_asset_deps)
+    {
+        return true;
     }
 
     false
@@ -827,6 +849,7 @@ mod tests {
         let current_styles: FxHashSet<SerializedAssetRef> = FxHashSet::default();
 
         let no_css_deps = FxHashMap::default();
+        let no_script_asset_deps = FxHashMap::default();
 
         assert!(!needs_rebundle(
             &scripts,
@@ -834,6 +857,7 @@ mod tests {
             &current_scripts,
             &current_styles,
             &no_css_deps,
+            &no_script_asset_deps,
         ));
 
         // Add a new script
@@ -849,6 +873,7 @@ mod tests {
             &new_scripts,
             &current_styles,
             &no_css_deps,
+            &no_script_asset_deps,
         ));
     }
 

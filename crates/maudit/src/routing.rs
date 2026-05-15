@@ -43,7 +43,7 @@ pub fn extract_params_from_raw_route(raw_route: &str) -> Vec<ParameterDef> {
     }
 
     // Sort by index in reverse order to avoid index shifting issues during replacement
-    params.sort_by(|a, b| b.index.cmp(&a.index));
+    params.sort_by_key(|b| std::cmp::Reverse(b.index));
 
     params
 }

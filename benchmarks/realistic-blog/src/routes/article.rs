@@ -19,7 +19,7 @@ impl Route<ArticlesParams, PaginatedContentPage<ArticleContent>> for Articles {
         let source = ctx.content::<ArticleContent>("articles");
 
         let mut articles: Vec<_> = source.entries().cloned().collect();
-        articles.sort_by(|a, b| b.data(ctx).date.cmp(&a.data(ctx).date));
+        articles.sort_by_key(|b| std::cmp::Reverse(b.data(ctx).date));
 
         paginate(articles, 4, |page| ArticlesParams {
             page: if page == 0 { None } else { Some(page) },
