@@ -2,29 +2,21 @@
 
 > A dire coronation, a situation where nobility, power, or status becomes inextricably tied to disastrous circumstances.
 
-[![Website](https://img.shields.io/website?url=https%3A%2F%2Fmaudit.org&up_message=maudit.org&down_message=maudit.org&label=www)](https://maudit.org)
-[![Crates.io License](https://img.shields.io/crates/l/maudit)](https://github.com/bruits/maudit/blob/main/LICENSE)
-[![Build Status](https://github.com/bruits/maudit/workflows/CI/badge.svg)](https://github.com/bruits/maudit/actions)
-[![Current Crates.io Version](https://img.shields.io/crates/v/maudit.svg)](https://crates.io/crates/maudit)
-[![CodSpeed Badge](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://codspeed.io/bruits/maudit)
-[![Discord](https://img.shields.io/discord/1323452220817014876)](https://maudit.org/chat/)
+A library for generating static websites with Rust. 
 
-A library for generating static websites with Rust.
+Read the [documentation](https://maudit.org/docs/) on [maudit.org](https://maudit.org), or join us on [Discord](https://maudit.org/chat/).
 
-## Quick links
+## Crates
 
-🌍 Visit our [website](https://maudit.org) to read the [documentation](https://maudit.org/docs/) and our [news](https://maudit.org/news/)
+Maudit is a monorepo that contains the following crates (Rust packages):
 
-📦 See the [crate](https://crates.io/crates/maudit) on Crates.io, and the [reference](https://docs.rs/maudit/latest/maudit/) on Docs.rs.
+| Name            | Description                                                | Registry                                                                                                                                       | README                                     |
+| --------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `maudit`        | Library for generating static websites                     | <a href="https://crates.io/crates/maudit"><img alt="Maudit Crates.io Version" src="https://img.shields.io/crates/v/maudit"></a>                | [README](https://github.com/bruits/maudit/blob/main/crates/maudit/README.md)        |
+| `maudit-cli`    | CLI and dev server to operate on Maudit projects           | <a href="https://crates.io/crates/maudit-cli"><img alt="Maudit CLI Crates.io Version" src="https://img.shields.io/crates/v/maudit-cli"></a>    | [README](https://github.com/bruits/maudit/blob/main/crates/maudit-cli/README.md)    |
+| `maudit-macros` | Procedural macros exposed by the library (e.g. `#[route]`) | <a href="https://crates.io/crates/maudit-macros"><img alt="Maudit Macros Crates.io Version" src="https://img.shields.io/crates/v/maudit-macros"></a> | [README](https://github.com/bruits/maudit/blob/main/crates/maudit-macros/README.md) |
+| `oubli`         | Library for generating documentation websites with Maudit  | <a href="https://crates.io/crates/oubli"><img alt="Oubli Crates.io Version" src="https://img.shields.io/crates/v/oubli"></a>                   | [README](https://github.com/bruits/maudit/blob/main/crates/oubli/README.md)         |
 
-🐛 [Report a bug](https://github.com/bruits/maudit/issues), please read our [contributing guidelines](https://github.com/bruits/maudit/blob/main/CONTRIBUTING.md) and [code of conduct](https://github.com/bruits/maudit/blob/main/CODE_OF_CONDUCT.md) first.
+## Acknowledgements
 
-💬 Join the discussion on [Github](https://github.com/bruits/maudit/discussions) and [Discord](https://maudit.org/chat/), if you have any questions, ideas, or suggestions.
-
-## Contributing
-
-Contributions are welcome! See our [Contributor Guide](https://github.com/bruits/maudit/blob/main/CONTRIBUTING.md) for help getting started.
-
-# License
-
-Maudit is licensed under [the MIT License](https://opensource.org/license/MIT). See [LICENSE](LICENSE) for details.
+Maudit is an open-source project born from [Bruits](https://bruits.org/), a Rust-focused collective 💛

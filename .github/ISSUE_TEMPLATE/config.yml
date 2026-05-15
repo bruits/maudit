@@ -1,11 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Any ideas or suggestions?
-    url: https://github.com/bruits/maudit/discussions/categories/ideas
-    about: Propose and discuss future improvements to Maudit (and Oubli).
-  - name: Support or help needed? (GitHub)
-    url: https://github.com/bruits/maudit/discussions/categories/q-a
-    about: Ask questions and get help from the community.
-  - name: Support or help needed? (Discord)
+  - name: Questions, support, or chat?
     url: https://maudit.org/chat/
-    about: Ask questions and get help from the community.
+    about: Join the Bruits Discord to ask questions and chat with the community.
