@@ -543,12 +543,28 @@ fn make_filename(path: &Path, hash: &String, extension: Option<&str>) -> PathBuf
     filename
 }
 
-fn make_final_url(assets_dir: &Path, file_name: &Path) -> String {
-    format!("/{}/{}", assets_dir.display(), file_name.display())
+/// Joins `Normal` path components with `/`. Avoids `Path::display()`, which
+/// would emit `\` on Windows.
+pub(crate) fn path_to_url_segment(p: &Path) -> String {
+    p.components()
+        .filter_map(|c| match c {
+            std::path::Component::Normal(s) => Some(s.to_string_lossy()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+pub(crate) fn make_final_url(assets_dir: &Path, file_name: &Path) -> String {
+    format!(
+        "/{}/{}",
+        path_to_url_segment(assets_dir),
+        path_to_url_segment(file_name)
+    )
 }
 
 fn make_pending_url(file_name: &Path) -> String {
-    format!("{}{}", PENDING_URL_PREFIX, file_name.display())
+    format!("{}{}", PENDING_URL_PREFIX, path_to_url_segment(file_name))
 }
 
 /// On-disk sibling of [`make_pending_url`]; substitution-map keys depend on this match.

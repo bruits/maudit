@@ -2477,6 +2477,7 @@ dependencies = [
 name = "maudit"
 version = "0.11.2"
 dependencies = [
+ "aho-corasick",
  "base64",
  "bincode",
  "chrono",

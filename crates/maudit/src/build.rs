@@ -15,7 +15,7 @@ use crate::{
     BuildOptions, BuildOutput,
     assets::{
         self, HashAssetType, HashConfig, PrefetchPlugin, RouteAssets, Script, Style, StyleOptions,
-        calculate_hash, image_cache::ImageCache, prefetch,
+        calculate_hash, image_cache::ImageCache, make_final_url, prefetch,
     },
     build::{images::process_image, options::PrefetchStrategy},
     content::ContentSources,
@@ -1194,11 +1194,8 @@ pub async fn build(
                 build_metadata.add_asset(final_path.to_string_lossy().to_string());
                 current_output_files.insert(filename.clone());
 
-                let final_url = format!(
-                    "/{}/{}",
-                    route_assets_options.assets_dir.display(),
-                    filename
-                );
+                let final_url =
+                    make_final_url(&route_assets_options.assets_dir, Path::new(&filename));
                 style_substitutions.insert(style.url.clone(), final_url);
 
                 // Track copied CSS-referenced assets (fonts, images) for stale cleanup
@@ -1293,10 +1290,9 @@ pub async fn build(
                         if let Some(facade) = chunk.facade_module_id.as_ref()
                             && let Some(script) = scripts_by_path.get(facade.as_str())
                         {
-                            let final_url = format!(
-                                "/{}/{}",
-                                route_assets_options.assets_dir.display(),
-                                filename
+                            let final_url = make_final_url(
+                                &route_assets_options.assets_dir,
+                                Path::new(&filename),
                             );
                             script_substitutions.insert(script.url.clone(), final_url);
                         }
@@ -1743,46 +1739,52 @@ fn substitute_asset_urls(
         Vec::new()
     };
 
-    let do_replace = |path: &PathBuf, patterns: &[(String, String)]| -> Result<(), io::Error> {
-        if patterns.is_empty() {
-            return Ok(());
-        }
-        let bytes = match fs::read(path) {
-            Ok(b) => b,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
-            Err(e) => return Err(e),
-        };
-        // Cheap prefilter: only fall into the UTF-8 / String path if at least one
-        // search pattern's first 16 bytes appear in the file.
-        let prefilter_hits = patterns
-            .iter()
-            .any(|(needle, _)| memchr::memmem::find(&bytes, needle.as_bytes()).is_some());
-        if !prefilter_hits {
-            return Ok(());
-        }
-        let Ok(mut s) = String::from_utf8(bytes) else {
-            return Ok(()); // non-UTF8 output (e.g. binary endpoints) — skip
-        };
-        let mut changed = false;
-        for (needle, replacement) in patterns {
-            if s.contains(needle.as_str()) {
-                s = s.replace(needle.as_str(), replacement);
-                changed = true;
-            }
-        }
-        if changed {
-            fs::write(path, s)?;
-        }
-        Ok(())
-    };
+    let fresh_replacer = build_replacer(&fresh_patterns);
+    let remap_replacer = build_replacer(&remap_patterns);
 
     fresh_pages
         .par_iter()
-        .try_for_each(|path| do_replace(path, &fresh_patterns))?;
+        .try_for_each(|path| do_replace(path, fresh_replacer.as_ref()))?;
 
     cached_pages
         .par_iter()
-        .try_for_each(|path| do_replace(path, &remap_patterns))?;
+        .try_for_each(|path| do_replace(path, remap_replacer.as_ref()))?;
 
     Ok(())
+}
+
+type Replacer = (aho_corasick::AhoCorasick, Vec<String>);
+
+fn build_replacer(patterns: &[(String, String)]) -> Option<Replacer> {
+    if patterns.is_empty() {
+        return None;
+    }
+    let ac = aho_corasick::AhoCorasick::new(patterns.iter().map(|(n, _)| n.as_bytes())).ok()?;
+    let replacements = patterns.iter().map(|(_, r)| r.clone()).collect();
+    Some((ac, replacements))
+}
+
+/// Single-pass multi-pattern replace on raw bytes. Skips UTF-8 validation; URLs
+/// are ASCII and the surrounding bytes don't need to be interpreted.
+fn do_replace(path: &PathBuf, replacer: Option<&Replacer>) -> Result<(), io::Error> {
+    let Some((ac, replacements)) = replacer else {
+        return Ok(());
+    };
+    let bytes = match fs::read(path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut last_end = 0;
+    for m in ac.find_iter(&bytes) {
+        out.extend_from_slice(&bytes[last_end..m.start()]);
+        out.extend_from_slice(replacements[m.pattern().as_usize()].as_bytes());
+        last_end = m.end();
+    }
+    if last_end == 0 {
+        return Ok(());
+    }
+    out.extend_from_slice(&bytes[last_end..]);
+    fs::write(path, &out)
 }

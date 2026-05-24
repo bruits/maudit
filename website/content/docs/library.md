@@ -106,7 +106,7 @@ This can be done by iterating over the assets registered in `route_assets` and c
 
 ```rs
 for asset in route_assets.assets() {
-    fs::copy(asset.path(), asset.build_path().as_rendered())?;
+    fs::copy(asset.path(), asset.build_path())?;
 }
 ```
 

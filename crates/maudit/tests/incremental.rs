@@ -98,6 +98,7 @@ impl Route for ImagePage {
 
 static STYLE_PATH_1: Mutex<Option<PathBuf>> = Mutex::new(None);
 static STYLE_PATH_2: Mutex<Option<PathBuf>> = Mutex::new(None);
+static STYLE_PATH_3: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 #[route("/styled")]
 pub struct StyledPage;
@@ -122,6 +123,23 @@ impl Route for StyledPage2 {
             .include_style(&style_path)
             .expect("Failed to include style");
         "<html><head></head><body><h1>Styled 2</h1></body></html>"
+    }
+}
+
+/// Includes a style only when the `trigger` content entry exists.
+#[route("/conditional-style")]
+pub struct ConditionalStyledPage;
+
+impl Route for ConditionalStyledPage {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let articles = ctx.content::<ArticleContent>("articles");
+        if articles.get_entry_safe("trigger").is_some() {
+            let style_path = STYLE_PATH_3.lock().unwrap().clone().unwrap();
+            ctx.assets
+                .include_style(&style_path)
+                .expect("Failed to include style");
+        }
+        "<html><head></head><body><h1>Conditional</h1></body></html>"
     }
 }
 
@@ -317,6 +335,10 @@ fn routes_with_styled1() -> &'static [&'static dyn FullRoute] {
 
 fn routes_with_styled2() -> &'static [&'static dyn FullRoute] {
     &[&IndexPage, &AboutPage, &ArticlePage, &StyledPage2]
+}
+
+fn routes_with_conditional_styled() -> &'static [&'static dyn FullRoute] {
+    &[&IndexPage, &AboutPage, &ArticlePage, &ConditionalStyledPage]
 }
 
 fn multi_routes() -> &'static [&'static dyn FullRoute] {
@@ -2697,5 +2719,89 @@ fn test_curated_render_tracks_per_entry() {
     assert!(
         second.unwrap().cached,
         "curated page for unchanged entry should be cached"
+    );
+}
+
+#[test]
+#[serial]
+fn test_style_dropped_from_page_clears_url_from_html() {
+    // Exercises post-bundle substitution + dirty-propagation: dropping a gating
+    // content entry must clear the style URL from the cached HTML.
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    let style_file = tmp.path().join("conditional.css");
+    fs::write(&style_file, "body { color: green; }").unwrap();
+    *STYLE_PATH_3.lock().unwrap() = Some(style_file.clone());
+
+    // Required by the index page (which iterates articles). Unrelated to the
+    // trigger entry below.
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+    // The presence of this entry makes ConditionalStyledPage include the style.
+    write_markdown(
+        &content_dir.join("articles"),
+        "trigger.md",
+        "Trigger",
+        "Gating entry",
+        "Body",
+    );
+
+    let output1 = coronate(
+        routes_with_conditional_styled(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+    assert!(
+        output1.pages.iter().all(|p| !p.cached),
+        "build 1: all rendered"
+    );
+
+    let conditional_html_path = tmp.path().join("dist/conditional-style/index.html");
+    let html_with_style = fs::read_to_string(&conditional_html_path).unwrap();
+    assert!(
+        html_with_style.contains(".css"),
+        "build 1: HTML should reference a bundled stylesheet, got:\n{}",
+        html_with_style
+    );
+    assert!(
+        !html_with_style.contains("__maudit_pending__"),
+        "build 1: placeholder URL must not survive substitution, got:\n{}",
+        html_with_style
+    );
+
+    fs::remove_file(content_dir.join("articles/trigger.md")).unwrap();
+
+    let output2 = coronate(
+        routes_with_conditional_styled(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let rendered2 = rendered_routes(&output2);
+    assert!(
+        rendered2.contains(&"/conditional-style".to_string()),
+        "build 2: /conditional-style must re-render after its gating entry is deleted, rendered={:?}",
+        rendered2
+    );
+
+    let html_without_style = fs::read_to_string(&conditional_html_path).unwrap();
+    assert!(
+        !html_without_style.contains(".css"),
+        "build 2: HTML must not reference any stylesheet after style was dropped, got:\n{}",
+        html_without_style
+    );
+    assert!(
+        !html_without_style.contains("__maudit_pending__"),
+        "build 2: placeholder URL must not appear, got:\n{}",
+        html_without_style
     );
 }

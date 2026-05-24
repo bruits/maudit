@@ -51,6 +51,7 @@ lightningcss = { version = "1.0.0-alpha.68", features = ["visitor"] }
 rayon = "1.11.0"
 rapidhash = "4.2.1"
 memchr = "2"
+aho-corasick = "1.1"
 pathdiff = "0.2.3"
 rolldown_plugin_replace = "1.0.0"
 
