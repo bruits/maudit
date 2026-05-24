@@ -9,7 +9,7 @@ use thumbhash::{rgba_to_thumb_hash, thumb_hash_to_average_rgba, thumb_hash_to_rg
 
 use crate::assets::image_cache::ImageCache;
 use crate::assets::{
-    AssetPath, AssetUrl, RouteAssetsOptions, make_filename, make_final_path, make_final_url,
+    RouteAssetsOptions, make_filename, make_final_path, make_final_url,
 };
 use crate::is_dev;
 
@@ -87,8 +87,8 @@ pub struct Image {
     pub(crate) options: Option<ImageOptions>,
 
     pub(crate) filename: PathBuf,
-    pub(crate) url: AssetUrl,
-    pub(crate) build_path: AssetPath,
+    pub(crate) url: String,
+    pub(crate) build_path: PathBuf,
     pub(crate) cache: Option<ImageCache>,
 }
 
@@ -139,11 +139,8 @@ impl Image {
                 })
                 .as_deref(),
         );
-        let build_path = AssetPath::new(make_final_path(
-            &route_assets_options.output_assets_dir,
-            &filename,
-        ));
-        let url = AssetUrl::new(make_final_url(&route_assets_options.assets_dir, &filename));
+        let build_path = make_final_path(&route_assets_options.output_assets_dir, &filename);
+        let url = make_final_url(&route_assets_options.assets_dir, &filename);
 
         Self {
             path,
@@ -522,7 +519,7 @@ impl RenderWithAlt for Image {
 
         format!(
             r#"<img src="{src}"{width_attr}{height_attr} loading="lazy" decoding="async" alt="{alt}"/>"#,
-            src = self.url.as_rendered(),
+            src = self.url,
             width_attr = width_attr,
             height_attr = height_attr,
             alt = alt

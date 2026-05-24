@@ -66,7 +66,7 @@ pub fn build_website(
 
             // Copy all assets used by this page.
             for asset in page_assets.assets() {
-                fs::copy(asset.path(), asset.build_path().as_rendered())?;
+                fs::copy(asset.path(), asset.build_path())?;
             }
         } else {
             // Dynamic route - has parameters like [slug] or [id]
@@ -111,7 +111,7 @@ pub fn build_website(
                 fs::write(route_filepath, content)?;
 
                 for asset in page_assets.assets() {
-                    fs::copy(asset.path(), asset.build_path().as_rendered())?;
+                    fs::copy(asset.path(), asset.build_path())?;
                 }
             }
         }

@@ -1199,7 +1199,7 @@ pub async fn build(
                     route_assets_options.assets_dir.display(),
                     filename
                 );
-                style_substitutions.insert(style.url.as_rendered().to_owned(), final_url);
+                style_substitutions.insert(style.url.clone(), final_url);
 
                 // Track copied CSS-referenced assets (fonts, images) for stale cleanup
                 for asset_filename in &css_output.copied_asset_filenames {
@@ -1298,8 +1298,7 @@ pub async fn build(
                                 route_assets_options.assets_dir.display(),
                                 filename
                             );
-                            script_substitutions
-                                .insert(script.url.as_rendered().to_owned(), final_url);
+                            script_substitutions.insert(script.url.clone(), final_url);
                         }
                     }
                     // Fingerprint each Rolldown-emitted asset (WASM, images, fonts) so
@@ -1371,8 +1370,8 @@ pub async fn build(
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone())),
         );
-        // Surface the substitution map on BuildOutput so `AssetUrl::resolve` /
-        // `AssetPath::resolve` can find the post-build URL/path for any asset
+        // Surface the substitution map on BuildOutput so `resolve_asset_url` /
+        // `resolve_asset_path` can find the post-build URL/path for any asset
         // Maudit rewrote.
         for (rendered, resolved) in &new_map {
             build_metadata.record_asset_substitution(
@@ -1405,7 +1404,7 @@ pub async fn build(
         let start_time = Instant::now();
         build_pages_images.par_iter().for_each(|image| {
             let start_process = Instant::now();
-            let dest_path: &Path = image.build_path().as_rendered();
+            let dest_path: &Path = image.build_path();
 
             let image_cwd_relative = diff_paths(image.path(), env::current_dir().unwrap())
                 .unwrap_or_else(|| image.path().to_path_buf());

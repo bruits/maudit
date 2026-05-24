@@ -8,7 +8,6 @@ use std::rc::Rc;
 use std::time::Instant;
 use std::{fs, path::PathBuf};
 
-mod asset_url;
 pub(crate) mod css;
 mod image;
 pub mod image_cache;
@@ -17,7 +16,6 @@ pub(crate) mod sanitize_filename;
 mod script;
 mod style;
 mod tailwind;
-pub use asset_url::{AssetPath, AssetUrl};
 pub use image::{Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt, RenderedImage};
 pub use prefetch::PrefetchPlugin;
 pub use script::Script;
@@ -487,8 +485,8 @@ impl RouteAssets {
 }
 
 pub trait Asset: Sync + Send {
-    fn build_path(&self) -> &AssetPath;
-    fn url(&self) -> &AssetUrl;
+    fn build_path(&self) -> &Path;
+    fn url(&self) -> &str;
     fn path(&self) -> &PathBuf;
     fn filename(&self) -> &PathBuf;
 }
@@ -504,11 +502,11 @@ macro_rules! implement_asset_trait {
                 &self.filename
             }
 
-            fn build_path(&self) -> &AssetPath {
+            fn build_path(&self) -> &Path {
                 &self.build_path
             }
 
-            fn url(&self) -> &AssetUrl {
+            fn url(&self) -> &str {
                 &self.url
             }
         }
@@ -735,17 +733,17 @@ mod tests {
         let image = page_assets
             .add_image(temp_dir.path().join("image.png"))
             .unwrap();
-        assert_eq!(image.url().as_rendered().chars().next(), Some('/'));
+        assert_eq!(image.url().chars().next(), Some('/'));
 
         let script = page_assets
             .add_script(temp_dir.path().join("script.js"))
             .unwrap();
-        assert_eq!(script.url().as_rendered().chars().next(), Some('/'));
+        assert_eq!(script.url().chars().next(), Some('/'));
 
         let style = page_assets
             .add_style(temp_dir.path().join("style.css"))
             .unwrap();
-        assert_eq!(style.url().as_rendered().chars().next(), Some('/'));
+        assert_eq!(style.url().chars().next(), Some('/'));
     }
 
     #[test]
@@ -756,17 +754,17 @@ mod tests {
         let image = page_assets
             .add_image(temp_dir.path().join("image.png"))
             .unwrap();
-        assert!(image.url().as_rendered().contains(&image.hash));
+        assert!(image.url().contains(&image.hash));
 
         let script = page_assets
             .add_script(temp_dir.path().join("script.js"))
             .unwrap();
-        assert!(script.url().as_rendered().contains(&script.hash));
+        assert!(script.url().contains(&script.hash));
 
         let style = page_assets
             .add_style(temp_dir.path().join("style.css"))
             .unwrap();
-        assert!(style.url().as_rendered().contains(&style.hash));
+        assert!(style.url().contains(&style.hash));
     }
 
     #[test]
@@ -780,7 +778,6 @@ mod tests {
         assert!(
             image
                 .build_path()
-                .as_rendered()
                 .to_string_lossy()
                 .contains(&image.hash)
         );
@@ -791,7 +788,6 @@ mod tests {
         assert!(
             script
                 .build_path()
-                .as_rendered()
                 .to_string_lossy()
                 .contains(&script.hash)
         );
@@ -802,7 +798,6 @@ mod tests {
         assert!(
             style
                 .build_path()
-                .as_rendered()
                 .to_string_lossy()
                 .contains(&style.hash)
         );

@@ -425,7 +425,7 @@ pub fn render_markdown(
                             route_ctx
                                 .as_mut()
                                 .and_then(|ctx| ctx.assets.add_image(resolved).ok())
-                                .map(|image| image.url().as_rendered().to_owned())
+                                .map(|image| image.url().to_owned())
                         })
                         .map(|image_url| {
                             Event::Start(Tag::Image {

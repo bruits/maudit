@@ -35,11 +35,10 @@ pub struct BuildOutput {
     pub static_files: Vec<StaticAssetOutput>,
     pub(crate) removed_pages: usize,
     /// Map from rendered asset URL to the resolved URL coronate wrote to disk.
-    /// Used by [`AssetUrl::resolve`](crate::assets::AssetUrl::resolve) to look up
-    /// the post-build URL.
+    /// Used by [`BuildOutput::resolve_asset_url`] to look up the post-build URL.
     pub(crate) url_substitutions: FxHashMap<String, String>,
     /// Map from rendered asset on-disk path to the resolved path. Used by
-    /// [`AssetPath::resolve`](crate::assets::AssetPath::resolve).
+    /// [`BuildOutput::resolve_asset_path`].
     pub(crate) path_substitutions: FxHashMap<PathBuf, PathBuf>,
 }
 

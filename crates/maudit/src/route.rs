@@ -948,7 +948,7 @@ pub fn finish_route(
                         el.append(
                             &format!(
                                 "<link rel=\"stylesheet\" href=\"{}\">",
-                                style.url().as_rendered()
+                                style.url()
                             ),
                             lol_html::html_content::ContentType::Html,
                         );
@@ -958,7 +958,7 @@ pub fn finish_route(
                         el.append(
                             &format!(
                                 "<script src=\"{}\" type=\"module\"></script>",
-                                script.url().as_rendered()
+                                script.url()
                             ),
                             lol_html::html_content::ContentType::Html,
                         );
