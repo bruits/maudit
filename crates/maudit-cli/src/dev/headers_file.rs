@@ -303,9 +303,7 @@ impl Pattern {
         let mut captures = Captures::default();
 
         for segment in &self.segments {
-            let Some(piece) = path_segs.next() else {
-                return None;
-            };
+            let piece = path_segs.next()?;
             match segment {
                 Segment::Literal(lit) => {
                     if lit != piece {

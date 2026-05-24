@@ -19,7 +19,7 @@ impl Route for Index {
         let mut articles: Vec<_> = source.entries().collect(); // Collect into a Vec to allow sorting
 
         // Sort by date, newest first
-        articles.sort_by(|a, b| b.data(ctx).date.cmp(&a.data(ctx).date));
+        articles.sort_by_key(|b| std::cmp::Reverse(b.data(ctx).date));
 
         // Take three latest
         articles = articles.into_iter().take(3).collect::<Vec<_>>();
