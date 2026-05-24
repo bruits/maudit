@@ -341,6 +341,42 @@ mod tests {
     }
 
     #[test]
+    fn test_bundle_rehashes_when_referenced_asset_changes() {
+        // Cache-busting invariant: when a CSS-referenced asset's bytes change,
+        // the bundled CSS bytes must change too (via the rewritten url()), so
+        // that hashing the CSS output yields a new filename downstream.
+        let dir = setup_css_dir();
+        let output_dir = tempfile::tempdir().unwrap();
+
+        let first = bundle_css(
+            &dir.path().join("with_url.css"),
+            None,
+            false,
+            output_dir.path(),
+        )
+        .unwrap();
+
+        fs::write(dir.path().join("font.woff2"), b"different-font-data").unwrap();
+
+        let second = bundle_css(
+            &dir.path().join("with_url.css"),
+            None,
+            false,
+            output_dir.path(),
+        )
+        .unwrap();
+
+        assert_ne!(
+            first.copied_asset_filenames[0], second.copied_asset_filenames[0],
+            "asset filename should change when its bytes change"
+        );
+        assert_ne!(
+            first.code, second.code,
+            "CSS output should change when a referenced asset's hash changes"
+        );
+    }
+
+    #[test]
     fn test_bundle_skips_absolute_and_data_urls() {
         let dir = setup_css_dir();
         let output_dir = tempfile::tempdir().unwrap();
