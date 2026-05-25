@@ -2477,6 +2477,7 @@ dependencies = [
 name = "maudit"
 version = "0.11.2"
 dependencies = [
+ "aho-corasick",
  "base64",
  "bincode",
  "chrono",
@@ -2489,12 +2490,14 @@ dependencies = [
  "lol_html",
  "maud",
  "maudit-macros",
+ "memchr",
  "oxipng",
  "pathdiff",
  "pulldown-cmark",
  "rapidhash",
  "rayon",
  "rolldown",
+ "rolldown_common",
  "rolldown_plugin_replace",
  "rustc-hash",
  "serde",

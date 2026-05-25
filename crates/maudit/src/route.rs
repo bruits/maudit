@@ -946,14 +946,20 @@ pub fn finish_route(
                 element!("head", |el| {
                     for style in &included_styles {
                         el.append(
-                            &format!("<link rel=\"stylesheet\" href=\"{}\">", style.url()),
+                            &format!(
+                                "<link rel=\"stylesheet\" href=\"{}\">",
+                                style.url()
+                            ),
                             lol_html::html_content::ContentType::Html,
                         );
                     }
 
                     for script in &included_scripts {
                         el.append(
-                            &format!("<script src=\"{}\" type=\"module\"></script>", script.url()),
+                            &format!(
+                                "<script src=\"{}\" type=\"module\"></script>",
+                                script.url()
+                            ),
                             lol_html::html_content::ContentType::Html,
                         );
                     }
@@ -985,7 +991,12 @@ pub fn finish_route(
     }
 }
 
-pub type PagesResult = (PageParams, PageProps, PageTypedParams, Option<(String, String)>);
+pub type PagesResult = (
+    PageParams,
+    PageProps,
+    PageTypedParams,
+    Option<(String, String)>,
+);
 pub type PagesResults = Vec<PagesResult>;
 
 pub type PageProps = Box<dyn Any + Send + Sync>;

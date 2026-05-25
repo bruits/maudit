@@ -196,11 +196,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
 
         // Create a simple CSS file
-        fs::write(
-            dir.path().join("style.css"),
-            "body { color: red; }",
-        )
-        .unwrap();
+        fs::write(dir.path().join("style.css"), "body { color: red; }").unwrap();
 
         // Create a font file referenced by CSS
         fs::write(dir.path().join("font.woff2"), b"fake-font-data").unwrap();
@@ -213,11 +209,7 @@ mod tests {
         .unwrap();
 
         // Create CSS files for @import testing
-        fs::write(
-            dir.path().join("_partial.css"),
-            "h1 { font-size: 2em; }",
-        )
-        .unwrap();
+        fs::write(dir.path().join("_partial.css"), "h1 { font-size: 2em; }").unwrap();
         fs::write(
             dir.path().join("main.css"),
             "@import \"_partial.css\";\nbody { color: blue; }",
@@ -250,16 +242,14 @@ mod tests {
         let dir = setup_css_dir();
         let output_dir = tempfile::tempdir().unwrap();
 
-        let result = bundle_css(
-            &dir.path().join("main.css"),
-            None,
-            false,
-            output_dir.path(),
-        )
-        .unwrap();
+        let result =
+            bundle_css(&dir.path().join("main.css"), None, false, output_dir.path()).unwrap();
 
         // The bundled output should contain both the partial and the main styles
-        assert!(result.code.contains("font-size"), "should contain @imported partial");
+        assert!(
+            result.code.contains("font-size"),
+            "should contain @imported partial"
+        );
         assert!(result.code.contains("color"), "should contain main styles");
     }
 
@@ -277,7 +267,10 @@ mod tests {
         .unwrap();
 
         // url() should have been rewritten to a fingerprinted filename
-        assert!(!result.code.contains("url(font.woff2)"), "original url should be rewritten");
+        assert!(
+            !result.code.contains("url(font.woff2)"),
+            "original url should be rewritten"
+        );
         assert_eq!(result.copied_asset_filenames.len(), 1);
         assert!(result.copied_asset_filenames[0].contains("font"));
         assert!(result.copied_asset_filenames[0].ends_with(".woff2"));
@@ -305,13 +298,8 @@ mod tests {
         )
         .unwrap();
 
-        let minified = bundle_css(
-            &dir.path().join("style.css"),
-            None,
-            true,
-            output_dir.path(),
-        )
-        .unwrap();
+        let minified =
+            bundle_css(&dir.path().join("style.css"), None, true, output_dir.path()).unwrap();
 
         assert!(
             minified.code.len() <= not_minified.code.len(),
@@ -338,10 +326,54 @@ mod tests {
         .unwrap();
 
         // Should contain the tailwind output, not the original file content
-        assert!(result.code.contains("margin"), "should use source_css content");
+        assert!(
+            result.code.contains("margin"),
+            "should use source_css content"
+        );
         // url() should still be rewritten and asset copied
         assert_eq!(result.copied_asset_filenames.len(), 1);
-        assert!(output_dir.path().join(&result.copied_asset_filenames[0]).exists());
+        assert!(
+            output_dir
+                .path()
+                .join(&result.copied_asset_filenames[0])
+                .exists()
+        );
+    }
+
+    #[test]
+    fn test_bundle_rehashes_when_referenced_asset_changes() {
+        // Cache-busting invariant: when a CSS-referenced asset's bytes change,
+        // the bundled CSS bytes must change too (via the rewritten url()), so
+        // that hashing the CSS output yields a new filename downstream.
+        let dir = setup_css_dir();
+        let output_dir = tempfile::tempdir().unwrap();
+
+        let first = bundle_css(
+            &dir.path().join("with_url.css"),
+            None,
+            false,
+            output_dir.path(),
+        )
+        .unwrap();
+
+        fs::write(dir.path().join("font.woff2"), b"different-font-data").unwrap();
+
+        let second = bundle_css(
+            &dir.path().join("with_url.css"),
+            None,
+            false,
+            output_dir.path(),
+        )
+        .unwrap();
+
+        assert_ne!(
+            first.copied_asset_filenames[0], second.copied_asset_filenames[0],
+            "asset filename should change when its bytes change"
+        );
+        assert_ne!(
+            first.code, second.code,
+            "CSS output should change when a referenced asset's hash changes"
+        );
     }
 
     #[test]

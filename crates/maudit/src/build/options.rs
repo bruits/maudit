@@ -1,6 +1,10 @@
 use std::{env, path::PathBuf};
 
-use crate::{assets::RouteAssetsOptions, is_dev, sitemap::SitemapOptions};
+use crate::{
+    assets::{IntermediateUrlFormat, RouteAssetsOptions},
+    is_dev,
+    sitemap::SitemapOptions,
+};
 
 /// Derive the default cache directory.
 ///
@@ -187,6 +191,8 @@ impl BuildOptions {
             assets_dir: self.assets.assets_dir.clone(),
             output_assets_dir: self.output_dir.join(&self.assets.assets_dir),
             hashing_strategy: self.assets.hashing_strategy,
+            output_dir: self.output_dir.clone(),
+            intermediate_url_format: IntermediateUrlFormat::SourceHash,
         }
     }
 }

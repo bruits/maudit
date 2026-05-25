@@ -12,7 +12,7 @@ pub(crate) mod css;
 mod image;
 pub mod image_cache;
 pub mod prefetch;
-mod sanitize_filename;
+pub(crate) mod sanitize_filename;
 mod script;
 mod style;
 mod tailwind;
@@ -90,7 +90,23 @@ pub struct RouteAssetsOptions {
     pub assets_dir: PathBuf,
     pub output_assets_dir: PathBuf,
     pub hashing_strategy: AssetHashingStrategy,
+    /// Must match what `url_to_disk_path` produces for the placeholder URL.
+    pub(crate) output_dir: PathBuf,
+    pub(crate) intermediate_url_format: IntermediateUrlFormat,
 }
+
+/// URL format for bundled assets pre-substitution. Coronate sets `Placeholder`;
+/// library-mode pipelines see `SourceHash`.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub(crate) enum IntermediateUrlFormat {
+    /// Source-hash URL matching `build_path`. Library mode treats this as final.
+    #[default]
+    SourceHash,
+    /// Sentinel URL coronate rewrites post-bundle to the content-hashed name.
+    Placeholder,
+}
+
+pub(crate) const PENDING_URL_PREFIX: &str = "/__maudit_pending__/";
 
 impl Default for RouteAssetsOptions {
     fn default() -> Self {
@@ -101,6 +117,8 @@ impl Default for RouteAssetsOptions {
             assets_dir: default_build_options.assets.assets_dir,
             output_assets_dir: page_assets_options.assets_dir,
             hashing_strategy: page_assets_options.hashing_strategy,
+            output_dir: default_build_options.output_dir,
+            intermediate_url_format: IntermediateUrlFormat::default(),
         }
     }
 }
@@ -467,8 +485,8 @@ impl RouteAssets {
 }
 
 pub trait Asset: Sync + Send {
-    fn build_path(&self) -> &PathBuf;
-    fn url(&self) -> &String;
+    fn build_path(&self) -> &Path;
+    fn url(&self) -> &str;
     fn path(&self) -> &PathBuf;
     fn filename(&self) -> &PathBuf;
 }
@@ -484,11 +502,11 @@ macro_rules! implement_asset_trait {
                 &self.filename
             }
 
-            fn build_path(&self) -> &PathBuf {
+            fn build_path(&self) -> &Path {
                 &self.build_path
             }
 
-            fn url(&self) -> &String {
+            fn url(&self) -> &str {
                 &self.url
             }
         }
@@ -525,8 +543,33 @@ fn make_filename(path: &Path, hash: &String, extension: Option<&str>) -> PathBuf
     filename
 }
 
-fn make_final_url(assets_dir: &Path, file_name: &Path) -> String {
-    format!("/{}/{}", assets_dir.display(), file_name.display())
+/// Joins `Normal` path components with `/`. Avoids `Path::display()`, which
+/// would emit `\` on Windows.
+pub(crate) fn path_to_url_segment(p: &Path) -> String {
+    p.components()
+        .filter_map(|c| match c {
+            std::path::Component::Normal(s) => Some(s.to_string_lossy()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+pub(crate) fn make_final_url(assets_dir: &Path, file_name: &Path) -> String {
+    format!(
+        "/{}/{}",
+        path_to_url_segment(assets_dir),
+        path_to_url_segment(file_name)
+    )
+}
+
+fn make_pending_url(file_name: &Path) -> String {
+    format!("{}{}", PENDING_URL_PREFIX, path_to_url_segment(file_name))
+}
+
+/// On-disk sibling of [`make_pending_url`]; substitution-map keys depend on this match.
+fn make_pending_path(output_dir: &Path, file_name: &Path) -> PathBuf {
+    output_dir.join(PENDING_URL_PREFIX.trim_start_matches('/')).join(file_name)
 }
 
 fn make_final_path(output_assets_dir: &Path, file_name: &Path) -> PathBuf {
@@ -748,17 +791,32 @@ mod tests {
         let image = page_assets
             .add_image(temp_dir.path().join("image.png"))
             .unwrap();
-        assert!(image.build_path().to_string_lossy().contains(&image.hash));
+        assert!(
+            image
+                .build_path()
+                .to_string_lossy()
+                .contains(&image.hash)
+        );
 
         let script = page_assets
             .add_script(temp_dir.path().join("script.js"))
             .unwrap();
-        assert!(script.build_path().to_string_lossy().contains(&script.hash));
+        assert!(
+            script
+                .build_path()
+                .to_string_lossy()
+                .contains(&script.hash)
+        );
 
         let style = page_assets
             .add_style(temp_dir.path().join("style.css"))
             .unwrap();
-        assert!(style.build_path().to_string_lossy().contains(&style.hash));
+        assert!(
+            style
+                .build_path()
+                .to_string_lossy()
+                .contains(&style.hash)
+        );
     }
 
     #[test]

@@ -15,7 +15,7 @@ use crate::{
     BuildOptions, BuildOutput,
     assets::{
         self, HashAssetType, HashConfig, PrefetchPlugin, RouteAssets, Script, Style, StyleOptions,
-        calculate_hash, image_cache::ImageCache, prefetch,
+        calculate_hash, image_cache::ImageCache, make_final_url, prefetch,
     },
     build::{images::process_image, options::PrefetchStrategy},
     content::ContentSources,
@@ -218,8 +218,13 @@ pub async fn build(
         None
     };
 
-    // Create route_assets_options with the image cache
-    let route_assets_options = options.route_assets_options();
+    // Coronate bundles via Rolldown/lightningcss with content-hashed filenames, so
+    // the substitution pass below rewrites the placeholder URLs.
+    let route_assets_options = {
+        let mut opts = options.route_assets_options();
+        opts.intermediate_url_format = assets::IntermediateUrlFormat::Placeholder;
+        opts
+    };
 
     info!(target: "build", "Output directory: {}", options.output_dir.display());
 
@@ -324,6 +329,11 @@ pub async fn build(
     let mut rendered_count: usize = 0;
     let mut cached_count: usize = 0;
     let mut created_dirs: FxHashSet<PathBuf> = FxHashSet::default();
+    // Pages flagged at write time as containing an asset-URL prefix. The post-bundle
+    // pass only re-reads these, not every page.
+    let mut pages_with_assets: Vec<PathBuf> = Vec::new();
+    // Pending prefix is what render-time HTML contains; substitution scans for it.
+    let assets_prefix_bytes = assets::PENDING_URL_PREFIX.as_bytes();
     // Seed the asset hash cache from the previous build cache.
     // Only reuse entries whose file mtime+size still match (cheap stat check).
     let asset_hash_cache: assets::AssetHashCache = {
@@ -469,7 +479,13 @@ pub async fn build(
                     let result = route.build(&mut page_ctx)?;
                     let access_log = page_ctx.take_access_log();
 
-                    write_route_file(&result, &file_path, &mut created_dirs)?;
+                    write_route_file(
+                        &result,
+                        &file_path,
+                        &mut created_dirs,
+                        &mut pages_with_assets,
+                        assets_prefix_bytes,
+                    )?;
                     info!(target: "pages", "{} -> {} {}", url, file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), &route_format_options));
 
                     if let Some(page_key) = page_key {
@@ -595,7 +611,13 @@ pub async fn build(
                                 .extend(get_pages_access_log.sources_iterated.iter().cloned());
                         }
 
-                        write_route_file(&content, &file_path, &mut created_dirs)?;
+                        write_route_file(
+                            &content,
+                            &file_path,
+                            &mut created_dirs,
+                            &mut pages_with_assets,
+                            assets_prefix_bytes,
+                        )?;
                         info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), &route_format_options));
 
                         record_page_cache_entry(
@@ -644,7 +666,13 @@ pub async fn build(
                             None,
                         ))?;
 
-                        write_route_file(&content, &file_path, &mut created_dirs)?;
+                        write_route_file(
+                            &content,
+                            &file_path,
+                            &mut created_dirs,
+                            &mut pages_with_assets,
+                            assets_prefix_bytes,
+                        )?;
                         info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(page_start.elapsed(), &route_format_options));
 
                         build_metadata.add_page(
@@ -736,7 +764,13 @@ pub async fn build(
                 let result = route.build(&mut page_ctx)?;
                 let access_log = page_ctx.take_access_log();
 
-                write_route_file(&result, &file_path, &mut created_dirs)?;
+                write_route_file(
+                    &result,
+                    &file_path,
+                    &mut created_dirs,
+                    &mut pages_with_assets,
+                    assets_prefix_bytes,
+                )?;
                 info!(target: "pages", "├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_start.elapsed(), &route_format_options));
 
                 if let Some(page_key) = page_key {
@@ -860,7 +894,13 @@ pub async fn build(
                                 .extend(get_pages_access_log.sources_iterated.iter().cloned());
                         }
 
-                        write_route_file(&content, &file_path, &mut created_dirs)?;
+                        write_route_file(
+                            &content,
+                            &file_path,
+                            &mut created_dirs,
+                            &mut pages_with_assets,
+                            assets_prefix_bytes,
+                        )?;
                         info!(target: "pages", "│  ├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_page_start.elapsed(), &route_format_options));
 
                         record_page_cache_entry(
@@ -912,7 +952,13 @@ pub async fn build(
                             Some(variant_id.clone()),
                         ))?;
 
-                        write_route_file(&content, &file_path, &mut created_dirs)?;
+                        write_route_file(
+                            &content,
+                            &file_path,
+                            &mut created_dirs,
+                            &mut pages_with_assets,
+                            assets_prefix_bytes,
+                        )?;
                         info!(target: "pages", "│  ├─ {} {}", file_path.to_string_lossy().dimmed(), format_elapsed_time(variant_page_start.elapsed(), &route_format_options));
 
                         build_metadata.add_page(
@@ -1059,6 +1105,7 @@ pub async fn build(
                 &current_bundled_scripts,
                 &current_bundled_styles,
                 &prev.css_url_dependencies,
+                &prev.script_asset_dependencies,
             )
         } else {
             true
@@ -1091,6 +1138,11 @@ pub async fn build(
         }
         true
     };
+
+    // source-hash URL -> content-hashed URL. Carried forward from the previous cache
+    // when bundling is skipped.
+    let mut script_substitutions: FxHashMap<String, String> = FxHashMap::default();
+    let mut style_substitutions: FxHashMap<String, String> = FxHashMap::default();
 
     if should_bundle && (!build_pages_styles.is_empty() || !build_pages_scripts.is_empty()) {
         let assets_start = Instant::now();
@@ -1126,22 +1178,25 @@ pub async fn build(
                     &route_assets_options.output_assets_dir,
                 )?;
 
-                // Ensure the output directory exists
-                if let Some(parent) = style.build_path().parent() {
+                // Hash the bundled bytes, not the source. Picks up Tailwind scans,
+                // @imports, url() rewrites that the source file's hash misses.
+                let output_hash = hash_asset_bytes(css_output.code.as_bytes());
+                let stem = bare_script_chunk_name(style.path());
+                let filename = format!("{}-{}.css", stem, output_hash);
+                let final_path = route_assets_options.output_assets_dir.join(&filename);
+
+                if let Some(parent) = final_path.parent() {
                     fs::create_dir_all(parent)?;
                 }
 
-                fs::write(style.build_path(), &css_output.code)?;
+                fs::write(&final_path, &css_output.code)?;
 
-                let filename = style.filename().to_string_lossy().to_string();
-                build_metadata.add_asset(
-                    route_assets_options
-                        .output_assets_dir
-                        .join(&filename)
-                        .to_string_lossy()
-                        .to_string(),
-                );
-                current_output_files.insert(filename);
+                build_metadata.add_asset(final_path.to_string_lossy().to_string());
+                current_output_files.insert(filename.clone());
+
+                let final_url =
+                    make_final_url(&route_assets_options.assets_dir, Path::new(&filename));
+                style_substitutions.insert(style.url.clone(), final_url);
 
                 // Track copied CSS-referenced assets (fonts, images) for stale cleanup
                 for asset_filename in &css_output.copied_asset_filenames {
@@ -1159,18 +1214,13 @@ pub async fn build(
             }
         }
 
-        // Process JS files with rolldown
+        // Bare stem as `[name]`; Rolldown's content hash disambiguates the output.
+        // Map back to the originating Script via `facade_module_id` below.
         let bundler_inputs = build_pages_scripts
             .iter()
             .map(|script| InputItem {
                 import: script.path().to_string_lossy().to_string(),
-                name: Some(
-                    script
-                        .filename()
-                        .with_extension("")
-                        .to_string_lossy()
-                        .to_string(),
-                ),
+                name: Some(bare_script_chunk_name(script.path())),
             })
             .collect::<Vec<InputItem>>();
 
@@ -1184,6 +1234,13 @@ pub async fn build(
         );
 
         if !bundler_inputs.is_empty() {
+            // Keyed on absolute source path; `InputItem.name` isn't unique when two
+            // scripts share a stem.
+            let scripts_by_path: FxHashMap<String, &Script> = build_pages_scripts
+                .iter()
+                .map(|s| (s.path().to_string_lossy().into_owned(), s))
+                .collect();
+
             let mut bundler = Bundler::with_plugins(
                 BundlerOptions {
                     input: Some(bundler_inputs),
@@ -1195,6 +1252,13 @@ pub async fn build(
                             .to_string_lossy()
                             .to_string(),
                     ),
+                    // Content-hash the emitted filenames so a change in any transitive
+                    // dependency (e.g. a referenced .wasm file whose hash Rolldown
+                    // changed) cascades into a new chunk filename. Without this, the JS
+                    // URL would stay stable while the chunk contents change — breaking
+                    // immutable caching on the embedded asset URL.
+                    entry_filenames: Some("[name]-[hash].js".to_string().into()),
+                    chunk_filenames: Some("[name]-[hash].js".to_string().into()),
                     experimental: Some(ExperimentalOptions {
                         resolve_new_url_to_asset: Some(true),
                         ..Default::default()
@@ -1218,7 +1282,35 @@ pub async fn build(
                         .to_string_lossy()
                         .to_string(),
                 );
-                current_output_files.insert(filename);
+                current_output_files.insert(filename.clone());
+
+                match output {
+                    // Map `Script::url` → the content-hashed URL Rolldown wrote.
+                    rolldown_common::Output::Chunk(chunk) if chunk.is_entry => {
+                        if let Some(facade) = chunk.facade_module_id.as_ref()
+                            && let Some(script) = scripts_by_path.get(facade.as_str())
+                        {
+                            let final_url = make_final_url(
+                                &route_assets_options.assets_dir,
+                                Path::new(&filename),
+                            );
+                            script_substitutions.insert(script.url.clone(), final_url);
+                        }
+                    }
+                    // Fingerprint each Rolldown-emitted asset (WASM, images, fonts) so
+                    // a change to one triggers a rebundle even when no JS source changed.
+                    rolldown_common::Output::Asset(asset) => {
+                        if let Some(ref mut cache) = new_cache {
+                            for original in &asset.original_file_names {
+                                let path = PathBuf::from(original);
+                                if let Some(fp) = cache::AssetFileFingerprint::from_path(&path) {
+                                    cache.script_asset_dependencies.insert(path, fp);
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
             }
         }
 
@@ -1238,19 +1330,68 @@ pub async fn build(
 
         if let Some(ref mut cache) = new_cache {
             cache.bundled_output_files = current_output_files;
+            cache.script_substitutions = script_substitutions.clone();
+            cache.style_substitutions = style_substitutions.clone();
         }
 
         info!(target: "build", "{}", format!("Assets generated in {}", format_elapsed_time(assets_start.elapsed(), &section_format_options)).bold());
     } else if !should_bundle && (!build_pages_styles.is_empty() || !build_pages_scripts.is_empty())
     {
-        // Carry forward bundled output files from previous cache
+        // Carry forward the bundle state from the previous cache. The dep fingerprints
+        // need to survive across builds; the substitution map handles freshly rendered
+        // pages that still embed source-hash URLs.
         if let Some(ref mut cache) = new_cache
             && let Some(prev_cache) = &incremental_state.previous_cache
         {
             cache.bundled_output_files = prev_cache.bundled_output_files.clone();
             cache.css_url_dependencies = prev_cache.css_url_dependencies.clone();
+            cache.script_asset_dependencies = prev_cache.script_asset_dependencies.clone();
+            cache.script_substitutions = prev_cache.script_substitutions.clone();
+            cache.style_substitutions = prev_cache.style_substitutions.clone();
+            script_substitutions = prev_cache.script_substitutions.clone();
+            style_substitutions = prev_cache.style_substitutions.clone();
         }
         info!(target: "build", "Assets unchanged, skipping bundling");
+    }
+
+    // Rewrite source-hash URLs (fresh pages) and stale content-hash URLs (cached
+    // pages from the previous build) to the URLs bundling just produced.
+    if !pages_with_assets.is_empty()
+        || !script_substitutions.is_empty()
+        || !style_substitutions.is_empty()
+    {
+        let mut new_map = script_substitutions.clone();
+        new_map.extend(
+            style_substitutions
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone())),
+        );
+        // Surface the substitution map on BuildOutput so `resolve_asset_url` /
+        // `resolve_asset_path` can find the post-build URL/path for any asset
+        // Maudit rewrote.
+        for (rendered, resolved) in &new_map {
+            build_metadata.record_asset_substitution(
+                rendered.clone(),
+                resolved.clone(),
+                url_to_disk_path(rendered, &options.output_dir),
+                url_to_disk_path(resolved, &options.output_dir),
+            );
+        }
+        let previous_map = incremental_state.previous_cache.as_ref().map(|c| {
+            let mut m = c.script_substitutions.clone();
+            m.extend(
+                c.style_substitutions
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone())),
+            );
+            m
+        });
+        substitute_asset_urls(
+            &pages_with_assets,
+            &new_map,
+            previous_map.as_ref(),
+            new_cache.as_ref(),
+        )?;
     }
 
     if !build_pages_images.is_empty() {
@@ -1259,7 +1400,7 @@ pub async fn build(
         let start_time = Instant::now();
         build_pages_images.par_iter().for_each(|image| {
             let start_process = Instant::now();
-            let dest_path: &PathBuf = image.build_path();
+            let dest_path: &Path = image.build_path();
 
             let image_cwd_relative = diff_paths(image.path(), env::current_dir().unwrap())
                 .unwrap_or_else(|| image.path().to_path_buf());
@@ -1507,10 +1648,36 @@ fn copy_recursively(
     Ok(())
 }
 
+/// 5-char rapidhash hex digest of bundled asset bytes. Used to content-hash the
+/// CSS output so Tailwind/lightningcss-induced byte changes show up in the
+/// filename — matches the format `calculate_hash` produces for source files.
+fn hash_asset_bytes(bytes: &[u8]) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = rapidhash::fast::RapidHasher::default();
+    bytes.hash(&mut hasher);
+    let hex = format!("{:016x}", hasher.finish());
+    hex[..5].to_string()
+}
+
+/// `/_maudit/foo-abc.js` + `<output_dir>` → `<output_dir>/_maudit/foo-abc.js`.
+fn url_to_disk_path(url: &str, output_dir: &Path) -> PathBuf {
+    output_dir.join(url.trim_start_matches('/'))
+}
+
+/// Sanitized file stem (e.g. `data/foo.js` → `foo`). Used as Rolldown's `[name]`;
+/// the source hash stays on `Script` for cache invalidation, not in the public URL.
+fn bare_script_chunk_name(path: &Path) -> String {
+    use crate::assets::sanitize_filename::default_sanitize_file_name;
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("asset");
+    default_sanitize_file_name(stem)
+}
+
 fn write_route_file(
     content: &[u8],
     file_path: &PathBuf,
     created_dirs: &mut FxHashSet<PathBuf>,
+    pages_with_assets: &mut Vec<PathBuf>,
+    assets_prefix: &[u8],
 ) -> Result<(), io::Error> {
     if let Some(parent_dir) = file_path.parent()
         && created_dirs.insert(parent_dir.to_path_buf())
@@ -1520,5 +1687,104 @@ fn write_route_file(
 
     fs::write(file_path, content)?;
 
+    // Skip pages that can't possibly reference an asset URL; saves a disk read each.
+    if memchr::memmem::find(content, assets_prefix).is_some() {
+        pages_with_assets.push(file_path.clone());
+    }
+
     Ok(())
+}
+
+/// Rewrite asset URLs in HTML to the content-hashed URLs bundling produced. Handles
+/// fresh pages (carrying the source-hash URL) and cached pages (carrying the prior
+/// build's content-hashed URL) in the same pass. Parallelized with rayon.
+fn substitute_asset_urls(
+    fresh_pages: &[PathBuf],
+    new_map: &FxHashMap<String, String>,
+    previous_map: Option<&FxHashMap<String, String>>,
+    new_cache: Option<&cache::BuildCache>,
+) -> Result<(), io::Error> {
+    // Pairs of (search, replace) to apply to freshly rendered pages.
+    let fresh_patterns: Vec<(String, String)> = new_map
+        .iter()
+        .map(|(p, u)| (p.clone(), u.clone()))
+        .collect();
+
+    // Pairs of (old_url, new_url) for cached pages — only entries where the URL changed.
+    let remap_patterns: Vec<(String, String)> = match previous_map {
+        Some(prev) => prev
+            .iter()
+            .filter_map(|(placeholder, old_url)| {
+                let new_url = new_map.get(placeholder)?;
+                (old_url != new_url).then(|| (old_url.clone(), new_url.clone()))
+            })
+            .collect(),
+        None => Vec::new(),
+    };
+
+    // Collect cached page output paths whose HTML may still reference the previous URLs.
+    // Any page that referenced at least one script or style is a candidate.
+    let cached_pages: Vec<PathBuf> = if remap_patterns.is_empty() {
+        Vec::new()
+    } else if let Some(cache) = new_cache {
+        let fresh_set: FxHashSet<&PathBuf> = fresh_pages.iter().collect();
+        cache
+            .pages
+            .values()
+            .filter(|entry| !entry.scripts.is_empty() || !entry.styles.is_empty())
+            .map(|entry| entry.output_file.clone())
+            .filter(|path| !fresh_set.contains(path))
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    let fresh_replacer = build_replacer(&fresh_patterns);
+    let remap_replacer = build_replacer(&remap_patterns);
+
+    fresh_pages
+        .par_iter()
+        .try_for_each(|path| do_replace(path, fresh_replacer.as_ref()))?;
+
+    cached_pages
+        .par_iter()
+        .try_for_each(|path| do_replace(path, remap_replacer.as_ref()))?;
+
+    Ok(())
+}
+
+type Replacer = (aho_corasick::AhoCorasick, Vec<String>);
+
+fn build_replacer(patterns: &[(String, String)]) -> Option<Replacer> {
+    if patterns.is_empty() {
+        return None;
+    }
+    let ac = aho_corasick::AhoCorasick::new(patterns.iter().map(|(n, _)| n.as_bytes())).ok()?;
+    let replacements = patterns.iter().map(|(_, r)| r.clone()).collect();
+    Some((ac, replacements))
+}
+
+/// Single-pass multi-pattern replace on raw bytes. Skips UTF-8 validation; URLs
+/// are ASCII and the surrounding bytes don't need to be interpreted.
+fn do_replace(path: &PathBuf, replacer: Option<&Replacer>) -> Result<(), io::Error> {
+    let Some((ac, replacements)) = replacer else {
+        return Ok(());
+    };
+    let bytes = match fs::read(path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut last_end = 0;
+    for m in ac.find_iter(&bytes) {
+        out.extend_from_slice(&bytes[last_end..m.start()]);
+        out.extend_from_slice(replacements[m.pattern().as_usize()].as_bytes());
+        last_end = m.end();
+    }
+    if last_end == 0 {
+        return Ok(());
+    }
+    out.extend_from_slice(&bytes[last_end..]);
+    fs::write(path, &out)
 }
