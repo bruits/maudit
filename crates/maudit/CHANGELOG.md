@@ -1,5 +1,16 @@
 # maudit
 
+## 0.12.0 — 2026-05-25
+
+### Minor changes
+
+- [1b976ed](https://github.com/bruits/maudit/commit/1b976edd9b2a701369bd8d10bbb5e12d05e64cea) Increased the minimum supported Rust version to 1.95.0. — Thanks @Princesseuh!
+- [d437432](https://github.com/bruits/maudit/commit/d4374328ed6873b73554ea6624215640b8e3b6cb) Bundle filenames now properly gets updated for every transitive dependency (CSS-referenced fonts and images, JS-imported assets, etc.). This was done by rewriting urls after bundling, which does results in worse performance, but at least ensure the URLs are always correct. — Thanks @Princesseuh!
+
+### Patch changes
+
+- [070dce6](https://github.com/bruits/maudit/commit/070dce6ce66ac3d39dcb075895d5000f2acaed7f) Updated to use the official upstream Rolldown 1.0 stable for JS bundling instead of the community-maintained fork. — Thanks @Princesseuh!
+
 ## 0.11.2 — 2026-05-10
 
 ### Patch changes
