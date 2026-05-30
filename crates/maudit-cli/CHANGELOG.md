@@ -1,5 +1,11 @@
 # maudit-cli
 
+## 0.8.1 — 2026-05-30
+
+### Patch changes
+
+- [bfe8b69](https://github.com/bruits/maudit/commit/bfe8b6944ef4b6c95e68888887551b146fd5aa6f) Fixes projects created with `maudit init` failing to compile out of the box. Previously the generated `Cargo.toml` could pin a version of `maudit` that didn't match the downloaded template, so a fresh project would fail to build until you bumped the version by hand. — Thanks @Princesseuh!
+
 ## 0.8.0 — 2026-05-10
 
 ### Minor changes
