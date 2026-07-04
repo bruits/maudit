@@ -28,7 +28,7 @@ fn file_fingerprint(path: &Path) -> Option<(u64, u64)> {
 #[derive(Serialize, Deserialize, Default)]
 struct PersistedImageCache {
     placeholders: FxHashMap<PathBuf, PersistedPlaceholder>,
-    transformed: FxHashMap<PathBuf, PathBuf>,
+    transformed: FxHashMap<PathBuf, PersistedTransformed>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -36,6 +36,12 @@ struct PersistedPlaceholder {
     thumbhash: Vec<u8>,
     mtime_ns: u64,
     size: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct PersistedTransformed {
+    cached_path: PathBuf,
+    source_path: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -49,8 +55,11 @@ pub struct PlaceholderCacheEntry {
 
 #[derive(Debug, Clone)]
 pub struct TransformedImageCacheEntry {
-    /// Path to the cached transformed image file
+    /// Path to the cached transformed image file.
     pub cached_path: PathBuf,
+    /// Source image this was transformed from. The entry is evicted when the
+    /// source is no longer referenced by any page.
+    pub source_path: PathBuf,
 }
 
 #[derive(Debug)]
@@ -117,7 +126,15 @@ impl ImageCacheInner {
         let transformed = persisted
             .transformed
             .into_iter()
-            .map(|(key, cached_path)| (key, TransformedImageCacheEntry { cached_path }))
+            .map(|(key, t)| {
+                (
+                    key,
+                    TransformedImageCacheEntry {
+                        cached_path: t.cached_path,
+                        source_path: t.source_path,
+                    },
+                )
+            })
             .collect();
 
         Self {
@@ -150,7 +167,15 @@ impl ImageCacheInner {
             transformed: self
                 .transformed
                 .iter()
-                .map(|(key, entry)| (key.clone(), entry.cached_path.clone()))
+                .map(|(key, entry)| {
+                    (
+                        key.clone(),
+                        PersistedTransformed {
+                            cached_path: entry.cached_path.clone(),
+                            source_path: entry.source_path.clone(),
+                        },
+                    )
+                })
                 .collect(),
         };
 
@@ -220,9 +245,15 @@ impl ImageCacheInner {
     }
 
     /// Cache a transformed image
-    pub fn cache_transformed_image(&mut self, final_filename: &Path, cached_path: PathBuf) {
+    pub fn cache_transformed_image(
+        &mut self,
+        final_filename: &Path,
+        cached_path: PathBuf,
+        source_path: PathBuf,
+    ) {
         let entry = TransformedImageCacheEntry {
             cached_path: cached_path.clone(),
+            source_path,
         };
 
         self.transformed.insert(final_filename.to_path_buf(), entry);
@@ -245,21 +276,17 @@ impl ImageCacheInner {
         self.cache_dir.join(final_filename)
     }
 
-    /// Remove placeholder and transformed entries not in the given sets.
-    /// Also deletes orphaned files from the cache directory.
-    pub fn gc(
-        &mut self,
-        live_placeholder_paths: &FxHashSet<PathBuf>,
-        live_transformed_filenames: &FxHashSet<PathBuf>,
-    ) -> usize {
+    /// Remove placeholder and transformed entries whose source image is no
+    /// longer referenced by any page. Also deletes orphaned files from the
+    /// cache directory.
+    pub fn gc(&mut self, live_src_paths: &FxHashSet<PathBuf>) -> usize {
         let before = self.placeholders.len() + self.transformed.len();
 
-        self.placeholders
-            .retain(|k, _| live_placeholder_paths.contains(k));
+        self.placeholders.retain(|k, _| live_src_paths.contains(k));
 
         let mut orphaned_files = Vec::new();
-        self.transformed.retain(|k, entry| {
-            if live_transformed_filenames.contains(k) {
+        self.transformed.retain(|_, entry| {
+            if live_src_paths.contains(&entry.source_path) {
                 true
             } else {
                 orphaned_files.push(entry.cached_path.clone());
@@ -335,9 +362,14 @@ impl ImageCache {
     }
 
     /// Cache a transformed image
-    pub fn cache_transformed_image(&self, final_filename: &Path, cached_path: PathBuf) {
+    pub fn cache_transformed_image(
+        &self,
+        final_filename: &Path,
+        cached_path: PathBuf,
+        source_path: PathBuf,
+    ) {
         self.lock_inner()
-            .cache_transformed_image(final_filename, cached_path)
+            .cache_transformed_image(final_filename, cached_path, source_path)
     }
 
     /// Returns true if the cache has no entries.
@@ -356,17 +388,11 @@ impl ImageCache {
         self.lock_inner().generate_cache_path(final_filename)
     }
 
-    /// Remove entries not referenced by any current page.
-    /// `live_placeholder_paths`: source paths of images used in the current build.
-    /// `live_transformed_filenames`: final filenames of transformed images in the current build.
+    /// Remove entries whose source image is no longer referenced by any page.
+    /// `live_src_paths`: source paths of images used in the current build.
     /// Returns the number of evicted entries.
-    pub fn gc(
-        &self,
-        live_placeholder_paths: &FxHashSet<PathBuf>,
-        live_transformed_filenames: &FxHashSet<PathBuf>,
-    ) -> usize {
-        self.lock_inner()
-            .gc(live_placeholder_paths, live_transformed_filenames)
+    pub fn gc(&self, live_src_paths: &FxHashSet<PathBuf>) -> usize {
+        self.lock_inner().gc(live_src_paths)
     }
 }
 
@@ -452,6 +478,7 @@ mod tests {
         image_cache.cache_transformed_image(
             Path::new("test.abc123.webp"),
             PathBuf::from("/tmp/cached/test.abc123.webp"),
+            img_path.clone(),
         );
 
         image_cache.save(&persisted_dir).unwrap();
@@ -498,15 +525,22 @@ mod tests {
         cache.cache_placeholder(&img_b, vec![2]);
         cache.cache_placeholder(&img_c, vec![3]);
 
-        cache.cache_transformed_image(Path::new("a.abc.webp"), temp_dir.join("a.abc.webp"));
-        cache.cache_transformed_image(Path::new("b.def.webp"), temp_dir.join("b.def.webp"));
+        cache.cache_transformed_image(
+            Path::new("a.abc.webp"),
+            temp_dir.join("a.abc.webp"),
+            img_a.clone(),
+        );
+        cache.cache_transformed_image(
+            Path::new("b.def.webp"),
+            temp_dir.join("b.def.webp"),
+            img_b.clone(),
+        );
 
-        // Only a.png and a.abc.webp are still live
-        let live_placeholders: FxHashSet<PathBuf> = [img_a.clone()].into_iter().collect();
-        let live_transformed: FxHashSet<PathBuf> =
-            [PathBuf::from("a.abc.webp")].into_iter().collect();
+        // Only a.png is still referenced by a page; its transform is kept because
+        // its source is live, b.def.webp is evicted because b.png is not.
+        let live_src: FxHashSet<PathBuf> = [img_a.clone()].into_iter().collect();
 
-        let evicted = cache.gc(&live_placeholders, &live_transformed);
+        let evicted = cache.gc(&live_src);
         assert_eq!(evicted, 3); // b.png, c.png placeholders + b.def.webp transformed
 
         // a.png still accessible
