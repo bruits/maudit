@@ -1,4 +1,5 @@
 {
+	"extends": "../tsconfig.json",
 	"compilerOptions": {
 		"target": "ES2022",
 		"module": "ES2022",
@@ -8,7 +9,8 @@
 		"skipLibCheck": true,
 		"resolveJsonModule": true,
 		"esModuleInterop": true,
-		"types": ["node", "@playwright/test"]
+		"types": ["node", "@playwright/test"],
+		"noEmit": true
 	},
 	"include": ["tests/**/*", "playwright.config.ts", "types.d.ts"]
 }

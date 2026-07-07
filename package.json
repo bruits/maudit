@@ -3,8 +3,8 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"check": "pnpm run check:js && pnpm run check:rs",
-		"check:ts": "tsgo",
+		"check": "pnpm run check:ts && pnpm run check:rs",
+		"check:ts": "tsgo --project tsconfig.check.json && tsgo --project e2e",
 		"check:rs": "cargo check",
 		"lint": "pnpm run lint:ts && pnpm run lint:rs",
 		"lint:ts": "oxlint --type-aware",
