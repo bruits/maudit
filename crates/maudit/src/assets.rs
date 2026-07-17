@@ -21,7 +21,7 @@ mod tailwind;
 pub use image::{Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt, RenderedImage};
 #[cfg(feature = "og_image")]
 #[cfg_attr(docsrs, doc(cfg(feature = "og_image")))]
-pub use opengraph::{OpenGraphImage, RenderedOpenGraphImage};
+pub use opengraph::{OpenGraphImage, OpenGraphSource, RenderedOpenGraphImage};
 pub use prefetch::PrefetchPlugin;
 pub use script::Script;
 pub use style::{Style, StyleOptions};

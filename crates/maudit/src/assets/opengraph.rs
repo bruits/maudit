@@ -1,6 +1,7 @@
-//! Generation of [OpenGraph](https://ogp.me/) images from SVG.
+//! Generation of [OpenGraph](https://ogp.me/) images.
 //!
-//! SVG is rendered to a PNG at build time using [resvg](https://github.com/linebender/resvg).
+//! SVG (an inline string or an `.svg` [`Image`]) is rendered to a PNG at build time using
+//! [resvg](https://github.com/linebender/resvg); raster [`Image`]s are referenced as-is.
 //! Obtain images through [`RouteAssets::add_opengraph_image`](crate::assets::RouteAssets::add_opengraph_image).
 
 use std::fmt::Display;
@@ -13,6 +14,37 @@ use resvg::{tiny_skia, usvg};
 
 use crate::assets::{Image, RouteAssets, make_filename, make_final_path, make_final_url};
 use crate::errors::AssetError;
+
+/// Source for [`RouteAssets::add_opengraph_image`].
+///
+/// A `&str`/`&String` (inline SVG) or an `&`[`Image`] can be passed directly through their
+/// [`From`] implementations.
+#[derive(Clone, Copy)]
+pub enum OpenGraphSource<'a> {
+    /// Inline SVG markup, rendered to a PNG. Best for images generated per-page.
+    Svg(&'a str),
+    /// An existing image asset. `.svg` files are rendered to a PNG; raster images (PNG,
+    /// JPEG, WebP, …) are referenced as-is. Best for static, pre-made images.
+    Image(&'a Image),
+}
+
+impl<'a> From<&'a str> for OpenGraphSource<'a> {
+    fn from(svg: &'a str) -> Self {
+        OpenGraphSource::Svg(svg)
+    }
+}
+
+impl<'a> From<&'a String> for OpenGraphSource<'a> {
+    fn from(svg: &'a String) -> Self {
+        OpenGraphSource::Svg(svg)
+    }
+}
+
+impl<'a> From<&'a Image> for OpenGraphSource<'a> {
+    fn from(image: &'a Image) -> Self {
+        OpenGraphSource::Image(image)
+    }
+}
 
 // System fonts are expensive to enumerate, so the database is built once and
 // shared across every image rendered during a build.
@@ -54,41 +86,43 @@ pub struct OpenGraphImage {
     url: String,
     width: u32,
     height: u32,
+    content_type: Option<&'static str>,
 }
 
 impl OpenGraphImage {
-    /// The absolute URL of the generated image, e.g. to reference it manually.
+    /// The absolute URL of the image, e.g. to reference it manually.
     pub fn url(&self) -> &str {
         &self.url
     }
 
-    /// The width of the generated image, in pixels.
+    /// The width of the image in pixels, or `0` if unknown.
     pub fn width(&self) -> u32 {
         self.width
     }
 
-    /// The height of the generated image, in pixels.
+    /// The height of the image in pixels, or `0` if unknown.
     pub fn height(&self) -> u32 {
         self.height
     }
 
     /// Render the `<meta>` tags needed to reference this image as the page's OpenGraph image.
     ///
-    /// Like images, referencing the generated image in the page is opt-in: the image is
+    /// Like images, referencing the image in the page is opt-in: the image is
     /// created whether or not this method is called.
     pub fn render(&self) -> RenderedOpenGraphImage {
-        format!(
-            concat!(
-                r#"<meta property="og:image" content="{url}"/>"#,
-                r#"<meta property="og:image:type" content="image/png"/>"#,
-                r#"<meta property="og:image:width" content="{width}"/>"#,
-                r#"<meta property="og:image:height" content="{height}"/>"#,
-            ),
-            url = self.url,
-            width = self.width,
-            height = self.height,
-        )
-        .into()
+        let mut tags = format!(r#"<meta property="og:image" content="{}"/>"#, self.url);
+        if let Some(content_type) = self.content_type {
+            tags.push_str(&format!(
+                r#"<meta property="og:image:type" content="{content_type}"/>"#
+            ));
+        }
+        if self.width > 0 && self.height > 0 {
+            tags.push_str(&format!(
+                r#"<meta property="og:image:width" content="{}"/><meta property="og:image:height" content="{}"/>"#,
+                self.width, self.height
+            ));
+        }
+        tags.into()
     }
 }
 
@@ -109,24 +143,78 @@ impl Display for RenderedOpenGraphImage {
 }
 
 impl RouteAssets {
-    /// Generate an OpenGraph image from an SVG string, rendering it to a PNG at build time.
+    /// Add an OpenGraph image, from either inline SVG (dynamic) or an existing [`Image`] (static).
     ///
-    /// The image is sized according to the SVG's own dimensions. As with [`add_image`](RouteAssets::add_image),
-    /// the returned value can be referenced in the page through its [`url`](OpenGraphImage::url) or
-    /// [`render`](OpenGraphImage::render) methods, but doing so is optional.
+    /// SVG — an [`OpenGraphSource::Svg`] string or an `.svg` [`Image`] — is rendered to a PNG at
+    /// build time and sized according to the SVG's own dimensions. Raster [`Image`]s (PNG, JPEG,
+    /// WebP, …) are referenced as-is. As with [`add_image`](RouteAssets::add_image), referencing
+    /// the returned value in the page through its [`url`](OpenGraphImage::url) or
+    /// [`render`](OpenGraphImage::render) methods is optional.
     ///
     /// OpenGraph consumers require absolute image URLs, so [`BuildOptions::base_url`](crate::BuildOptions::base_url)
     /// must be set; otherwise this returns an error.
     ///
     /// Requires the `og_image` feature, which is enabled by default.
-    pub fn add_opengraph_image(&mut self, svg: &str) -> Result<OpenGraphImage, AssetError> {
+    ///
+    /// ## Example
+    /// ```rust
+    /// # use maudit::route::prelude::*;
+    /// # fn example(ctx: &mut PageContext) -> Result<(), maudit::errors::AssetError> {
+    /// // Dynamic: generated per page.
+    /// let generated = ctx.assets.add_opengraph_image("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"630\"/>")?;
+    ///
+    /// // Static: a pre-made file.
+    /// let cover = ctx.assets.add_image("images/og-cover.png")?;
+    /// let static_og = ctx.assets.add_opengraph_image(&cover)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn add_opengraph_image<'a>(
+        &mut self,
+        source: impl Into<OpenGraphSource<'a>>,
+    ) -> Result<OpenGraphImage, AssetError> {
         // OpenGraph consumers require an absolute URL, so `base_url` must be set.
-        let base_url = self.options.base_url.as_deref().ok_or_else(|| {
+        let base_url = self.options.base_url.clone().ok_or_else(|| {
             AssetError::OpenGraphFailed {
                 message: "OpenGraph images need an absolute URL: set `BuildOptions::base_url` to your site's URL (e.g. \"https://example.com\")".to_string(),
             }
         })?;
 
+        match source.into() {
+            OpenGraphSource::Svg(svg) => self.render_opengraph_svg(svg, &base_url),
+            OpenGraphSource::Image(image) if is_svg(&image.path) => {
+                let svg = std::fs::read_to_string(&image.path).map_err(|e| {
+                    AssetError::OpenGraphFailed {
+                        message: format!("failed to read {}: {}", image.path.display(), e),
+                    }
+                })?;
+                self.render_opengraph_svg(&svg, &base_url)
+            }
+            OpenGraphSource::Image(image) => {
+                // Raster images are valid OpenGraph formats, so reference the asset directly.
+                self.images.insert(image.clone());
+                // `dimensions()` reads the source, which no longer matches the output once
+                // the image is resized; report unknown (0, 0) rather than wrong dimensions.
+                let resized = image
+                    .options
+                    .as_ref()
+                    .is_some_and(|opts| opts.width.is_some() || opts.height.is_some());
+                let (width, height) = if resized { (0, 0) } else { image.dimensions() };
+                Ok(OpenGraphImage {
+                    url: format!("{}{}", base_url.trim_end_matches('/'), image.url),
+                    width,
+                    height,
+                    content_type: mime_from_url(&image.url),
+                })
+            }
+        }
+    }
+
+    fn render_opengraph_svg(
+        &mut self,
+        svg: &str,
+        base_url: &str,
+    ) -> Result<OpenGraphImage, AssetError> {
         let (png, width, height) = render_svg_to_png(svg)?;
         let hash = hash_bytes(&png);
 
@@ -150,7 +238,29 @@ impl RouteAssets {
         self.images
             .insert(Image::from_generated(build_path, hash, filename, asset_url));
 
-        Ok(OpenGraphImage { url, width, height })
+        Ok(OpenGraphImage {
+            url,
+            width,
+            height,
+            content_type: Some("image/png"),
+        })
+    }
+}
+
+fn is_svg(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("svg"))
+}
+
+fn mime_from_url(url: &str) -> Option<&'static str> {
+    match url.rsplit('.').next()?.to_ascii_lowercase().as_str() {
+        "png" => Some("image/png"),
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "webp" => Some("image/webp"),
+        "gif" => Some("image/gif"),
+        "avif" => Some("image/avif"),
+        _ => None,
     }
 }
 
@@ -198,7 +308,7 @@ fn hash_bytes(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::assets::{Asset, RouteAssets, RouteAssetsOptions};
+    use crate::assets::{Asset, ImageOptions, RouteAssets, RouteAssetsOptions};
 
     const SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><rect width="100%" height="100%" fill="#1a1a1a"/></svg>"##;
 
@@ -248,6 +358,76 @@ mod tests {
         )));
         assert!(rendered.contains(r#"<meta property="og:image:width" content="1200"/>"#));
         assert!(rendered.contains(r#"<meta property="og:image:height" content="630"/>"#));
+    }
+
+    #[test]
+    fn references_raster_image_directly() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let img_path = temp_dir.path().join("cover.png");
+        image::ImageBuffer::<image::Rgba<u8>, _>::from_fn(8, 4, |_, _| {
+            image::Rgba([10, 10, 10, 255])
+        })
+        .save(&img_path)
+        .unwrap();
+
+        let mut assets = assets_in(temp_dir.path());
+        let image = assets.add_image(&img_path).unwrap();
+        let og = assets.add_opengraph_image(&image).unwrap();
+
+        assert_eq!((og.width(), og.height()), (8, 4));
+        assert!(og.url().starts_with("https://example.com/"));
+        assert!(og.url().ends_with(".png"));
+        // No PNG is generated; only the referenced image is registered.
+        assert_eq!(assets.images.len(), 1);
+
+        let rendered = og.render().to_string();
+        assert!(rendered.contains(r#"<meta property="og:image:type" content="image/png"/>"#));
+        assert!(rendered.contains(r#"<meta property="og:image:width" content="8"/>"#));
+    }
+
+    #[test]
+    fn resized_raster_image_omits_dimensions() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let img_path = temp_dir.path().join("cover.png");
+        image::ImageBuffer::<image::Rgba<u8>, _>::from_fn(20, 20, |_, _| {
+            image::Rgba([10, 10, 10, 255])
+        })
+        .save(&img_path)
+        .unwrap();
+
+        let mut assets = assets_in(temp_dir.path());
+        let image = assets
+            .add_image_with_options(
+                &img_path,
+                ImageOptions {
+                    width: Some(8),
+                    height: Some(8),
+                    format: None,
+                },
+            )
+            .unwrap();
+        let og = assets.add_opengraph_image(&image).unwrap();
+
+        assert_eq!((og.width(), og.height()), (0, 0));
+        let rendered = og.render().to_string();
+        assert!(!rendered.contains("og:image:width"));
+        assert!(rendered.contains(r#"<meta property="og:image:type""#));
+    }
+
+    #[test]
+    fn renders_svg_image_to_png() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let svg_path = temp_dir.path().join("cover.svg");
+        std::fs::write(&svg_path, SVG).unwrap();
+
+        let mut assets = assets_in(temp_dir.path());
+        let image = assets.add_image(&svg_path).unwrap();
+        let og = assets.add_opengraph_image(&image).unwrap();
+
+        assert_eq!((og.width(), og.height()), (1200, 630));
+        assert!(og.url().ends_with(".png"));
+        // The source SVG plus the generated PNG.
+        assert_eq!(assets.images.len(), 2);
     }
 
     #[test]
