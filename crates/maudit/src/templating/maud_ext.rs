@@ -28,6 +28,13 @@ impl Render for RenderedImage {
     }
 }
 
+#[cfg(feature = "og_image")]
+impl Render for crate::assets::RenderedOpenGraphImage {
+    fn render(&self) -> Markup {
+        PreEscaped(self.to_string())
+    }
+}
+
 /// Can be used to create a generator tag in the output HTML. See [`GENERATOR`](crate::GENERATOR).
 pub fn generator() -> Markup {
     html! {

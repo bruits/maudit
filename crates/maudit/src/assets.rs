@@ -11,12 +11,17 @@ use std::{fs, path::PathBuf};
 pub(crate) mod css;
 mod image;
 pub mod image_cache;
+#[cfg(feature = "og_image")]
+mod opengraph;
 pub mod prefetch;
 pub(crate) mod sanitize_filename;
 mod script;
 mod style;
 mod tailwind;
 pub use image::{Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt, RenderedImage};
+#[cfg(feature = "og_image")]
+#[cfg_attr(docsrs, doc(cfg(feature = "og_image")))]
+pub use opengraph::{OpenGraphImage, RenderedOpenGraphImage};
 pub use prefetch::PrefetchPlugin;
 pub use script::Script;
 pub use style::{Style, StyleOptions};

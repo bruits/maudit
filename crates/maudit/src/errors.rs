@@ -66,6 +66,9 @@ pub enum AssetError {
         #[source]
         source: image::ImageError,
     },
+    #[cfg(feature = "og_image")]
+    #[error("Failed to generate OpenGraph image: {message}")]
+    OpenGraphFailed { message: String },
 }
 
 #[derive(Error, Debug)]

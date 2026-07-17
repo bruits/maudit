@@ -11,8 +11,9 @@ rust-version = "1.95.0"
 exclude = ["tsconfig.json"]
 
 [features]
-default = ["maud"]
+default = ["maud", "og_image"]
 maud = ["dep:maud"]
+og_image = ["dep:resvg"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -21,6 +22,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [dependencies]
 # Optional
 maud = { workspace = true, optional = true }
+resvg = { version = "0.45.1", optional = true }
 
 # TODO: Allow making those optional
 rolldown = "1.0.0"

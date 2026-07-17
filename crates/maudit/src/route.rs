@@ -1019,6 +1019,8 @@ pub mod prelude {
         Asset, Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt, Script, Style,
         StyleOptions,
     };
+    #[cfg(feature = "og_image")]
+    pub use crate::assets::{OpenGraphImage, RenderedOpenGraphImage};
     pub use crate::content::{ContentContext, ContentEntry, Entry, EntryInner, MarkdownContent};
     pub use maudit_macros::{Params, route};
 }
