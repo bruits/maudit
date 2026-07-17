@@ -58,6 +58,9 @@ pub struct OpenGraphImage {
 
 impl OpenGraphImage {
     /// The URL of the generated image, e.g. to reference it manually.
+    ///
+    /// Absolute when [`BuildOptions::base_url`](crate::BuildOptions::base_url) is set (as OpenGraph
+    /// consumers expect), otherwise root-relative.
     pub fn url(&self) -> &str {
         &self.url
     }
@@ -113,7 +116,8 @@ impl RouteAssets {
     ///
     /// The image is sized according to the SVG's own dimensions. As with [`add_image`](RouteAssets::add_image),
     /// the returned value can be referenced in the page through its [`url`](OpenGraphImage::url) or
-    /// [`render`](OpenGraphImage::render) methods, but doing so is optional.
+    /// [`render`](OpenGraphImage::render) methods, but doing so is optional. The referenced URL is absolute
+    /// when [`BuildOptions::base_url`](crate::BuildOptions::base_url) is set, as OpenGraph consumers expect.
     ///
     /// Requires the `og_image` feature, which is enabled by default.
     pub fn add_opengraph_image(&mut self, svg: &str) -> Result<OpenGraphImage, AssetError> {
@@ -122,7 +126,13 @@ impl RouteAssets {
 
         let filename = make_filename(Path::new("og-image"), &hash, Some("png"));
         let build_path = make_final_path(&self.options.output_assets_dir, &filename);
-        let url = make_final_url(&self.options.assets_dir, &filename);
+        let asset_url = make_final_url(&self.options.assets_dir, &filename);
+
+        // OpenGraph consumers expect an absolute URL, so resolve against `base_url` when set.
+        let url = match &self.options.base_url {
+            Some(base) => format!("{}{}", base.trim_end_matches('/'), asset_url),
+            None => asset_url.clone(),
+        };
 
         // Materialize the generated PNG on disk so the build's copy step is a no-op.
         if !build_path.exists() {
@@ -136,12 +146,8 @@ impl RouteAssets {
             })?;
         }
 
-        self.images.insert(Image::from_generated(
-            build_path,
-            hash,
-            filename,
-            url.clone(),
-        ));
+        self.images
+            .insert(Image::from_generated(build_path, hash, filename, asset_url));
 
         Ok(OpenGraphImage { url, width, height })
     }
@@ -252,6 +258,28 @@ mod tests {
 
         assert_eq!(first.url(), second.url());
         assert_eq!(assets.images.len(), 1);
+    }
+
+    #[test]
+    fn url_is_absolute_with_base_url() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut assets = RouteAssets::new(
+            &RouteAssetsOptions {
+                output_assets_dir: temp_dir.path().to_path_buf(),
+                base_url: Some("https://example.com".to_string()),
+                ..Default::default()
+            },
+            None,
+            None,
+        );
+
+        let og = assets.add_opengraph_image(SVG).unwrap();
+
+        assert!(og.url().starts_with("https://example.com/"));
+        assert!(og.render().to_string().contains(&format!(
+            r#"<meta property="og:image" content="{}"/>"#,
+            og.url()
+        )));
     }
 
     #[test]

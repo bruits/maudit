@@ -98,6 +98,8 @@ pub struct RouteAssetsOptions {
     /// Must match what `url_to_disk_path` produces for the placeholder URL.
     pub(crate) output_dir: PathBuf,
     pub(crate) intermediate_url_format: IntermediateUrlFormat,
+    /// [`BuildOptions::base_url`], used to resolve absolute asset URLs where needed.
+    pub(crate) base_url: Option<String>,
 }
 
 /// URL format for bundled assets pre-substitution. Coronate sets `Placeholder`;
@@ -124,6 +126,7 @@ impl Default for RouteAssetsOptions {
             hashing_strategy: page_assets_options.hashing_strategy,
             output_dir: default_build_options.output_dir,
             intermediate_url_format: IntermediateUrlFormat::default(),
+            base_url: default_build_options.base_url,
         }
     }
 }

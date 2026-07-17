@@ -193,6 +193,7 @@ impl BuildOptions {
             hashing_strategy: self.assets.hashing_strategy,
             output_dir: self.output_dir.clone(),
             intermediate_url_format: IntermediateUrlFormat::SourceHash,
+            base_url: self.base_url.clone(),
         }
     }
 }
