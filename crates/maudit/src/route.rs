@@ -410,7 +410,7 @@ impl<'a> PageContext<'a> {
     pub fn canonical_url(&self) -> Option<String> {
         self.base_url
             .as_ref()
-            .map(|base| format!("{}{}", base, self.current_path))
+            .map(|base| crate::assets::join_base_url(base, self.current_path))
     }
 }
 

@@ -99,6 +99,8 @@ pub struct RouteAssetsOptions {
     pub(crate) output_dir: PathBuf,
     pub(crate) intermediate_url_format: IntermediateUrlFormat,
     /// [`BuildOptions::base_url`], used to resolve absolute asset URLs where needed.
+    /// Currently only consumed by OpenGraph image generation.
+    #[cfg_attr(not(feature = "og_image"), allow(dead_code))]
     pub(crate) base_url: Option<String>,
 }
 
@@ -646,9 +648,7 @@ pub fn calculate_hash(path: &Path, options: Option<&HashConfig>) -> Result<Strin
         }
     }
 
-    let mut hasher = RapidHasher::default();
-    hasher.write(&buf);
-    let hash = hasher.finish(); // one-shot, much faster than streaming
+    let hash = hash_bytes(&buf);
 
     debug!(
         "Calculated hash for asset {:?} in {:?}",
@@ -656,9 +656,26 @@ pub fn calculate_hash(path: &Path, options: Option<&HashConfig>) -> Result<Strin
         start_time.elapsed()
     );
 
-    // TODO: This works, but perhaps we can generate prettier hashes, see https://github.com/rolldown/rolldown/blob/abf62c45d7a69b42dab4bff92095e320b418e9b8/crates/rolldown_utils/src/xxhash.rs
+    Ok(hash)
+}
+
+/// Hash raw bytes into the short hex string used for asset filenames. Shared so every
+/// asset kind (including generated OpenGraph images) uses the exact same convention.
+///
+// TODO: This works, but perhaps we can generate prettier hashes, see https://github.com/rolldown/rolldown/blob/abf62c45d7a69b42dab4bff92095e320b418e9b8/crates/rolldown_utils/src/xxhash.rs
+pub(crate) fn hash_bytes(bytes: &[u8]) -> String {
+    let mut hasher = RapidHasher::default();
+    hasher.write(bytes);
+    let hash = hasher.finish(); // one-shot, much faster than streaming
     let hex = format!("{:016x}", hash);
-    Ok(hex[..5].to_string())
+    hex[..5].to_string()
+}
+
+/// Join an absolute site `base_url` with a root-relative `path` (e.g. `/foo.png`) into a
+/// single absolute URL. Trims a trailing `/` from `base_url` so `https://example.com` and
+/// `https://example.com/` behave identically.
+pub(crate) fn join_base_url(base_url: &str, path: &str) -> String {
+    format!("{}{}", base_url.trim_end_matches('/'), path)
 }
 
 #[cfg(test)]

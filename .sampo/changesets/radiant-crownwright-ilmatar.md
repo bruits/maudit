@@ -4,6 +4,8 @@ cargo/maudit: minor
 
 Added built-in OpenGraph image generation behind the new `og_image` feature (enabled by default). Call `ctx.assets.add_opengraph_image(source)` in a route with either an inline SVG string (rendered to a PNG at build time using [resvg](https://github.com/linebender/resvg), for dynamic per-page images) or an existing `Image` (an `.svg` is rendered to a PNG, raster images are referenced as-is, for static pre-made images). Like images, referencing the result is opt-in: `og.render()` returns the `<meta property="og:image">` tags. OpenGraph consumers require absolute image URLs, so `BuildOptions::base_url` must be set.
 
+Rendered images are cached (keyed on the SVG source and requested size) in the same on-disk image cache as regular assets, so the expensive SVG-to-PNG rasterization is skipped on rebuilds when the input is unchanged.
+
 ```rust
 let og = ctx.assets.add_opengraph_image(
     r##"<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630">

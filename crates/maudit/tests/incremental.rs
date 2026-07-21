@@ -2805,3 +2805,249 @@ fn test_style_dropped_from_page_clears_url_from_html() {
         html_without_style
     );
 }
+
+// ---------------------------------------------------------------------------
+// OpenGraph image generation through the real incremental build pipeline.
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "og_image")]
+const OG_INLINE_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><rect width="100%" height="100%" fill="#0a0a0a"/></svg>"##;
+
+#[cfg(feature = "og_image")]
+#[route("/og")]
+pub struct OgPage;
+
+#[cfg(feature = "og_image")]
+impl Route for OgPage {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let og = ctx.assets.add_opengraph_image(OG_INLINE_SVG).unwrap();
+        format!(
+            "<html><head>{}</head><body><h1>OG</h1></body></html>",
+            og.render()
+        )
+    }
+}
+
+/// An OpenGraph page whose SVG embeds an article title, so its rendered image depends on
+/// content and must change when that content changes.
+#[cfg(feature = "og_image")]
+#[route("/og-content")]
+pub struct OgContentPage;
+
+#[cfg(feature = "og_image")]
+impl Route for OgContentPage {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let articles = ctx.content::<ArticleContent>("articles");
+        let entry = articles.get_entry("first");
+        let title = entry.data(ctx).title.clone();
+        let svg = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><text x="60" y="330" font-size="72">{}</text></svg>"##,
+            title
+        );
+        let og = ctx.assets.add_opengraph_image(&svg).unwrap();
+        format!(
+            "<html><head>{}</head><body><h1>{}</h1></body></html>",
+            og.render(),
+            title
+        )
+    }
+}
+
+#[cfg(feature = "og_image")]
+fn routes_with_og() -> &'static [&'static dyn FullRoute] {
+    &[&OgPage]
+}
+
+#[cfg(feature = "og_image")]
+fn routes_with_og_content() -> &'static [&'static dyn FullRoute] {
+    &[&OgContentPage]
+}
+
+/// [`build_options`] with a `base_url`, which OpenGraph image generation requires.
+#[cfg(feature = "og_image")]
+fn build_options_with_base_url(tmp: &Path) -> BuildOptions {
+    BuildOptions {
+        base_url: Some("https://example.com".to_string()),
+        ..build_options(tmp)
+    }
+}
+
+/// Recursively find the first file under `dir` whose name starts with `prefix`.
+#[cfg(feature = "og_image")]
+fn find_generated(dir: &Path, prefix: &str) -> Option<PathBuf> {
+    for entry in fs::read_dir(dir).ok()?.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = find_generated(&path, prefix) {
+                return Some(found);
+            }
+        } else if path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with(prefix))
+        {
+            return Some(path);
+        }
+    }
+    None
+}
+
+/// Extract the `og:image` URL from a rendered page's meta tags.
+#[cfg(feature = "og_image")]
+fn og_image_url(html: &str) -> String {
+    let marker = r#"property="og:image" content=""#;
+    let start = html.find(marker).expect("og:image meta tag present") + marker.len();
+    let rest = &html[start..];
+    let end = rest.find('"').expect("closing quote");
+    rest[..end].to_string()
+}
+
+/// A no-op rebuild must treat an OpenGraph page like any other cached page, and the
+/// generated PNG must survive in the output directory.
+#[cfg(feature = "og_image")]
+#[test]
+#[serial]
+fn test_opengraph_page_cached_on_rebuild() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    let out1 = coronate(
+        routes_with_og(),
+        make_content_sources(&content_dir),
+        build_options_with_base_url(tmp.path()),
+    )
+    .unwrap();
+    assert!(
+        out1.pages.iter().all(|p| !p.cached),
+        "first build renders everything"
+    );
+
+    let dist = tmp.path().join("dist");
+    let og_png = find_generated(&dist, "og-image").expect("OG PNG generated in output");
+
+    // Second build, nothing changed.
+    let out2 = coronate(
+        routes_with_og(),
+        make_content_sources(&content_dir),
+        build_options_with_base_url(tmp.path()),
+    )
+    .unwrap();
+
+    let rendered = rendered_routes(&out2);
+    assert!(
+        rendered.is_empty(),
+        "OG page must be cached on a no-op rebuild, rendered: {:?}",
+        rendered
+    );
+    assert_eq!(cached_routes(&out2), vec!["/og".to_string()]);
+    assert!(
+        og_png.exists(),
+        "OG PNG must persist across a cached rebuild"
+    );
+}
+
+/// When the content an OpenGraph image is derived from changes, the page must re-render and
+/// its OG image (URL + file) must change accordingly.
+#[cfg(feature = "og_image")]
+#[test]
+#[serial]
+fn test_opengraph_regenerates_on_content_change() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First",
+        "desc",
+        "body",
+    );
+
+    coronate(
+        routes_with_og_content(),
+        make_content_sources(&content_dir),
+        build_options_with_base_url(tmp.path()),
+    )
+    .unwrap();
+
+    let dist = tmp.path().join("dist");
+    let html_path = dist.join("og-content/index.html");
+    let url1 = og_image_url(&fs::read_to_string(&html_path).unwrap());
+    let file1 = url1.rsplit('/').next().unwrap().to_string();
+    assert!(find_generated(&dist, &file1).is_some());
+
+    // Change the title the SVG embeds.
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Updated",
+        "desc",
+        "body",
+    );
+
+    let out2 = coronate(
+        routes_with_og_content(),
+        make_content_sources(&content_dir),
+        build_options_with_base_url(tmp.path()),
+    )
+    .unwrap();
+
+    assert!(
+        rendered_routes(&out2).contains(&"/og-content".to_string()),
+        "OG page must re-render when its source content changes"
+    );
+
+    let url2 = og_image_url(&fs::read_to_string(&html_path).unwrap());
+    assert_ne!(
+        url1, url2,
+        "OG image URL must change when the embedded content changes"
+    );
+    let file2 = url2.rsplit('/').next().unwrap().to_string();
+    assert!(
+        find_generated(&dist, &file2).is_some(),
+        "the newly referenced OG PNG must exist in the output"
+    );
+}
+
+/// The persistent image cache must let an OpenGraph image be restored without re-rendering.
+/// The cached PNG is overwritten with sentinel bytes so a genuine re-render (which would
+/// produce a real rasterized PNG) is distinguishable from a cache reuse.
+#[cfg(feature = "og_image")]
+#[test]
+#[serial]
+fn test_opengraph_restored_from_image_cache() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+
+    coronate(
+        routes_with_og(),
+        make_content_sources(&content_dir),
+        build_options_with_base_url(tmp.path()),
+    )
+    .unwrap();
+
+    let cache_png = find_generated(&tmp.path().join("cache/images"), "og-image")
+        .expect("OG PNG stored in the image cache");
+    let sentinel: &[u8] = b"SENTINEL-CACHED-OG-BYTES";
+    fs::write(&cache_png, sentinel).unwrap();
+
+    // Wipe the output directory but keep the cache, then rebuild.
+    fs::remove_dir_all(tmp.path().join("dist")).unwrap();
+
+    coronate(
+        routes_with_og(),
+        make_content_sources(&content_dir),
+        build_options_with_base_url(tmp.path()),
+    )
+    .unwrap();
+
+    let out_png = find_generated(&tmp.path().join("dist"), "og-image")
+        .expect("OG PNG restored to the output directory");
+    assert_eq!(
+        fs::read(&out_png).unwrap(),
+        sentinel,
+        "OG image must be restored from the image cache, not re-rendered"
+    );
+}
