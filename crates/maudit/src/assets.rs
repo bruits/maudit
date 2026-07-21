@@ -579,7 +579,9 @@ fn make_pending_url(file_name: &Path) -> String {
 
 /// On-disk sibling of [`make_pending_url`]; substitution-map keys depend on this match.
 fn make_pending_path(output_dir: &Path, file_name: &Path) -> PathBuf {
-    output_dir.join(PENDING_URL_PREFIX.trim_start_matches('/')).join(file_name)
+    output_dir
+        .join(PENDING_URL_PREFIX.trim_start_matches('/'))
+        .join(file_name)
 }
 
 fn make_final_path(output_assets_dir: &Path, file_name: &Path) -> PathBuf {
@@ -816,32 +818,17 @@ mod tests {
         let image = page_assets
             .add_image(temp_dir.path().join("image.png"))
             .unwrap();
-        assert!(
-            image
-                .build_path()
-                .to_string_lossy()
-                .contains(&image.hash)
-        );
+        assert!(image.build_path().to_string_lossy().contains(&image.hash));
 
         let script = page_assets
             .add_script(temp_dir.path().join("script.js"))
             .unwrap();
-        assert!(
-            script
-                .build_path()
-                .to_string_lossy()
-                .contains(&script.hash)
-        );
+        assert!(script.build_path().to_string_lossy().contains(&script.hash));
 
         let style = page_assets
             .add_style(temp_dir.path().join("style.css"))
             .unwrap();
-        assert!(
-            style
-                .build_path()
-                .to_string_lossy()
-                .contains(&style.hash)
-        );
+        assert!(style.build_path().to_string_lossy().contains(&style.hash));
     }
 
     #[test]

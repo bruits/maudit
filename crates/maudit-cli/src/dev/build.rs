@@ -316,15 +316,16 @@ impl BuildManager {
                                     }
                                     // Binary artifact produced - capture the path
                                     Message::CompilerArtifact(artifact)
-                                        if artifact.executable.is_some() => {
-                                            binary_path =
-                                                artifact.executable.map(|p| p.into_std_path_buf());
-                                            binary_name = Some(artifact.target.name.clone());
-                                            debug!(
-                                                "Found binary artifact: {:?} ({})",
-                                                binary_path, artifact.target.name
-                                            );
-                                        }
+                                        if artifact.executable.is_some() =>
+                                    {
+                                        binary_path =
+                                            artifact.executable.map(|p| p.into_std_path_buf());
+                                        binary_name = Some(artifact.target.name.clone());
+                                        debug!(
+                                            "Found binary artifact: {:?} ({})",
+                                            binary_path, artifact.target.name
+                                        );
+                                    }
                                     // Random text came in, just log it
                                     Message::TextLine(msg) => {
                                         info!("{}", msg);

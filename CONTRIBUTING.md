@@ -31,7 +31,7 @@ We're also committed to fostering a welcoming and respectful community. Any issu
 
 ## Quality Guidelines
 
-- Prefer self-documenting code first, with expressive names and straightforward logic. Comments should explain *why* (intent, invariants, trade-offs), not *how*. Variable and function names should be clear and descriptive, not cryptic abbreviations. Avoid hidden state and side effects.
+- Prefer self-documenting code first, with expressive names and straightforward logic. Comments should explain _why_ (intent, invariants, trade-offs), not _how_. Variable and function names should be clear and descriptive, not cryptic abbreviations. Avoid hidden state and side effects.
 - Tests should assert observable behavior (inputs/outputs, effects), not internal implementation details. Keep tests deterministic and independent of global state.
 - For errors, use typed error enums in library crates (derived with `thiserror`). Per-crate `pub type Result<T>` aliases for ergonomic signatures. Add context at the boundary (CLI) rather than deep in core, keep library error messages concise.
 - Prefer `?` propagation when possible, and reserve `.expect()`/`.unwrap()` for cases where failure is a programmer bug (e.g. hardcoded regex literals, test helpers).
@@ -44,6 +44,7 @@ We're also committed to fostering a welcoming and respectful community. Any issu
 Maudit uses [Sampo](https://github.com/bruits/sampo) to manage changelogs and versioning. Every user-facing change should ship with a changeset that lands in the changelog of the next release.
 
 **Structure:**
+
 1. **Breaking prefix (if applicable):** `**⚠️ breaking change:**`
 2. **Verb:** `Added`, `Removed`, `Fixed`, `Changed`, `Deprecated`, or `Improved`.
 3. **Description**.
@@ -71,7 +72,7 @@ For the website, the examples using Tailwind, the CLI's JavaScript pieces, and t
 
 ### Oubli
 
-`oubli` is a sibling library that builds documentation websites *with* Maudit. It depends on `maudit` and `maud`, and will powers most of Bruits ecosystem's documentation websites. Treat it as a downstream user of `maudit`: breaking changes in `maudit`'s public API ripple here first.
+`oubli` is a sibling library that builds documentation websites _with_ Maudit. It depends on `maudit` and `maud`, and will powers most of Bruits ecosystem's documentation websites. Treat it as a downstream user of `maudit`: breaking changes in `maudit`'s public API ripple here first.
 
 ### Other workspaces
 
