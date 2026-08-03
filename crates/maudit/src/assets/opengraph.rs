@@ -3,6 +3,8 @@
 //! SVG (an inline string or an `.svg` [`Image`]) is rendered to a PNG at build time using
 //! [resvg](https://github.com/linebender/resvg); raster [`Image`]s are referenced as-is.
 //! Obtain images through [`RouteAssets::add_opengraph_image`](crate::assets::RouteAssets::add_opengraph_image).
+//!
+//! Requires the `og_image` feature, which is not enabled by default.
 
 use std::fmt::Display;
 use std::path::Path;
@@ -159,7 +161,8 @@ impl RouteAssets {
     /// OpenGraph consumers require absolute image URLs, so [`BuildOptions::base_url`](crate::BuildOptions::base_url)
     /// must be set; otherwise this returns an error.
     ///
-    /// Requires the `og_image` feature, which is enabled by default.
+    /// Requires the `og_image` feature, which is **not** enabled by default:
+    /// `maudit = { version = "...", features = ["og_image"] }`.
     ///
     /// ## Example
     /// ```rust

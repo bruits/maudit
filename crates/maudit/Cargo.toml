@@ -11,8 +11,10 @@ rust-version = "1.95.0"
 exclude = ["tsconfig.json"]
 
 [features]
-default = ["maud", "og_image"]
+default = ["maud"]
 maud = ["dep:maud"]
+# Opt-in: pulls in resvg, a full SVG rasterizer, which is a heavy dependency to
+# compile for sites that do not generate OpenGraph images.
 og_image = ["dep:resvg"]
 
 [package.metadata.docs.rs]
