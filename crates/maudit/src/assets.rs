@@ -11,12 +11,17 @@ use std::{fs, path::PathBuf};
 pub(crate) mod css;
 mod image;
 pub mod image_cache;
+#[cfg(feature = "og_image")]
+mod opengraph;
 pub mod prefetch;
 pub(crate) mod sanitize_filename;
 mod script;
 mod style;
 mod tailwind;
 pub use image::{Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt, RenderedImage};
+#[cfg(feature = "og_image")]
+#[cfg_attr(docsrs, doc(cfg(feature = "og_image")))]
+pub use opengraph::{OpenGraphImage, OpenGraphSource, RenderedOpenGraphImage};
 pub use prefetch::PrefetchPlugin;
 pub use script::Script;
 pub use style::{Style, StyleOptions};
@@ -93,6 +98,10 @@ pub struct RouteAssetsOptions {
     /// Must match what `url_to_disk_path` produces for the placeholder URL.
     pub(crate) output_dir: PathBuf,
     pub(crate) intermediate_url_format: IntermediateUrlFormat,
+    /// [`BuildOptions::base_url`], used to resolve absolute asset URLs where needed.
+    /// Currently only consumed by OpenGraph image generation.
+    #[cfg_attr(not(feature = "og_image"), allow(dead_code))]
+    pub(crate) base_url: Option<String>,
 }
 
 /// URL format for bundled assets pre-substitution. Coronate sets `Placeholder`;
@@ -119,6 +128,7 @@ impl Default for RouteAssetsOptions {
             hashing_strategy: page_assets_options.hashing_strategy,
             output_dir: default_build_options.output_dir,
             intermediate_url_format: IntermediateUrlFormat::default(),
+            base_url: default_build_options.base_url,
         }
     }
 }
@@ -569,7 +579,9 @@ fn make_pending_url(file_name: &Path) -> String {
 
 /// On-disk sibling of [`make_pending_url`]; substitution-map keys depend on this match.
 fn make_pending_path(output_dir: &Path, file_name: &Path) -> PathBuf {
-    output_dir.join(PENDING_URL_PREFIX.trim_start_matches('/')).join(file_name)
+    output_dir
+        .join(PENDING_URL_PREFIX.trim_start_matches('/'))
+        .join(file_name)
 }
 
 fn make_final_path(output_assets_dir: &Path, file_name: &Path) -> PathBuf {
@@ -638,9 +650,7 @@ pub fn calculate_hash(path: &Path, options: Option<&HashConfig>) -> Result<Strin
         }
     }
 
-    let mut hasher = RapidHasher::default();
-    hasher.write(&buf);
-    let hash = hasher.finish(); // one-shot, much faster than streaming
+    let hash = hash_bytes(&buf);
 
     debug!(
         "Calculated hash for asset {:?} in {:?}",
@@ -648,9 +658,26 @@ pub fn calculate_hash(path: &Path, options: Option<&HashConfig>) -> Result<Strin
         start_time.elapsed()
     );
 
-    // TODO: This works, but perhaps we can generate prettier hashes, see https://github.com/rolldown/rolldown/blob/abf62c45d7a69b42dab4bff92095e320b418e9b8/crates/rolldown_utils/src/xxhash.rs
+    Ok(hash)
+}
+
+/// Hash raw bytes into the short hex string used for asset filenames. Shared so every
+/// asset kind (including generated OpenGraph images) uses the exact same convention.
+///
+// TODO: This works, but perhaps we can generate prettier hashes, see https://github.com/rolldown/rolldown/blob/abf62c45d7a69b42dab4bff92095e320b418e9b8/crates/rolldown_utils/src/xxhash.rs
+pub(crate) fn hash_bytes(bytes: &[u8]) -> String {
+    let mut hasher = RapidHasher::default();
+    hasher.write(bytes);
+    let hash = hasher.finish(); // one-shot, much faster than streaming
     let hex = format!("{:016x}", hash);
-    Ok(hex[..5].to_string())
+    hex[..5].to_string()
+}
+
+/// Join an absolute site `base_url` with a root-relative `path` (e.g. `/foo.png`) into a
+/// single absolute URL. Trims a trailing `/` from `base_url` so `https://example.com` and
+/// `https://example.com/` behave identically.
+pub(crate) fn join_base_url(base_url: &str, path: &str) -> String {
+    format!("{}{}", base_url.trim_end_matches('/'), path)
 }
 
 #[cfg(test)]
@@ -791,32 +818,17 @@ mod tests {
         let image = page_assets
             .add_image(temp_dir.path().join("image.png"))
             .unwrap();
-        assert!(
-            image
-                .build_path()
-                .to_string_lossy()
-                .contains(&image.hash)
-        );
+        assert!(image.build_path().to_string_lossy().contains(&image.hash));
 
         let script = page_assets
             .add_script(temp_dir.path().join("script.js"))
             .unwrap();
-        assert!(
-            script
-                .build_path()
-                .to_string_lossy()
-                .contains(&script.hash)
-        );
+        assert!(script.build_path().to_string_lossy().contains(&script.hash));
 
         let style = page_assets
             .add_style(temp_dir.path().join("style.css"))
             .unwrap();
-        assert!(
-            style
-                .build_path()
-                .to_string_lossy()
-                .contains(&style.hash)
-        );
+        assert!(style.build_path().to_string_lossy().contains(&style.hash));
     }
 
     #[test]

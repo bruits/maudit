@@ -14,6 +14,7 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
         routes![routes::Index, routes::DynamicExample, routes::Endpoint],
         content_sources![],
         BuildOptions {
+            base_url: Some("https://example.com".into()),
             assets: AssetsOptions {
                 tailwind_binary_path: "../../node_modules/.bin/tailwindcss".into(),
                 ..Default::default()

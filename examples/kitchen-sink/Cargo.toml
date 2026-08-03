@@ -5,5 +5,5 @@ edition = "2024"
 publish = false
 
 [dependencies]
-maudit = { workspace = true }
+maudit = { workspace = true, features = ["og_image"] }
 maud = "0.27.0"

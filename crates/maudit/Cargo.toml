@@ -13,6 +13,9 @@ exclude = ["tsconfig.json"]
 [features]
 default = ["maud"]
 maud = ["dep:maud"]
+# Opt-in: pulls in resvg, a full SVG rasterizer, which is a heavy dependency to
+# compile for sites that do not generate OpenGraph images.
+og_image = ["dep:resvg"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -21,6 +24,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [dependencies]
 # Optional
 maud = { workspace = true, optional = true }
+resvg = { version = "0.45.1", optional = true }
 
 # TODO: Allow making those optional
 rolldown = "1.0.0"

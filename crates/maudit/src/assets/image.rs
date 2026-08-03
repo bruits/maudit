@@ -8,9 +8,7 @@ use log::debug;
 use thumbhash::{rgba_to_thumb_hash, thumb_hash_to_average_rgba, thumb_hash_to_rgba};
 
 use crate::assets::image_cache::ImageCache;
-use crate::assets::{
-    RouteAssetsOptions, make_filename, make_final_path, make_final_url,
-};
+use crate::assets::{RouteAssetsOptions, make_filename, make_final_path, make_final_url};
 use crate::is_dev;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -150,6 +148,27 @@ impl Image {
             url,
             build_path,
             cache,
+        }
+    }
+
+    /// Construct an image for a file already materialized on disk (e.g. a generated
+    /// OpenGraph image), with a precomputed hash, filename and URL. The source and build
+    /// paths are the same, so the build's copy step becomes a no-op.
+    #[cfg(feature = "og_image")]
+    pub(crate) fn from_generated(
+        build_path: PathBuf,
+        hash: String,
+        filename: PathBuf,
+        url: String,
+    ) -> Self {
+        Self {
+            path: build_path.clone(),
+            hash,
+            options: None,
+            filename,
+            url,
+            build_path,
+            cache: None,
         }
     }
 

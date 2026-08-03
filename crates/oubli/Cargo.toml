@@ -4,6 +4,7 @@ description = "Library for generating documentation websites with Maudit."
 version = "0.1.19"
 license = "MIT"
 edition = "2024"
+rust-version = "1.95.0"
 
 [dependencies]
 maudit = { path = "../maudit", version = "0.12.0" }

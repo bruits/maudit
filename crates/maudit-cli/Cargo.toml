@@ -4,6 +4,7 @@ description = "CLI to operate on maudit projects."
 version = "0.8.1"
 license = "MIT"
 edition = "2024"
+rust-version = "1.95.0"
 include = ["js/dist/**/**", "src/**", "Cargo.toml", "Cargo.lock", "CHANGELOG.md"]
 
 [[bin]]
