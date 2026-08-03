@@ -99,6 +99,20 @@ impl Route for ImagePage {
 static STYLE_PATH_1: Mutex<Option<PathBuf>> = Mutex::new(None);
 static STYLE_PATH_2: Mutex<Option<PathBuf>> = Mutex::new(None);
 static STYLE_PATH_3: Mutex<Option<PathBuf>> = Mutex::new(None);
+static SCRIPT_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+#[route("/scripted")]
+pub struct ScriptedPage;
+
+impl Route for ScriptedPage {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let script_path = SCRIPT_PATH.lock().unwrap().clone().unwrap();
+        ctx.assets
+            .include_script(&script_path)
+            .expect("Failed to include script");
+        "<html><head></head><body><h1>Scripted</h1></body></html>"
+    }
+}
 
 #[route("/styled")]
 pub struct StyledPage;
@@ -2803,5 +2817,169 @@ fn test_style_dropped_from_page_clears_url_from_html() {
         !html_without_style.contains("__maudit_pending__"),
         "build 2: placeholder URL must not appear, got:\n{}",
         html_without_style
+    );
+}
+
+fn routes_with_scripted() -> &'static [&'static dyn FullRoute] {
+    &[&IndexPage, &AboutPage, &ArticlePage, &ScriptedPage]
+}
+
+/// Every emitted .js bundle in the output assets dir, concatenated.
+fn read_bundled_js(tmp: &Path) -> String {
+    let assets_dir = tmp.join("dist/_maudit");
+    let mut out = String::new();
+    if let Ok(entries) = fs::read_dir(&assets_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "js") {
+                out.push_str(&fs::read_to_string(&path).unwrap_or_default());
+            }
+        }
+    }
+    out
+}
+
+#[test]
+#[serial]
+fn test_script_entry_change_triggers_rebundle() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+
+    let entry = tmp.path().join("entry.js");
+    fs::write(&entry, "console.log(\"ENTRY_ONE\");").unwrap();
+    *SCRIPT_PATH.lock().unwrap() = Some(entry.clone());
+
+    coronate(
+        routes_with_scripted(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+    assert!(read_bundled_js(tmp.path()).contains("ENTRY_ONE"));
+
+    fs::write(&entry, "console.log(\"ENTRY_TWO\");").unwrap();
+
+    coronate(
+        routes_with_scripted(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+    assert!(
+        read_bundled_js(tmp.path()).contains("ENTRY_TWO"),
+        "editing the entry script must re-bundle"
+    );
+}
+
+#[test]
+#[serial]
+fn test_script_import_change_triggers_rebundle() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+
+    // The entry never changes; only the module it imports does.
+    let entry = tmp.path().join("entry.js");
+    let helper = tmp.path().join("helper.js");
+    fs::write(
+        &entry,
+        "import { marker } from \"./helper.js\";\nconsole.log(marker);",
+    )
+    .unwrap();
+    fs::write(&helper, "export const marker = \"MARKER_ONE\";").unwrap();
+    *SCRIPT_PATH.lock().unwrap() = Some(entry.clone());
+
+    coronate(
+        routes_with_scripted(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+    assert!(read_bundled_js(tmp.path()).contains("MARKER_ONE"));
+
+    fs::write(&helper, "export const marker = \"MARKER_TWO\";").unwrap();
+
+    coronate(
+        routes_with_scripted(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+    assert!(
+        read_bundled_js(tmp.path()).contains("MARKER_TWO"),
+        "editing an imported module must re-bundle the entry that imports it"
+    );
+}
+
+/// Every emitted .css bundle in the output assets dir, concatenated.
+fn read_bundled_css(tmp: &Path) -> String {
+    let assets_dir = tmp.join("dist/_maudit");
+    let mut out = String::new();
+    if let Ok(entries) = fs::read_dir(&assets_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "css") {
+                out.push_str(&fs::read_to_string(&path).unwrap_or_default());
+            }
+        }
+    }
+    out
+}
+
+#[test]
+#[serial]
+fn test_style_import_change_triggers_rebundle() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First Post",
+        "The first post",
+        "Hello world",
+    );
+
+    // The entry stylesheet never changes; only the partial it @imports does.
+    let entry = tmp.path().join("main.css");
+    let partial = tmp.path().join("_partial.css");
+    fs::write(&entry, "@import \"_partial.css\";\nbody { color: blue; }").unwrap();
+    fs::write(&partial, "h1::after { content: \"MARKER_ONE\"; }").unwrap();
+    *STYLE_PATH_1.lock().unwrap() = Some(entry.clone());
+
+    coronate(
+        routes_with_styled1(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+    assert!(read_bundled_css(tmp.path()).contains("MARKER_ONE"));
+
+    fs::write(&partial, "h1::after { content: \"MARKER_TWO\"; }").unwrap();
+
+    coronate(
+        routes_with_styled1(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+    assert!(
+        read_bundled_css(tmp.path()).contains("MARKER_TWO"),
+        "editing an @import-ed partial must re-bundle the stylesheet that imports it"
     );
 }

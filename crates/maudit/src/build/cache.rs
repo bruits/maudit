@@ -8,7 +8,7 @@ use log::{debug, info};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
-pub const BUILD_CACHE_VERSION: u32 = 13;
+pub const BUILD_CACHE_VERSION: u32 = 14;
 pub const BUILD_CACHE_FILENAME: &str = "build_cache.bin";
 
 /// Fingerprint for an asset file (script, style, image) used for fast change detection.
@@ -87,6 +87,16 @@ pub struct BuildCache {
     /// bytes even when no JS source changed, so we must re-bundle.
     #[serde(default)]
     pub script_asset_dependencies: FxHashMap<PathBuf, AssetFileFingerprint>,
+    /// Fingerprints of every on-disk module Rolldown inlined into a chunk, i.e. the
+    /// entry's transitive `import` graph. The entry script's own hash only covers the
+    /// entry file, so without this an edit to an imported module is invisible.
+    #[serde(default)]
+    pub script_module_dependencies: FxHashMap<PathBuf, AssetFileFingerprint>,
+    /// Fingerprints of CSS files pulled in via `@import`. Same blind spot as
+    /// `script_module_dependencies`: the stylesheet's hash covers only the entry file,
+    /// and `css_url_dependencies` only covers `url()` targets.
+    #[serde(default)]
+    pub style_import_dependencies: FxHashMap<PathBuf, AssetFileFingerprint>,
     /// Persisted asset hash cache: path → list of (options_hash, asset_hash, mtime, size).
     /// Used to skip `calculate_hash` on incremental rebuilds when the file hasn't changed.
     #[serde(default)]
@@ -523,14 +533,29 @@ pub fn find_stale_static_files(
         .collect()
 }
 
+/// The cached fingerprints of everything that feeds into bundle output but isn't
+/// covered by the entry files' own hashes.
+///
+/// Grouped into a struct rather than passed positionally: all four are the same type,
+/// so naming them at the call site is the only thing keeping them apart.
+pub struct CachedBundleDependencies<'a> {
+    /// Files referenced via `url()` in CSS (fonts, images).
+    pub css_urls: &'a FxHashMap<PathBuf, AssetFileFingerprint>,
+    /// Files Rolldown emitted as separate assets (WASM, images, fonts).
+    pub script_assets: &'a FxHashMap<PathBuf, AssetFileFingerprint>,
+    /// The entry scripts' transitive `import` graph.
+    pub script_modules: &'a FxHashMap<PathBuf, AssetFileFingerprint>,
+    /// Stylesheets pulled in via `@import`.
+    pub style_imports: &'a FxHashMap<PathBuf, AssetFileFingerprint>,
+}
+
 /// Check whether rebundling is needed by comparing asset sets and dependency fingerprints.
 pub fn needs_rebundle(
     cached_scripts: &[SerializedAssetRef],
     cached_styles: &[SerializedAssetRef],
     current_scripts: &FxHashSet<SerializedAssetRef>,
     current_styles: &FxHashSet<SerializedAssetRef>,
-    cached_css_deps: &FxHashMap<PathBuf, AssetFileFingerprint>,
-    cached_script_asset_deps: &FxHashMap<PathBuf, AssetFileFingerprint>,
+    cached_dependencies: &CachedBundleDependencies<'_>,
 ) -> bool {
     fn sets_differ(cached: &[SerializedAssetRef], current: &FxHashSet<SerializedAssetRef>) -> bool {
         cached.len() != current.len() || cached.iter().any(|item| !current.contains(item))
@@ -549,14 +574,20 @@ pub fn needs_rebundle(
         })
     }
 
-    // A changed CSS url() target or Rolldown-emitted asset changes the next bundle's
-    // output bytes, so we must re-bundle to pick it up.
-    if any_fingerprint_changed(cached_css_deps) || any_fingerprint_changed(cached_script_asset_deps)
-    {
-        return true;
-    }
+    // A changed CSS url() target, Rolldown-emitted asset, imported JS module or
+    // `@import`-ed stylesheet changes the next bundle's output bytes, so we must
+    // re-bundle to pick it up. The entry-file hashes above can't see any of these.
+    let CachedBundleDependencies {
+        css_urls,
+        script_assets,
+        script_modules,
+        style_imports,
+    } = cached_dependencies;
 
-    false
+    any_fingerprint_changed(css_urls)
+        || any_fingerprint_changed(script_assets)
+        || any_fingerprint_changed(script_modules)
+        || any_fingerprint_changed(style_imports)
 }
 
 /// Compute incremental state from a previously loaded cache and current content.
@@ -848,16 +879,19 @@ mod tests {
         let current_scripts: FxHashSet<SerializedAssetRef> = scripts.iter().cloned().collect();
         let current_styles: FxHashSet<SerializedAssetRef> = FxHashSet::default();
 
-        let no_css_deps = FxHashMap::default();
-        let no_script_asset_deps = FxHashMap::default();
+        let no_deps = FxHashMap::default();
 
         assert!(!needs_rebundle(
             &scripts,
             &styles,
             &current_scripts,
             &current_styles,
-            &no_css_deps,
-            &no_script_asset_deps,
+            &CachedBundleDependencies {
+                css_urls: &no_deps,
+                script_assets: &no_deps,
+                script_modules: &no_deps,
+                style_imports: &no_deps,
+            },
         ));
 
         // Add a new script
@@ -872,8 +906,64 @@ mod tests {
             &styles,
             &new_scripts,
             &current_styles,
-            &no_css_deps,
-            &no_script_asset_deps,
+            &CachedBundleDependencies {
+                css_urls: &no_deps,
+                script_assets: &no_deps,
+                script_modules: &no_deps,
+                style_imports: &no_deps,
+            },
+        ));
+    }
+
+    #[test]
+    fn test_needs_rebundle_on_changed_module_dependency() {
+        let dir = tempfile::tempdir().unwrap();
+        let helper = dir.path().join("helper.js");
+        fs::write(&helper, "export const marker = 1;").unwrap();
+
+        let entry = vec![SerializedAssetRef {
+            path: dir.path().join("entry.js"),
+            hash: "abc".to_string(),
+        }];
+        let current_entry: FxHashSet<SerializedAssetRef> = entry.iter().cloned().collect();
+        let no_styles = FxHashSet::default();
+        let empty = FxHashMap::default();
+
+        let mut module_deps = FxHashMap::default();
+        module_deps.insert(
+            helper.clone(),
+            AssetFileFingerprint::from_path(&helper).unwrap(),
+        );
+
+        // Unchanged import graph: nothing to do.
+        assert!(!needs_rebundle(
+            &entry,
+            &[],
+            &current_entry,
+            &no_styles,
+            &CachedBundleDependencies {
+                css_urls: &empty,
+                script_assets: &empty,
+                script_modules: &module_deps,
+                style_imports: &empty,
+            },
+        ));
+
+        // The entry is untouched, but the module it imports changed. Vary the length so
+        // the check trips on size even where mtime granularity is coarse.
+        fs::write(&helper, "export const marker = 22222;").unwrap();
+
+        assert!(needs_rebundle(
+            &entry,
+            &[],
+            &current_entry,
+            &no_styles,
+            &CachedBundleDependencies {
+                css_urls: &empty,
+                script_assets: &empty,
+                script_modules: &module_deps,
+                style_imports: &empty,
+            },
         ));
     }
 
