@@ -87,14 +87,12 @@ pub struct BuildCache {
     /// bytes even when no JS source changed, so we must re-bundle.
     #[serde(default)]
     pub script_asset_dependencies: FxHashMap<PathBuf, AssetFileFingerprint>,
-    /// Fingerprints of every on-disk module Rolldown inlined into a chunk, i.e. the
-    /// entry's transitive `import` graph. The entry script's own hash only covers the
-    /// entry file, so without this an edit to an imported module is invisible.
+    /// The entry scripts' transitive `import` graph. An entry's own hash covers only
+    /// the entry file, so without this an edit to an imported module is invisible.
     #[serde(default)]
     pub script_module_dependencies: FxHashMap<PathBuf, AssetFileFingerprint>,
-    /// Fingerprints of CSS files pulled in via `@import`. Same blind spot as
-    /// `script_module_dependencies`: the stylesheet's hash covers only the entry file,
-    /// and `css_url_dependencies` only covers `url()` targets.
+    /// Stylesheets pulled in via `@import`. Same blind spot as
+    /// `script_module_dependencies`; `css_url_dependencies` only covers `url()` targets.
     #[serde(default)]
     pub style_import_dependencies: FxHashMap<PathBuf, AssetFileFingerprint>,
     /// Persisted asset hash cache: path → list of (options_hash, asset_hash, mtime, size).
@@ -533,19 +531,12 @@ pub fn find_stale_static_files(
         .collect()
 }
 
-/// The cached fingerprints of everything that feeds into bundle output but isn't
-/// covered by the entry files' own hashes.
-///
-/// Grouped into a struct rather than passed positionally: all four are the same type,
-/// so naming them at the call site is the only thing keeping them apart.
+/// Fingerprints of everything feeding into bundle output that the entry files' own
+/// hashes don't cover. Named fields because all four are the same type.
 pub struct CachedBundleDependencies<'a> {
-    /// Files referenced via `url()` in CSS (fonts, images).
     pub css_urls: &'a FxHashMap<PathBuf, AssetFileFingerprint>,
-    /// Files Rolldown emitted as separate assets (WASM, images, fonts).
     pub script_assets: &'a FxHashMap<PathBuf, AssetFileFingerprint>,
-    /// The entry scripts' transitive `import` graph.
     pub script_modules: &'a FxHashMap<PathBuf, AssetFileFingerprint>,
-    /// Stylesheets pulled in via `@import`.
     pub style_imports: &'a FxHashMap<PathBuf, AssetFileFingerprint>,
 }
 
@@ -574,9 +565,7 @@ pub fn needs_rebundle(
         })
     }
 
-    // A changed CSS url() target, Rolldown-emitted asset, imported JS module or
-    // `@import`-ed stylesheet changes the next bundle's output bytes, so we must
-    // re-bundle to pick it up. The entry-file hashes above can't see any of these.
+    // None of these are visible to the entry-file hashes above.
     let CachedBundleDependencies {
         css_urls,
         script_assets,
@@ -935,7 +924,6 @@ mod tests {
             AssetFileFingerprint::from_path(&helper).unwrap(),
         );
 
-        // Unchanged import graph: nothing to do.
         assert!(!needs_rebundle(
             &entry,
             &[],
@@ -949,8 +937,7 @@ mod tests {
             },
         ));
 
-        // The entry is untouched, but the module it imports changed. Vary the length so
-        // the check trips on size even where mtime granularity is coarse.
+        // Differing length, so the check trips on size even where mtime is coarse.
         fs::write(&helper, "export const marker = 22222;").unwrap();
 
         assert!(needs_rebundle(

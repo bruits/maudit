@@ -1214,8 +1214,6 @@ pub async fn build(
                             cache.css_url_dependencies.insert(dep_path.clone(), fp);
                         }
                     }
-                    // `@import`-ed partials are inlined into the output, so they change
-                    // the bundled bytes without changing the entry stylesheet's hash.
                     for dep_path in &css_output.import_dependencies {
                         if let Some(fp) = cache::AssetFileFingerprint::from_path(dep_path) {
                             cache.style_import_dependencies.insert(dep_path.clone(), fp);
@@ -1309,10 +1307,6 @@ pub async fn build(
                             script_substitutions.insert(script.url.clone(), final_url);
                         }
 
-                        // Fingerprint the chunk's source module graph. The entry script's
-                        // own hash covers only the entry file, so without this an edit to
-                        // an imported module never triggers a rebundle. Modules that
-                        // aren't real files (virtual/plugin-generated) are skipped.
                         if let Some(ref mut cache) = new_cache {
                             for module_id in &chunk.module_ids {
                                 let path = PathBuf::from(module_id.as_str());

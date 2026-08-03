@@ -25,14 +25,11 @@ pub struct BundleCssOutput {
     /// Canonical paths of source files referenced via `url()` in the CSS.
     /// Used to detect when referenced assets change between builds.
     pub source_dependencies: Vec<PathBuf>,
-    /// Paths of every stylesheet the bundler read, i.e. the entry plus its transitive
-    /// `@import` graph. Imported partials are inlined into the output, so a change to
-    /// one alters the bundled bytes without touching the entry file's hash.
+    /// The entry plus its transitive `@import` graph. Imported partials are inlined
+    /// into the output, so editing one changes the bundled bytes but not the entry's hash.
     pub import_dependencies: Vec<PathBuf>,
 }
 
-/// Wraps [`FileProvider`] to record the path of every stylesheet the bundler reads,
-/// which is exactly the entry plus its transitive `@import` graph.
 struct RecordingFileProvider {
     inner: FileProvider,
     read_paths: Mutex<Vec<PathBuf>>,
@@ -222,7 +219,7 @@ pub fn bundle_css(
             .map_err(|e| format!("Failed to serialize CSS: {}", e))?
             .code;
 
-        // Drop the borrow held by `bundler`/`stylesheet` before reclaiming the paths.
+        // `bundler` borrows `provider`.
         drop(stylesheet);
         drop(bundler);
         import_dependencies = provider.into_read_paths();
