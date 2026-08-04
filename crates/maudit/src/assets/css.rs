@@ -2,8 +2,9 @@ use crate::errors::AssetError;
 use std::convert::Infallible;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
-use lightningcss::bundler::{Bundler, FileProvider};
+use lightningcss::bundler::{Bundler, FileProvider, ResolveResult, SourceProvider};
 use lightningcss::printer::PrinterOptions;
 use lightningcss::stylesheet::{MinifyOptions, ParserOptions, StyleSheet};
 use lightningcss::values::url::Url;
@@ -24,6 +25,47 @@ pub struct BundleCssOutput {
     /// Canonical paths of source files referenced via `url()` in the CSS.
     /// Used to detect when referenced assets change between builds.
     pub source_dependencies: Vec<PathBuf>,
+    /// The entry plus its transitive `@import` graph. Imported partials are inlined
+    /// into the output, so editing one changes the bundled bytes but not the entry's hash.
+    pub import_dependencies: Vec<PathBuf>,
+}
+
+struct RecordingFileProvider {
+    inner: FileProvider,
+    read_paths: Mutex<Vec<PathBuf>>,
+}
+
+impl RecordingFileProvider {
+    fn new() -> Self {
+        Self {
+            inner: FileProvider::new(),
+            read_paths: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn into_read_paths(self) -> Vec<PathBuf> {
+        self.read_paths.into_inner().unwrap_or_default()
+    }
+}
+
+impl SourceProvider for RecordingFileProvider {
+    type Error = std::io::Error;
+
+    fn read<'a>(&'a self, file: &Path) -> Result<&'a str, Self::Error> {
+        let source = self.inner.read(file)?;
+        if let Ok(paths) = self.read_paths.lock().as_mut() {
+            paths.push(file.to_path_buf());
+        }
+        Ok(source)
+    }
+
+    fn resolve(
+        &self,
+        specifier: &str,
+        originating_file: &Path,
+    ) -> Result<ResolveResult, Self::Error> {
+        self.inner.resolve(specifier, originating_file)
+    }
 }
 
 /// Visitor that rewrites relative `url()` references in CSS.
@@ -132,6 +174,8 @@ pub fn bundle_css(
         errors: Vec::new(),
     };
 
+    let mut import_dependencies = Vec::new();
+
     let code = if let Some(css) = source_css {
         let mut stylesheet = StyleSheet::parse(css, ParserOptions::default())
             .map_err(|e| format!("Failed to parse CSS: {}", e))?;
@@ -152,7 +196,7 @@ pub fn bundle_css(
             .map_err(|e| format!("Failed to serialize CSS: {}", e))?
             .code
     } else {
-        let provider = FileProvider::new();
+        let provider = RecordingFileProvider::new();
         let mut bundler = Bundler::new(&provider, None, ParserOptions::default());
 
         let mut stylesheet = bundler
@@ -167,13 +211,20 @@ pub fn bundle_css(
                 .map_err(|e| format!("Failed to minify CSS: {}", e))?;
         }
 
-        stylesheet
+        let code = stylesheet
             .to_css(PrinterOptions {
                 minify,
                 ..Default::default()
             })
             .map_err(|e| format!("Failed to serialize CSS: {}", e))?
-            .code
+            .code;
+
+        // `bundler` borrows `provider`.
+        drop(stylesheet);
+        drop(bundler);
+        import_dependencies = provider.into_read_paths();
+
+        code
     };
 
     if let Some(err) = url_visitor.errors.into_iter().next() {
@@ -184,6 +235,7 @@ pub fn bundle_css(
         code,
         copied_asset_filenames: url_visitor.copied_filenames,
         source_dependencies: url_visitor.source_deps,
+        import_dependencies,
     })
 }
 

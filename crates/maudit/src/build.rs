@@ -1104,8 +1104,12 @@ pub async fn build(
                 &prev.bundled_styles,
                 &current_bundled_scripts,
                 &current_bundled_styles,
-                &prev.css_url_dependencies,
-                &prev.script_asset_dependencies,
+                &cache::CachedBundleDependencies {
+                    css_urls: &prev.css_url_dependencies,
+                    script_assets: &prev.script_asset_dependencies,
+                    script_modules: &prev.script_module_dependencies,
+                    style_imports: &prev.style_import_dependencies,
+                },
             )
         } else {
             true
@@ -1210,6 +1214,11 @@ pub async fn build(
                             cache.css_url_dependencies.insert(dep_path.clone(), fp);
                         }
                     }
+                    for dep_path in &css_output.import_dependencies {
+                        if let Some(fp) = cache::AssetFileFingerprint::from_path(dep_path) {
+                            cache.style_import_dependencies.insert(dep_path.clone(), fp);
+                        }
+                    }
                 }
             }
         }
@@ -1285,9 +1294,10 @@ pub async fn build(
                 current_output_files.insert(filename.clone());
 
                 match output {
-                    // Map `Script::url` → the content-hashed URL Rolldown wrote.
-                    rolldown_common::Output::Chunk(chunk) if chunk.is_entry => {
-                        if let Some(facade) = chunk.facade_module_id.as_ref()
+                    rolldown_common::Output::Chunk(chunk) => {
+                        // Map `Script::url` → the content-hashed URL Rolldown wrote.
+                        if chunk.is_entry
+                            && let Some(facade) = chunk.facade_module_id.as_ref()
                             && let Some(script) = scripts_by_path.get(facade.as_str())
                         {
                             let final_url = make_final_url(
@@ -1295,6 +1305,18 @@ pub async fn build(
                                 Path::new(&filename),
                             );
                             script_substitutions.insert(script.url.clone(), final_url);
+                        }
+
+                        if let Some(ref mut cache) = new_cache {
+                            for module_id in &chunk.module_ids {
+                                let path = PathBuf::from(module_id.as_str());
+                                if !path.is_file() {
+                                    continue;
+                                }
+                                if let Some(fp) = cache::AssetFileFingerprint::from_path(&path) {
+                                    cache.script_module_dependencies.insert(path, fp);
+                                }
+                            }
                         }
                     }
                     // Fingerprint each Rolldown-emitted asset (WASM, images, fonts) so
@@ -1309,7 +1331,6 @@ pub async fn build(
                             }
                         }
                     }
-                    _ => {}
                 }
             }
         }
@@ -1346,6 +1367,8 @@ pub async fn build(
             cache.bundled_output_files = prev_cache.bundled_output_files.clone();
             cache.css_url_dependencies = prev_cache.css_url_dependencies.clone();
             cache.script_asset_dependencies = prev_cache.script_asset_dependencies.clone();
+            cache.script_module_dependencies = prev_cache.script_module_dependencies.clone();
+            cache.style_import_dependencies = prev_cache.style_import_dependencies.clone();
             cache.script_substitutions = prev_cache.script_substitutions.clone();
             cache.style_substitutions = prev_cache.style_substitutions.clone();
             script_substitutions = prev_cache.script_substitutions.clone();
