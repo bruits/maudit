@@ -60,6 +60,7 @@ mod tests {
         use crate::{assets::RouteAssets, content::ContentSources};
 
         let content_sources = ContentSources::new(vec![]);
+        let build_values = crate::build_value::BuildValueStore::default();
         let mut page_assets = RouteAssets::new(
             &RouteAssetsOptions {
                 assets_dir: "assets".into(),
@@ -80,6 +81,7 @@ mod tests {
             access_log: std::rc::Rc::new(std::cell::RefCell::new(
                 crate::content::tracked::ContentAccessLog::new(),
             )),
+            build_values: &build_values,
         };
 
         f(&mut ctx)
