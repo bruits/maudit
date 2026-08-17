@@ -359,8 +359,8 @@ fn cache_header_by_content(uri: &Uri, content_type: &HeaderValue) -> Option<Head
             "public, max-age=31536000, immutable",
         ))
     } else {
-        // Don't try to cache anything else, the browser will decide based on the last-modified header
-        None
+        // Unfingerprinted URLs, so heuristic freshness would hide edits until it expires
+        Some(HeaderValue::from_static("no-cache"))
     }
 }
 
@@ -446,5 +446,50 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = ctrl_c => {},
         _ = terminate => {},
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cache_header(path: &str, content_type: &str) -> Option<String> {
+        cache_header_by_content(
+            &path.parse::<Uri>().unwrap(),
+            &HeaderValue::from_str(content_type).unwrap(),
+        )
+        .map(|value| value.to_str().unwrap().to_string())
+    }
+
+    #[test]
+    fn html_is_never_cached() {
+        assert_eq!(
+            cache_header("/about/", "text/html").as_deref(),
+            Some("no-cache, no-store, must-revalidate")
+        );
+    }
+
+    #[test]
+    fn fingerprinted_assets_are_cached_forever() {
+        assert_eq!(
+            cache_header("/_maudit/app-CScY0Smx.js", "text/javascript").as_deref(),
+            Some("public, max-age=31536000, immutable")
+        );
+    }
+
+    #[test]
+    fn static_files_are_revalidated() {
+        assert_eq!(
+            cache_header("/style.css", "text/css").as_deref(),
+            Some("no-cache")
+        );
+        assert_eq!(
+            cache_header("/logo.svg", "image/svg+xml").as_deref(),
+            Some("no-cache")
+        );
+        assert_eq!(
+            cache_header("/fonts/inter.woff2", "font/woff2").as_deref(),
+            Some("no-cache")
+        );
     }
 }
