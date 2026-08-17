@@ -12,7 +12,7 @@ use notify::{
 use notify_debouncer_full::{DebounceEventResult, DebouncedEvent, new_debouncer};
 use quanta::Instant;
 use server::StatusManager;
-use std::{fs, path::Path, path::PathBuf, sync::Arc};
+use std::{ffi::OsStr, fs, path::Path, path::PathBuf, sync::Arc};
 use tokio::{signal, sync::mpsc::channel, task::JoinHandle};
 use tracing::{error, info};
 
@@ -40,14 +40,12 @@ pub async fn start_dev_env(
     // Set up file watching with debouncer
     let (tx, mut rx) = channel::<DebounceEventResult>(1000);
 
+    let watch_root = fs::canonicalize(cwd).unwrap_or_else(|_| PathBuf::from(cwd));
+
     let directories = fs::read_dir(cwd)?
         .filter_map(|entry| entry.ok())
         .filter(|entry| entry.path().is_dir())
-        .filter(|entry| {
-            let path = entry.path();
-            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            !matches!(file_name, "target" | ".git" | "dist")
-        })
+        .filter(|entry| !entry.path().file_name().is_some_and(is_ignored_root_dir))
         .map(|entry| entry.path())
         .collect::<Vec<_>>();
 
@@ -112,13 +110,13 @@ pub async fn start_dev_env(
                             // - https://github.com/notify-rs/notify/issues/434
                             // - https://github.com/notify-rs/notify/issues/412
 
-                            let should_rebuild = events.iter().any(should_rebuild_for_event);
+                            let should_rebuild = events.iter().any(|event| should_rebuild_for_event(&watch_root, event));
 
                             // If new folder are created or removed, add/remove watches as needed
                             for event in &events {
                                 if let EventKind::Create(CreateKind::Folder) = event.kind {
                                     for path in &event.paths {
-                                        if should_watch_path(path) {
+                                        if should_watch_path(&watch_root, path) {
                                             if let Err(e) = debouncer.watch(path, RecursiveMode::Recursive) {
                                                 error!(name: "watch", "Failed to add watch for new directory {:?}: {}", path, e);
                                             } else {
@@ -131,7 +129,7 @@ pub async fn start_dev_env(
                                 // TODO: This doesn't seem to always work, sometimes removed folders are considered renames (maybe because of trash?), but it's fine I think
                                 if let EventKind::Remove(RemoveKind::Folder) = event.kind {
                                     for path in &event.paths {
-                                        if should_watch_path(path) {
+                                        if should_watch_path(&watch_root, path) {
                                             if let Err(e) = debouncer.unwatch(path) {
                                                 error!(name: "watch", "Failed to remove watch for directory {:?}: {}", path, e);
                                             } else {
@@ -147,7 +145,7 @@ pub async fn start_dev_env(
                                 let changed_paths: Vec<PathBuf> = events
                                     .iter()
                                     .flat_map(|e| e.paths.iter().cloned())
-                                    .filter(|p| should_watch_path(p))
+                                    .filter(|p| should_watch_path(&watch_root, p))
                                     .collect();
 
                                 if !dev_server_started {
@@ -252,9 +250,9 @@ pub async fn start_dev_env(
     Ok(())
 }
 
-fn should_rebuild_for_event(event: &DebouncedEvent) -> bool {
+fn should_rebuild_for_event(root: &Path, event: &DebouncedEvent) -> bool {
     event.paths.iter().any(|path| {
-        should_watch_path(path)
+        should_watch_path(root, path)
             && match event.kind {
                 // Only rebuild on actual content modifications, not metadata changes
                 EventKind::Modify(ModifyKind::Data(_)) => true,
@@ -272,23 +270,25 @@ fn should_rebuild_for_event(event: &DebouncedEvent) -> bool {
     })
 }
 
-fn should_watch_path(path: &Path) -> bool {
-    // Skip .DS_Store files
-    if let Some(file_name) = path.file_name()
-        && file_name == ".DS_Store"
-    {
+fn is_ignored_root_dir(name: &OsStr) -> bool {
+    matches!(name.to_str(), Some("target" | "dist" | ".git"))
+}
+
+fn should_watch_path(root: &Path, path: &Path) -> bool {
+    if path.file_name().is_some_and(|name| name == ".DS_Store") {
         return false;
     }
 
-    // Skip dist and target directories, normally ignored by the watcher, but just in case
-    if path
-        .ancestors()
-        .any(|p| p.ends_with("dist") || p.ends_with("target") || p.ends_with(".git"))
-    {
-        return false;
-    }
+    // Only ignored at the root: a `static/dist` directory is content the user expects to be served
+    let absolute = root.join(path);
+    let Ok(relative) = absolute.strip_prefix(root) else {
+        return true;
+    };
 
-    true
+    !relative
+        .components()
+        .next()
+        .is_some_and(|first| is_ignored_root_dir(first.as_os_str()))
 }
 
 async fn shutdown_signal() {
@@ -312,5 +312,67 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = ctrl_c => {},
         _ = terminate => {},
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ignores_root_output_directories() {
+        let root = Path::new("/project");
+
+        assert!(!should_watch_path(
+            root,
+            Path::new("/project/dist/index.html")
+        ));
+        assert!(!should_watch_path(
+            root,
+            Path::new("/project/target/debug/site")
+        ));
+        assert!(!should_watch_path(root, Path::new("/project/.git/HEAD")));
+    }
+
+    #[test]
+    fn watches_ignored_names_below_the_root() {
+        let root = Path::new("/project");
+
+        assert!(should_watch_path(
+            root,
+            Path::new("/project/static/dist/vendor.js")
+        ));
+        assert!(should_watch_path(
+            root,
+            Path::new("/project/static/target/app.css")
+        ));
+    }
+
+    #[test]
+    fn watches_relative_paths() {
+        assert!(should_watch_path(
+            Path::new("."),
+            Path::new("./static/dist/vendor.js")
+        ));
+        assert!(!should_watch_path(
+            Path::new("."),
+            Path::new("./dist/index.html")
+        ));
+    }
+
+    #[test]
+    fn watches_projects_living_under_an_ignored_name() {
+        assert!(should_watch_path(
+            Path::new("/dist/project"),
+            Path::new("/dist/project/static/logo.svg")
+        ));
+    }
+
+    #[test]
+    fn ignores_ds_store() {
+        assert!(!should_watch_path(
+            Path::new("/project"),
+            Path::new("/project/static/.DS_Store")
+        ));
     }
 }

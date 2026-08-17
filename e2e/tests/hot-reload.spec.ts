@@ -69,20 +69,24 @@ test.describe("Hot Reload", () => {
 	const indexPath = resolve(fixturePath, "src", "pages", "index.rs");
 	const mainPath = resolve(fixturePath, "src", "main.rs");
 	const dataPath = resolve(fixturePath, "data.txt");
+	const staticPath = resolve(fixturePath, "static", "asset.txt");
 	let originalIndexContent: string;
 	let originalMainContent: string;
 	let originalDataContent: string;
+	let originalStaticContent: string;
 
 	test.beforeAll(async () => {
 		// Save original content
 		originalIndexContent = readFileSync(indexPath, "utf-8");
 		originalMainContent = readFileSync(mainPath, "utf-8");
 		originalDataContent = readFileSync(dataPath, "utf-8");
+		originalStaticContent = readFileSync(staticPath, "utf-8");
 
 		// Ensure files are in original state
 		writeFileSync(indexPath, originalIndexContent, "utf-8");
 		writeFileSync(mainPath, originalMainContent, "utf-8");
 		writeFileSync(dataPath, originalDataContent, "utf-8");
+		writeFileSync(staticPath, originalStaticContent, "utf-8");
 	});
 
 	test.afterEach(async ({ devServer }) => {
@@ -90,6 +94,7 @@ test.describe("Hot Reload", () => {
 		writeFileSync(indexPath, originalIndexContent, "utf-8");
 		writeFileSync(mainPath, originalMainContent, "utf-8");
 		writeFileSync(dataPath, originalDataContent, "utf-8");
+		writeFileSync(staticPath, originalStaticContent, "utf-8");
 
 		// Only wait for build if devServer is available (startup might have failed)
 		if (devServer) {
@@ -112,6 +117,7 @@ test.describe("Hot Reload", () => {
 		writeFileSync(indexPath, originalIndexContent, "utf-8");
 		writeFileSync(mainPath, originalMainContent, "utf-8");
 		writeFileSync(dataPath, originalDataContent, "utf-8");
+		writeFileSync(staticPath, originalStaticContent, "utf-8");
 	});
 
 	test("should recompile when Rust code changes (dependencies)", async ({ page, devServer }) => {
@@ -188,5 +194,29 @@ test.describe("Hot Reload", () => {
 		await page.reload();
 
 		await expect(page.locator("#title")).toHaveText("Another Update", { timeout: 15000 });
+	});
+
+	test("should serve updated static files after they change", async ({ request, devServer }) => {
+		const before = await request.get(`${devServer.url}/asset.txt`);
+		expect(await before.text()).toContain("Original asset");
+
+		devServer.clearLogs();
+		writeFileSync(staticPath, "Updated asset", "utf-8");
+
+		await waitForBuildComplete(devServer, 20000);
+
+		const after = await request.get(`${devServer.url}/asset.txt`);
+		expect(await after.text()).toContain("Updated asset");
+	});
+
+	test("should serve static files with a revalidating cache header", async ({
+		request,
+		devServer,
+	}) => {
+		const response = await request.get(`${devServer.url}/asset.txt`);
+		expect(response.headers()["cache-control"]).toBe("no-cache");
+
+		const html = await request.get(devServer.url);
+		expect(html.headers()["cache-control"]).toBe("no-cache, no-store, must-revalidate");
 	});
 });
