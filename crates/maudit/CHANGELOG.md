@@ -1,5 +1,12 @@
 # maudit
 
+## 0.12.1 — 2026-08-18
+
+### Patch changes
+
+- [dfadca2](https://github.com/bruits/maudit/commit/dfadca24b7998d63f30551c0af3b7d5594573f55) Fixes incremental builds serving a stale bundle when a file imported by a script or stylesheet changed. — Thanks @Princesseuh!
+- [1a07b1e](https://github.com/bruits/maudit/commit/1a07b1e227ef292596e66e2e8477b396ff7327f5) Updated Rolldown to 1.2.4, bringing the latest bundler fixes and improvements to script and style bundling. — Thanks @Princesseuh!
+
 ## 0.12.0 — 2026-05-25
 
 ### Minor changes

@@ -1,5 +1,13 @@
 # maudit-cli
 
+## 0.8.2 — 2026-08-18
+
+### Patch changes
+
+- [9e24ae2](https://github.com/bruits/maudit/commit/9e24ae2a43bb97d4718b98bcd59cf6ef6ad2db85) Fixed the development server ignoring changes in directories named `dist`, `target` or `.git` anywhere in the project, such as `static/dist`. Only the ones at the root are skipped now. — Thanks @Princesseuh!
+- [1a07b1e](https://github.com/bruits/maudit/commit/1a07b1e227ef292596e66e2e8477b396ff7327f5) Updated Rolldown to 1.2.4, bringing the latest bundler fixes and improvements to script and style bundling. — Thanks @Princesseuh!
+- [9e24ae2](https://github.com/bruits/maudit/commit/9e24ae2a43bb97d4718b98bcd59cf6ef6ad2db85) Fixed the development server serving stale static files after they change, the browser now revalidates them on every request. — Thanks @Princesseuh!
+
 ## 0.8.1 — 2026-05-30
 
 ### Patch changes
