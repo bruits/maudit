@@ -117,7 +117,7 @@ fn inject_live_reload_script(html_content: &str, socket_addr: SocketAddr, host: 
             } else {
                 local_ip().unwrap().to_string()
             },
-            &socket_addr.port().to_string()
+            socket_addr.port()
         ),
     );
 
