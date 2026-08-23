@@ -130,7 +130,10 @@ where
 }
 
 pub fn init_logging() {
-    let tracing_formatter = tracing_subscriber::fmt::layer().event_format(EventLoggerFormatter);
+    // We colorize our own messages, so tracing-subscriber must not escape their ANSI sequences.
+    let tracing_formatter = tracing_subscriber::fmt::layer()
+        .with_ansi_sanitization(false)
+        .event_format(EventLoggerFormatter);
 
     tracing_subscriber::registry()
         .with(
