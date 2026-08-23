@@ -1,5 +1,11 @@
 # maudit-cli
 
+## 0.8.3 — 2026-08-23
+
+### Patch changes
+
+- [e38a9f7](https://github.com/bruits/maudit/commit/e38a9f7b03f402a890582e325aff5db91beb2c70) Fixed the CLI printing raw escape codes (`\x1b[1m`) instead of colored text. — Thanks @Princesseuh!
+
 ## 0.8.2 — 2026-08-18
 
 ### Patch changes
