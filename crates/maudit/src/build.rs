@@ -12,10 +12,10 @@ use std::{
 use crate::assets::css::bundle_css;
 use crate::assets::run_tailwind;
 use crate::{
-    BuildOptions, BuildOutput,
+    AssetHashingStrategy, BuildOptions, BuildOutput,
     assets::{
         self, HashAssetType, HashConfig, PrefetchPlugin, RouteAssets, Script, Style, StyleOptions,
-        calculate_hash, image_cache::ImageCache, make_final_url, prefetch,
+        calculate_hash, image_cache::ImageCache, image_cache_key, make_final_url, prefetch,
     },
     build::{images::process_image, options::PrefetchStrategy},
     content::ContentSources,
@@ -1429,10 +1429,19 @@ pub async fn build(
                 .unwrap_or_else(|| image.path().to_path_buf());
 
             if let Some(image_options) = &image.options {
-                let final_filename = image.filename();
+                // Key the encode cache on content, not on the URL fingerprint, so
+                // the result is reused across dev and production builds (which
+                // fingerprint differently) instead of re-encoded on every switch.
+                // Under `Precise` the fingerprint is already content-based, so
+                // reuse it rather than reading the file a second time.
+                let cache_key = if options.assets.hashing_strategy == AssetHashingStrategy::Precise {
+                    image.filename().to_path_buf()
+                } else {
+                    image_cache_key(image).unwrap_or_else(|_| image.filename().to_path_buf())
+                };
 
                 // Check cache for transformed images
-                let cached_path = image_cache.get_transformed_image(final_filename);
+                let cached_path = image_cache.get_transformed_image(&cache_key);
 
                 if let Some(cached_path) = cached_path {
                     // Copy from cache instead of processing
@@ -1443,7 +1452,7 @@ pub async fn build(
                 }
 
                 // Generate cache path for transformed image
-                let cache_path = image_cache.generate_cache_path(final_filename);
+                let cache_path = image_cache.generate_cache_path(&cache_key);
 
                 // Process image directly to cache
                 process_image(image, &cache_path, image_options);
@@ -1451,7 +1460,11 @@ pub async fn build(
                 // Copy from cache to destination
                 if fs::copy(&cache_path, dest_path).is_ok() {
                     // Cache the processed image path
-                    image_cache.cache_transformed_image(final_filename, cache_path);
+                    image_cache.cache_transformed_image(
+                        &cache_key,
+                        cache_path,
+                        image.path().to_path_buf(),
+                    );
                 } else {
                     debug!("Failed to copy from cache {} to dest {}", cache_path.display(), dest_path.display());
                 }
@@ -1564,19 +1577,16 @@ pub async fn build(
             // On incremental builds, use new_cache.pages (which has both rendered and
             // cache-hit pages) to get the complete set of live images.
             let mut live_src_paths = FxHashSet::default();
-            let mut live_transformed = FxHashSet::default();
             if let Some(ref cache) = new_cache {
                 for img in cache.pages.values().flat_map(|p| &p.images) {
                     live_src_paths.insert(img.path.clone());
-                    live_transformed.insert(img.filename.clone());
                 }
             } else {
                 for img in &build_pages_images {
                     live_src_paths.insert(img.path().to_path_buf());
-                    live_transformed.insert(img.filename().to_path_buf());
                 }
             };
-            let evicted = image_cache.gc(&live_src_paths, &live_transformed);
+            let evicted = image_cache.gc(&live_src_paths);
             if evicted > 0 {
                 info!(target: "cache", "Image cache GC: evicted {} stale entries", evicted);
             }

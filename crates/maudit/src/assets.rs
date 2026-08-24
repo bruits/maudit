@@ -543,6 +543,24 @@ fn make_filename(path: &Path, hash: &String, extension: Option<&str>) -> PathBuf
     filename
 }
 
+/// Content-based identity for an image's encoded output, independent of the
+/// [`AssetHashingStrategy`](crate::AssetHashingStrategy) used for URL
+/// fingerprints. Builds that would emit byte-identical output share this key,
+/// so the encoded file in the image cache is reused across dev and production
+/// builds. It matches the output filename a `Precise` build would produce.
+pub(crate) fn image_cache_key(image: &Image) -> Result<PathBuf, AssetError> {
+    let options = image.options.clone().unwrap_or_default();
+    let hash = calculate_hash(
+        &image.path,
+        Some(&HashConfig {
+            asset_type: HashAssetType::Image(&options),
+            hashing_strategy: &AssetHashingStrategy::Precise,
+        }),
+    )?;
+    let extension = image.filename.extension().and_then(|ext| ext.to_str());
+    Ok(make_filename(&image.path, &hash, extension))
+}
+
 /// Joins `Normal` path components with `/`. Avoids `Path::display()`, which
 /// would emit `\` on Windows.
 pub(crate) fn path_to_url_segment(p: &Path) -> String {
@@ -661,7 +679,7 @@ mod tests {
         AssetHashingStrategy,
         assets::{
             Asset, ImageFormat, ImageOptions, RouteAssets, RouteAssetsOptions, StyleOptions,
-            make_filename,
+            image_cache_key, make_filename,
         },
     };
 
@@ -888,6 +906,49 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_image_cache_key_is_strategy_independent() {
+        let temp_dir = setup_temp_dir();
+        let image_path = temp_dir.path().join("image.png");
+
+        let img = image::ImageBuffer::<image::Rgba<u8>, _>::from_fn(1, 1, |_x, _y| {
+            image::Rgba([255, 0, 0, 255])
+        });
+        img.save(&image_path).unwrap();
+
+        let add_with = |strategy| {
+            let mut page_assets = RouteAssets::new(
+                &RouteAssetsOptions {
+                    hashing_strategy: strategy,
+                    ..Default::default()
+                },
+                None,
+                None,
+            );
+            page_assets
+                .add_image_with_options(
+                    &image_path,
+                    ImageOptions {
+                        format: Some(ImageFormat::WebP),
+                        ..Default::default()
+                    },
+                )
+                .unwrap()
+        };
+
+        let precise = add_with(AssetHashingStrategy::Precise);
+        let fast = add_with(AssetHashingStrategy::FastImprecise);
+
+        // The URL fingerprint differs between strategies (content vs mtime+size)...
+        assert_ne!(precise.filename(), fast.filename());
+        // ...but the encode-cache key does not, so the cached image is shared
+        // across dev and production builds instead of re-encoded.
+        assert_eq!(
+            image_cache_key(&precise).unwrap(),
+            image_cache_key(&fast).unwrap()
+        );
     }
 
     #[test]
