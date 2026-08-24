@@ -2,5 +2,5 @@ packages:
   - crates/*
   - e2e
 
-onlyBuiltDependencies:
-  - "@parcel/watcher"
+allowBuilds:
+  '@parcel/watcher': true
