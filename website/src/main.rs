@@ -46,6 +46,7 @@ fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
             "https://goulven-clech.dev/".into(),
             "https://bruits.org/".into(),
             "https://satteri.bruits.org/".into(),
+            "https://garden.bruits.org/".into(),
         ],
         output: OutputConfig {
             dir: "./dist".into(),
