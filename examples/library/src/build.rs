@@ -3,6 +3,7 @@ use std::fs;
 use maudit::{
     BuildOptions,
     assets::RouteAssets,
+    build_value::BuildValueStore,
     content::ContentSources,
     route::{DynamicRouteContext, FullRoute, PageContext, PageParams},
     routing::extract_params_from_raw_route,
@@ -22,6 +23,8 @@ pub fn build_website(
 
     // Create the assets directory if it doesn't exist.
     fs::create_dir_all(&route_assets_options.output_assets_dir)?;
+
+    let build_values = BuildValueStore::default();
 
     for route in routes {
         // Get the raw route path (e.g., "/articles/[slug]")
@@ -51,6 +54,7 @@ pub fn build_website(
                 &url,
                 &options.base_url,
                 None,
+                &build_values,
             );
 
             let content = route.build(&mut ctx)?;
@@ -96,6 +100,7 @@ pub fn build_website(
                     &url,
                     &options.base_url,
                     None,
+                    &build_values,
                 );
 
                 // Everything below here is the same as for static routes.

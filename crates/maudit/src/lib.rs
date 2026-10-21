@@ -7,6 +7,7 @@
 
 // Modules the end-user will interact directly or indirectly with
 pub mod assets;
+pub mod build_value;
 pub mod content;
 pub mod errors;
 pub mod route;
