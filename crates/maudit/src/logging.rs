@@ -56,12 +56,12 @@ pub fn format_elapsed_time(elapsed: Duration, options: &FormatElapsedTimeOptions
             if mins > 0 {
                 format!("{}m{}s", mins, remaining)
             } else {
-                format!("{}s", secs)
+                format_secs(elapsed)
             }
         }
         .red(),
-        secs if secs > options.sec_yellow_threshold => format!("{}s", secs).yellow(),
-        secs if secs > 0 => format!("{}s", secs).normal(),
+        secs if secs > options.sec_yellow_threshold => format_secs(elapsed).yellow(),
+        secs if secs > 0 => format_secs(elapsed).normal(),
         _ => match elapsed.as_millis() {
             millis
                 if options
@@ -89,7 +89,35 @@ pub fn format_elapsed_time(elapsed: Duration, options: &FormatElapsedTimeOptions
     }
 }
 
+fn format_secs(elapsed: Duration) -> String {
+    format!("{:.2}s", elapsed.as_secs_f64())
+}
+
 pub fn print_title(title: &str) {
     info!(target: "SKIP_FORMAT", "{}", "");
     info!(target: "SKIP_FORMAT", "{}", format!(" {} ", title).on_green().bold());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn format(elapsed: Duration) -> String {
+        format_elapsed_time(elapsed, &FormatElapsedTimeOptions::default())
+            .input
+            .clone()
+    }
+
+    #[test]
+    fn keeps_fractional_seconds() {
+        assert_eq!(format(Duration::from_millis(1950)), "1.95s");
+        assert_eq!(format(Duration::from_millis(2500)), "2.50s");
+    }
+
+    #[test]
+    fn formats_minutes_and_milliseconds() {
+        assert_eq!(format(Duration::from_secs(125)), "2m5s");
+        assert_eq!(format(Duration::from_millis(950)), "950ms");
+        assert_eq!(format(Duration::from_micros(150)), "150μs");
+    }
 }
