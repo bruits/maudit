@@ -47,9 +47,9 @@ pub fn format_elapsed_time(elapsed: Duration, options: &FormatElapsedTimeOptions
             let secs = secs % 60;
             format!("{}m{}s", mins, secs).red()
         }
-        secs if secs > options.sec_red_threshold => format!("{}s", secs).red(),
-        secs if secs > options.sec_yellow_threshold => format!("{}s", secs).yellow(),
-        secs if secs > 0 => format!("{}s", secs).dimmed(),
+        secs if secs > options.sec_red_threshold => format_secs(elapsed).red(),
+        secs if secs > options.sec_yellow_threshold => format_secs(elapsed).yellow(),
+        secs if secs > 0 => format_secs(elapsed).dimmed(),
         _ => match elapsed.as_millis() {
             millis
                 if options
@@ -75,6 +75,10 @@ pub fn format_elapsed_time(elapsed: Duration, options: &FormatElapsedTimeOptions
     } else {
         result
     }
+}
+
+fn format_secs(elapsed: Duration) -> String {
+    format!("{:.2}s", elapsed.as_secs_f64())
 }
 
 pub struct EventLoggerFormatter;
@@ -143,4 +147,27 @@ pub fn init_logging() {
         )
         .with(tracing_formatter)
         .init();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn format(elapsed: Duration) -> String {
+        format_elapsed_time(elapsed, &FormatElapsedTimeOptions::default_dev())
+            .input
+            .clone()
+    }
+
+    #[test]
+    fn keeps_fractional_seconds() {
+        assert_eq!(format(Duration::from_millis(1950)), "1.95s");
+        assert_eq!(format(Duration::from_millis(7250)), "7.25s");
+    }
+
+    #[test]
+    fn formats_minutes_and_milliseconds() {
+        assert_eq!(format(Duration::from_secs(125)), "2m5s");
+        assert_eq!(format(Duration::from_millis(950)), "950ms");
+    }
 }
