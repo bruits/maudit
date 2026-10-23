@@ -62,7 +62,7 @@ test.describe("Prefetch", () => {
 			// Should only have one speculation rules script
 			const speculationScripts = await page.locator('script[type="speculationrules"]').all();
 			expect(speculationScripts.length).toBe(1);
-			const scriptContent = await speculationScripts[0].textContent();
+			const scriptContent = await speculationScripts[0]?.textContent();
 			if (scriptContent) {
 				const rules = JSON.parse(scriptContent);
 				expect(rules.prefetch).toBeDefined();
