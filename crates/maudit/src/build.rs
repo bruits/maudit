@@ -5,7 +5,6 @@ use std::{
     io::{self},
     path::{Path, PathBuf},
     rc::Rc,
-    sync::Arc,
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -28,7 +27,7 @@ use crate::{
 use colored::{ColoredString, Colorize};
 use log::{debug, info, trace, warn};
 use pathdiff::diff_paths;
-use rolldown::{Bundler, BundlerOptions, ExperimentalOptions, InputItem};
+use rolldown::{Bundler, BundlerOptions, ExperimentalOptions, InputItem, plugin::Pluginable};
 use rolldown_plugin_replace::ReplacePlugin;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -1275,8 +1274,8 @@ pub async fn build(
                     ..Default::default()
                 },
                 vec![
-                    Arc::new(PrefetchPlugin {}),
-                    Arc::new(ReplacePlugin::new(FxHashMap::default())?),
+                    Pluginable::new_shared(PrefetchPlugin {}),
+                    Pluginable::new_shared(ReplacePlugin::new(FxHashMap::default())?),
                 ],
             )?;
 
