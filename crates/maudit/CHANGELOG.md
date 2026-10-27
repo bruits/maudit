@@ -1,5 +1,12 @@
 # maudit
 
+## 0.12.2 — 2026-10-27
+
+### Patch changes
+
+- [7682dbe](https://github.com/bruits/maudit/commit/7682dbe26638ad813ede3120087fef70fea81434) Fixed new projects failing to compile with recent versions of Rolldown. — Thanks @Princesseuh!
+- [d614d0b](https://github.com/bruits/maudit/commit/d614d0b7c64a8d25872077dd3db3161db7efd169) Fixed build and dev server timings being rounded down to whole seconds, e.g. a 1.9s build showing as "1s". — Thanks @Princesseuh!
+
 ## 0.12.1 — 2026-08-18
 
 ### Patch changes
