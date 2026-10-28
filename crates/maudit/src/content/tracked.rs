@@ -29,6 +29,16 @@ impl ContentAccessLog {
     pub fn merge_entries_read(&mut self, other: &ContentAccessLog) {
         self.entries_read.extend(other.entries_read.iter().cloned());
     }
+
+    /// Merge every dependency from `other` into this log — both specific entry reads
+    /// and full-source iterations. Used to replay a [`BuildValue`](crate::build_value::BuildValue)'s
+    /// own content dependencies onto each page that reads it, so the reader is
+    /// re-rendered whenever the value's inputs change.
+    pub(crate) fn merge_all(&mut self, other: &ContentAccessLog) {
+        self.entries_read.extend(other.entries_read.iter().cloned());
+        self.sources_iterated
+            .extend(other.sources_iterated.iter().cloned());
+    }
 }
 
 /// A wrapper around [`ContentSource`] that records all accesses

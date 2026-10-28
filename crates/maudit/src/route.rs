@@ -319,6 +319,7 @@ pub struct PageContext<'a> {
     pub variant: Option<String>,
     pub(crate) access_log:
         std::rc::Rc<std::cell::RefCell<crate::content::tracked::ContentAccessLog>>,
+    pub(crate) build_values: &'a crate::build_value::BuildValueStore,
 }
 
 impl<'a> PageContext<'a> {
@@ -328,6 +329,7 @@ impl<'a> PageContext<'a> {
         current_path: &'a String,
         base_url: &'a Option<String>,
         variant: Option<String>,
+        build_values: &'a crate::build_value::BuildValueStore,
     ) -> Self {
         Self {
             params: &(),
@@ -340,6 +342,7 @@ impl<'a> PageContext<'a> {
             access_log: std::rc::Rc::new(std::cell::RefCell::new(
                 crate::content::tracked::ContentAccessLog::new(),
             )),
+            build_values,
         }
     }
 
@@ -350,6 +353,7 @@ impl<'a> PageContext<'a> {
         current_path: &'a String,
         base_url: &'a Option<String>,
         variant: Option<String>,
+        build_values: &'a crate::build_value::BuildValueStore,
     ) -> Self {
         Self {
             params: dynamic_page.1.as_ref(),
@@ -362,6 +366,7 @@ impl<'a> PageContext<'a> {
             access_log: std::rc::Rc::new(std::cell::RefCell::new(
                 crate::content::tracked::ContentAccessLog::new(),
             )),
+            build_values,
         }
     }
 
@@ -378,6 +383,16 @@ impl<'a> PageContext<'a> {
 
     pub(crate) fn take_access_log(&self) -> crate::content::tracked::ContentAccessLog {
         self.access_log.take()
+    }
+
+    /// Read a [`BuildValue`](crate::build_value::BuildValue): a value computed once per
+    /// build from content and shared across pages. The value's own content dependencies
+    /// are recorded onto this page, so the page re-renders when those inputs change.
+    pub fn build_value<T: 'static>(
+        &self,
+        def: &'static crate::build_value::BuildValue<T>,
+    ) -> std::rc::Rc<T> {
+        crate::build_value::compute(def, self.content, self.build_values, &self.access_log)
     }
 
     pub fn params<T: 'static + Clone>(&self) -> T {
@@ -1019,6 +1034,7 @@ pub mod prelude {
         Asset, Image, ImageFormat, ImageOptions, ImagePlaceholder, RenderWithAlt, Script, Style,
         StyleOptions,
     };
+    pub use crate::build_value::BuildValue;
     pub use crate::content::{ContentContext, ContentEntry, Entry, EntryInner, MarkdownContent};
     pub use maudit_macros::{Params, route};
 }

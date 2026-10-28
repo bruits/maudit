@@ -10,10 +10,7 @@ pub mod markdown;
 mod slugger;
 pub mod tracked;
 
-use crate::{
-    assets::RouteAssets,
-    route::{DynamicRouteContext, PageContext, PageParams},
-};
+use crate::route::{DynamicRouteContext, PageContext, PageParams};
 pub use markdown::{
     components::{
         BlockQuoteKind, BlockquoteComponent, CodeComponent, EmphasisComponent, HardBreakComponent,
@@ -174,29 +171,22 @@ pub trait ContentEntry<T> {
 
 impl<T> ContentEntry<T> for Entry<T> {}
 
-/// Trait for contexts that can provide access to content
+/// Trait for contexts that can read content: the render-time [`PageContext`], the
+/// enumeration-time [`DynamicRouteContext`], and the [`DerivedContext`](crate::build_value::DerivedContext)
+/// used to compute [`BuildValue`](crate::build_value::BuildValue)s.
 pub trait ContentContext {
     fn content(&self) -> &ContentSources;
-    fn assets(&mut self) -> &mut RouteAssets;
 }
 
 impl ContentContext for PageContext<'_> {
     fn content(&self) -> &ContentSources {
         self.content
     }
-
-    fn assets(&mut self) -> &mut RouteAssets {
-        self.assets
-    }
 }
 
 impl ContentContext for DynamicRouteContext<'_> {
     fn content(&self) -> &ContentSources {
         self.content
-    }
-
-    fn assets(&mut self) -> &mut RouteAssets {
-        self.assets
     }
 }
 

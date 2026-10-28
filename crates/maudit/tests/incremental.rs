@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use maudit::build_value::BuildValue;
 use maudit::content::markdown_entry;
 use maudit::content::{ContentSource, ContentSources, glob_markdown};
 use maudit::route::prelude::*;
@@ -240,6 +241,61 @@ impl Route<ProjectParams> for ProjectPage {
             data.title, data.description
         )
     }
+}
+
+/// Read by both routes below, so both must inherit its `articles` dependency.
+static ARTICLE_DIGEST: BuildValue<String> = BuildValue::new(|ctx| {
+    let articles = ctx.content::<ArticleContent>("articles");
+    let mut titles: Vec<String> = Vec::new();
+    for entry in articles.entries() {
+        titles.push(entry.data(ctx).title.clone());
+    }
+    titles.sort();
+    titles.join("|")
+});
+
+static CONSUMER_STYLE_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+/// Reads the digest but has no other inputs, so it goes cached on an incremental build.
+#[route("/data.json")]
+pub struct DataRoute;
+
+impl Route for DataRoute {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let digest = ctx.build_value(&ARTICLE_DIGEST);
+        format!("{{\"digest\":\"{}\"}}", digest)
+    }
+}
+
+/// The style lets this route be dirtied without touching any content.
+#[route("/consumer")]
+pub struct ConsumerRoute;
+
+impl Route for ConsumerRoute {
+    fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+        let style_path = CONSUMER_STYLE_PATH.lock().unwrap().clone().unwrap();
+        ctx.assets
+            .include_style(&style_path)
+            .expect("failed to include style");
+        let digest = ctx.build_value(&ARTICLE_DIGEST);
+        format!(
+            "<html><head></head><body data-digest=\"{}\"><h1>Consumer</h1></body></html>",
+            digest
+        )
+    }
+}
+
+fn build_value_routes() -> &'static [&'static dyn FullRoute] {
+    &[&DataRoute, &ConsumerRoute]
+}
+
+fn page_is_cached(output: &maudit::BuildOutput, path_substr: &str) -> bool {
+    output
+        .pages
+        .iter()
+        .find(|p| p.file_path.contains(path_substr))
+        .unwrap_or_else(|| panic!("no page with path containing {path_substr:?}"))
+        .cached
 }
 
 fn write_markdown(dir: &Path, filename: &str, title: &str, description: &str, body: &str) {
@@ -2981,5 +3037,173 @@ fn test_style_import_change_triggers_rebundle() {
     assert!(
         read_bundled_css(tmp.path()).contains("MARKER_TWO"),
         "editing an @import-ed partial must re-bundle the stylesheet that imports it"
+    );
+}
+
+/// Regression for the cached-producer-skips-side-effect trap: when the route that
+/// "produces" a shared value is cached, a dirty page reading the value must still get it.
+#[test]
+#[serial]
+fn test_build_value_available_when_producer_route_is_cached() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First",
+        "d1",
+        "Body",
+    );
+    write_markdown(
+        &content_dir.join("articles"),
+        "second.md",
+        "Second",
+        "d2",
+        "Body",
+    );
+
+    let style_file = tmp.path().join("consumer.css");
+    fs::write(&style_file, "body { color: red; }").unwrap();
+    *CONSUMER_STYLE_PATH.lock().unwrap() = Some(style_file.clone());
+
+    let _ = coronate(
+        build_value_routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Change ONLY the consumer's style, so no content is dirty.
+    fs::write(&style_file, "body { color: blue; }").unwrap();
+
+    let output = coronate(
+        build_value_routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    assert!(
+        page_is_cached(&output, "data.json"),
+        "data.json should be cached — its inputs are unchanged"
+    );
+    assert!(
+        !page_is_cached(&output, "consumer"),
+        "consumer should re-render (its style changed)"
+    );
+
+    let html = fs::read_to_string(tmp.path().join("dist/consumer/index.html")).unwrap();
+    assert!(
+        html.contains("data-digest=\"First|Second\""),
+        "digest must be present even though the producer route was cached, got:\n{html}"
+    );
+}
+
+/// Editing a build value's input re-renders every page that reads it, with the new value.
+#[test]
+#[serial]
+fn test_build_value_readers_rerender_on_input_change() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First",
+        "d1",
+        "Body",
+    );
+    write_markdown(
+        &content_dir.join("articles"),
+        "second.md",
+        "Second",
+        "d2",
+        "Body",
+    );
+
+    let style_file = tmp.path().join("consumer.css");
+    fs::write(&style_file, "body { color: red; }").unwrap();
+    *CONSUMER_STYLE_PATH.lock().unwrap() = Some(style_file.clone());
+
+    let _ = coronate(
+        build_value_routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    // Change a title that feeds the digest.
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "Zeta",
+        "d1",
+        "Body",
+    );
+
+    let output = coronate(
+        build_value_routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    assert!(
+        !page_is_cached(&output, "data.json"),
+        "producer reads the digest, so an input change must re-render it"
+    );
+    assert!(
+        !page_is_cached(&output, "consumer"),
+        "consumer reads the digest, so an input change must re-render it"
+    );
+
+    let html = fs::read_to_string(tmp.path().join("dist/consumer/index.html")).unwrap();
+    assert!(
+        html.contains("data-digest=\"Second|Zeta\""),
+        "digest must reflect the edited title, got:\n{html}"
+    );
+}
+
+/// When nothing a build value depends on changes, its readers stay cached.
+#[test]
+#[serial]
+fn test_build_value_readers_cached_when_inputs_unchanged() {
+    let tmp = tempfile::tempdir().unwrap();
+    let content_dir = tmp.path().join("content");
+    fs::create_dir_all(content_dir.join("articles")).unwrap();
+    write_markdown(
+        &content_dir.join("articles"),
+        "first.md",
+        "First",
+        "d1",
+        "Body",
+    );
+
+    let style_file = tmp.path().join("consumer.css");
+    fs::write(&style_file, "body { color: red; }").unwrap();
+    *CONSUMER_STYLE_PATH.lock().unwrap() = Some(style_file.clone());
+
+    let _ = coronate(
+        build_value_routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    let output = coronate(
+        build_value_routes(),
+        make_content_sources(&content_dir),
+        build_options(tmp.path()),
+    )
+    .unwrap();
+
+    assert!(
+        page_is_cached(&output, "data.json"),
+        "no change: producer cached"
+    );
+    assert!(
+        page_is_cached(&output, "consumer"),
+        "no change: consumer cached"
     );
 }

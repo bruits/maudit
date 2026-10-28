@@ -401,6 +401,8 @@ pub async fn build(
         None
     };
 
+    let build_value_store = crate::build_value::BuildValueStore::default();
+
     // Serial page rendering loop.
     for route in routes {
         let cached_route = CachedRoute::new(*route);
@@ -474,6 +476,7 @@ pub async fn build(
                         &url,
                         &options.base_url,
                         None,
+                        &build_value_store,
                     );
                     let result = route.build(&mut page_ctx)?;
                     let access_log = page_ctx.take_access_log();
@@ -589,6 +592,7 @@ pub async fn build(
                             &url,
                             &options.base_url,
                             None,
+                            &build_value_store,
                         );
                         let content = route.build(&mut page_ctx)?;
                         let mut access_log = page_ctx.take_access_log();
@@ -663,6 +667,7 @@ pub async fn build(
                             &url,
                             &options.base_url,
                             None,
+                            &build_value_store,
                         ))?;
 
                         write_route_file(
@@ -759,6 +764,7 @@ pub async fn build(
                     &url,
                     &options.base_url,
                     Some(variant_id.clone()),
+                    &build_value_store,
                 );
                 let result = route.build(&mut page_ctx)?;
                 let access_log = page_ctx.take_access_log();
@@ -879,6 +885,7 @@ pub async fn build(
                             &url,
                             &options.base_url,
                             Some(variant_id.clone()),
+                            &build_value_store,
                         );
                         let content = route.build(&mut page_ctx)?;
                         let mut access_log = page_ctx.take_access_log();
@@ -949,6 +956,7 @@ pub async fn build(
                             &url,
                             &options.base_url,
                             Some(variant_id.clone()),
+                            &build_value_store,
                         ))?;
 
                         write_route_file(
