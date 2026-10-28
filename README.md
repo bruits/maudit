@@ -2,9 +2,57 @@
 
 > A dire coronation, a situation where nobility, power, or status becomes inextricably tied to disastrous circumstances.
 
-A library for generating static websites with Rust. 
+A library for generating static websites with Rust.
+
+* **Built for you, by you**: Maudit is not an opaque SSG that you feed configuration into and hope for the best. It is based entirely on code you yourself write.
+* **Lightning fast rebuilds**: Maudit performs best when you have content that changes multiple times while the layout is constant.
+* **Does just what you need**: Maudit is *only* made to render static sites, so if you need a static site this tool is just for you.
 
 Read the [documentation](https://maudit.org/docs/) on [maudit.org](https://maudit.org), or join us on [Discord](https://maudit.org/chat/).
+
+```rust
+use maudit::route::prelude::*;
+
+#[route("/hello-world")]
+pub struct HelloWorld;
+
+impl Route for HelloWorld {
+  fn render(&self, ctx: &mut PageContext) -> impl Into<RenderResult> {
+    "Hello, world!"
+  }
+}
+```
+
+```rust
+use routes::HelloWorld;
+use maudit::{coronate, routes, content_sources, BuildOptions, BuildOutput};
+
+fn main() -> Result<BuildOutput, Box<dyn std::error::Error>> {
+    coronate(
+      routes![HelloWorld],
+      content_sources![],
+      BuildOptions::default()
+    )
+}
+```
+
+## Usage
+
+Getting started is easy!
+
+**Step 1**: install maudit
+
+```bash
+cargo install maudit-cli
+```
+
+**Step 2**: create your project
+
+```bash
+maudit init
+```
+
+See [the docs](https://maudit.org/docs/quick-start/) for more info about where to go from here.
 
 ## Crates
 
