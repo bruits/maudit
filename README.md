@@ -4,7 +4,7 @@
 
 A library for generating static websites with Rust.
 
-* **Built by you**: Maudit is not an opaque SSG that you feed configuration into and hope for the best. It is based entirely on code you yourself write.
+* **Built for you, by you**: Maudit is not an opaque SSG that you feed configuration into and hope for the best. It is based entirely on code you yourself write.
 * **Lightning fast rebuilds**: Maudit performs best when you have content that changes multiple times while the layout is constant.
 * **Does just what you need**: Maudit is *only* made to render static sites, so if you need a static site this tool is just for you.
 
