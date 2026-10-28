@@ -1,5 +1,11 @@
 # maudit-cli
 
+## 0.8.4 — 2026-10-27
+
+### Patch changes
+
+- [d614d0b](https://github.com/bruits/maudit/commit/d614d0b7c64a8d25872077dd3db3161db7efd169) Fixed build and dev server timings being rounded down to whole seconds, e.g. a 1.9s build showing as "1s". — Thanks @Princesseuh!
+
 ## 0.8.3 — 2026-08-23
 
 ### Patch changes

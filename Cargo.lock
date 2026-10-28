@@ -2448,7 +2448,7 @@ dependencies = [
 
 [[package]]
 name = "maudit"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "aho-corasick",
  "base64 0.22.1",
@@ -2487,7 +2487,7 @@ dependencies = [
 
 [[package]]
 name = "maudit-cli"
-version = "0.8.3"
+version = "0.8.4"
 dependencies = [
  "axum",
  "cargo_metadata",
@@ -2942,7 +2942,7 @@ dependencies = [
 
 [[package]]
 name = "oubli"
-version = "0.1.20"
+version = "0.1.21"
 dependencies = [
  "maud",
  "maudit",
